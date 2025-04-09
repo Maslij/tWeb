@@ -1,6 +1,105 @@
-# tWeb
+# tWeb - Video Stream Management Web Interface
 
-A lightweight React web application for interfacing with tAPI video streaming service.
+## Overview
+
+tWeb is a React-based web interface for the tAPI video stream management system. It provides a user-friendly interface for:
+
+- Creating and managing video streams from cameras, files, or RTSP sources
+- Monitoring and controlling streams
+- Defining regions of interest with the polygon editor
+- Building and managing computer vision pipelines with the Vision Pipeline Builder
+
+## Vision Pipeline Builder
+
+The web interface now includes a powerful Vision Pipeline Builder that allows users to create computer vision processing pipelines through an intuitive, visual drag-and-drop interface. The builder provides the following capabilities:
+
+- Drag-and-drop interface for adding vision components
+- Interactive connection creation between components
+- Visual feedback for valid connections
+- Component configuration through property panels
+- Pipeline saving and activation
+
+### Key Components and Files
+
+- `VisionPipelineBuilder.tsx`: Main component for the pipeline builder UI
+- `StreamDetails.tsx`: Integration of the pipeline builder into the stream details view
+- `api.ts`: API integration functions for pipeline management
+
+### Core Pipeline Builder Features
+
+1. **Component Palette**: 
+   - Displays available vision components from the API
+   - Components are categorized by type (source, detector, tracker, etc.)
+   - Shows which components are available based on current pipeline state
+
+2. **Canvas Workspace**:
+   - Interactive area for building pipelines
+   - Nodes can be freely positioned and connected
+   - Visual connection lines show data flow
+
+3. **Node Properties**:
+   - Configuration panel for selected components
+   - Displays component-specific settings
+   - Shows input and output data types
+
+4. **Pipeline Management**:
+   - Save pipelines to the API
+   - Activate pipelines for processing
+   - Load existing pipelines for editing
+
+### Vision Component Categories
+
+The system supports six categories of components:
+
+1. **Source**: Generates image data from camera or file
+2. **Detector**: Identifies objects or features in images
+3. **Tracker**: Tracks detected objects across frames
+4. **Classifier**: Categorizes detected objects
+5. **Geometry**: Manages spatial regions and operations
+6. **Sink**: Outputs or stores processing results
+
+## Integration with tAPI
+
+The web interface integrates with the tAPI backend through a set of API endpoints:
+
+1. **Component Discovery**:
+   - Fetches available vision components from `/api/vision/components`
+   - Dynamically builds the component palette based on available components
+
+2. **Pipeline Management**:
+   - Creates pipelines via POST to `/api/streams/{streamId}/pipelines`
+   - Updates pipelines via PUT to `/api/streams/{streamId}/pipelines/{pipelineId}`
+   - Retrieves pipelines via GET from `/api/streams/{streamId}/pipelines`
+   - Activates pipelines via POST to `/api/streams/{streamId}/pipelines/{pipelineId}/activate`
+
+## Development and Customization
+
+### Adding New Components
+
+To add support for new vision components:
+
+1. Add the component definition to the tAPI backend
+2. The UI will automatically discover and display the new component
+3. No changes needed to the VisionPipelineBuilder component
+
+### Customizing the Builder UI
+
+The pipeline builder UI can be customized by modifying:
+
+- `VisionPipelineBuilder.tsx`: Core builder component
+- `VisionPipelineBuilder.css`: Styling for the builder
+
+## Running the Application
+
+```bash
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+```
+
+The application will be available at http://localhost:5173 and will connect to the tAPI backend at http://localhost:8080.
 
 ## Features
 
