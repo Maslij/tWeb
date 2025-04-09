@@ -38,9 +38,17 @@ interface VisionPipelineBuilderProps {
   streamName: string;
   streamSource: string;
   streamType: 'camera' | 'file' | 'rtsp';
+  streamStatus: 'created' | 'running' | 'stopped' | 'error';
+  streamResolution?: string;
+  streamFps?: number;
   onSave: (pipeline: any) => void;
+  onStartStream?: () => void;
+  onStopStream?: () => void;
+  onDeleteStream?: () => void;
+  actionLoading?: boolean;
   availableComponents?: any[]; // Optional array of available components from API
   initialPipeline?: any; // Optional initial pipeline data
+  renderCameraFeedPreview?: () => React.ReactNode; // Optional function to render camera feed preview
 }
 
 // Add a utility function to normalize component formats from the API
@@ -64,9 +72,17 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
   streamName, 
   streamSource, 
   streamType, 
+  streamStatus, 
+  streamResolution, 
+  streamFps, 
   onSave, 
+  onStartStream, 
+  onStopStream, 
+  onDeleteStream, 
+  actionLoading, 
   availableComponents, 
-  initialPipeline 
+  initialPipeline, 
+  renderCameraFeedPreview 
 }) => {
   const [pipeline, setPipeline] = useState<Pipeline>(() => {
     // If initialPipeline is provided, use it
@@ -823,8 +839,7 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
                   {component.category === 'source' && node.sourceDetails && (
                     <div className="node-source-details">
                       <div className="source-detail"><strong>Stream:</strong> {node.sourceDetails.name}</div>
-                      <div className="source-detail"><strong>Source:</strong> {node.sourceDetails.source}</div>
-                      <div className="source-detail"><strong>Type:</strong> {node.sourceDetails.type}</div>
+                      <div className="source-detail"><strong>Status:</strong> <span className={`status-indicator ${streamStatus}`}>{streamStatus}</span></div>
                     </div>
                   )}
                   
@@ -836,6 +851,67 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
                   {component.outputs && component.outputs.length > 0 && (
                     <div className="node-info">
                       <small>Outputs: {component.outputs.join(', ')}</small>
+                    </div>
+                  )}
+                  
+                  {node.config && Object.entries(node.config).length > 0 && (
+                    <div className="node-config">
+                      <h5>Configuration</h5>
+                      {Object.entries(node.config).map(([key, value]) => {
+                        if (Array.isArray(value)) {
+                          return (
+                            <div key={key} className="config-item">
+                              <label>{key}:</label>
+                              <div className="array-config">
+                                {value.map((item, idx) => (
+                                  <div key={idx} className="array-item">
+                                    {item.toString()}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        }
+                        
+                        if (typeof value === 'number') {
+                          return (
+                            <div key={key} className="config-item">
+                              <label>{key}:</label>
+                              <input 
+                                type="range" 
+                                min="0" 
+                                max="1" 
+                                step="0.1"
+                                value={value}
+                                onChange={(e) => {
+                                  setPipeline(prev => ({
+                                    ...prev,
+                                    nodes: prev.nodes.map(n => 
+                                      n.id === selectedNode 
+                                        ? { 
+                                            ...n, 
+                                            config: { 
+                                              ...n.config, 
+                                              [key]: parseFloat(e.target.value) 
+                                            } 
+                                          } 
+                                        : n
+                                    )
+                                  }));
+                                }}
+                              />
+                              <span>{value.toFixed(1)}</span>
+                            </div>
+                          );
+                        }
+                        
+                        return (
+                          <div key={key} className="config-item">
+                            <label>{key}:</label>
+                            <span>{value.toString()}</span>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -867,22 +943,86 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
                   <h4>{component.name}</h4>
                   <p>{component.description}</p>
                   
-                  {/* Show stream details for source nodes */}
+                  {/* Detailed Stream Details and Controls for source nodes */}
                   {component.category === 'source' && node.sourceDetails && (
                     <div className="source-properties">
                       <h5>Stream Details</h5>
+                      <div className="property-item">
+                        <label>ID:</label>
+                        <span>{streamId}</span>
+                      </div>
                       <div className="property-item">
                         <label>Name:</label>
                         <span>{node.sourceDetails.name}</span>
                       </div>
                       <div className="property-item">
                         <label>Source:</label>
-                        <span>{node.sourceDetails.source}</span>
+                        <span title={node.sourceDetails.source} className="source-url">{node.sourceDetails.source}</span>
                       </div>
                       <div className="property-item">
                         <label>Type:</label>
                         <span>{node.sourceDetails.type}</span>
                       </div>
+                      <div className="property-item">
+                        <label>Status:</label>
+                        <span className={`status-indicator ${streamStatus}`}>{streamStatus}</span>
+                      </div>
+                      {streamResolution && (
+                        <div className="property-item">
+                          <label>Resolution:</label>
+                          <span>{streamResolution}</span>
+                        </div>
+                      )}
+                      {streamFps && (
+                        <div className="property-item">
+                          <label>FPS:</label>
+                          <span>{streamFps}</span>
+                        </div>
+                      )}
+                      
+                      {/* Stream Controls */}
+                      {component.id === 'camera_feed' && (
+                        <div className="stream-controls">
+                          <h5>Stream Controls</h5>
+                          <div className="stream-actions">
+                            {streamStatus !== 'running' && onStartStream && (
+                              <button 
+                                className="btn" 
+                                onClick={onStartStream}
+                                disabled={actionLoading}
+                              >
+                                Start Stream
+                              </button>
+                            )}
+                            {streamStatus === 'running' && onStopStream && (
+                              <button 
+                                className="btn btn-secondary" 
+                                onClick={onStopStream}
+                                disabled={actionLoading}
+                              >
+                                Stop Stream
+                              </button>
+                            )}
+                            {onDeleteStream && (
+                              <button 
+                                className="btn btn-danger" 
+                                onClick={onDeleteStream}
+                                disabled={actionLoading}
+                              >
+                                Delete Stream
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Camera feed preview */}
+                      {component.id === 'camera_feed' && renderCameraFeedPreview && (
+                        <div className="camera-feed-preview-container">
+                          <h5>Camera Feed Preview</h5>
+                          {renderCameraFeedPreview()}
+                        </div>
+                      )}
                     </div>
                   )}
                   

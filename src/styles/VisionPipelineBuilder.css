@@ -491,4 +491,200 @@
   font-size: 20px;
   color: #888;
   margin-top: 10px;
+}
+
+/* Modal and Stream Preview Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background-color: white;
+  padding: 20px;
+  border-radius: 5px;
+  width: 95%;
+  height: 95vh;
+  max-width: 1600px;
+  max-height: 95vh;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-close-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  z-index: 10;
+  color: #333;
+}
+
+.stream-modal-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.stream-modal-content h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
+.stream-modal-settings {
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
+
+.stream-view-container {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  background-color: #000;
+  border-radius: 4px;
+}
+
+.stream-view, .stream-view-ws {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.stream-image, .stream-canvas {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto;
+}
+
+.camera-feed-preview {
+  position: relative;
+  border: 1px solid #ddd;
+  padding: 10px;
+  border-radius: 4px;
+}
+
+.preview-enlarge-btn {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  background-color: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.camera-feed-preview-placeholder {
+  padding: 20px;
+  background-color: #f5f5f5;
+  border: 1px solid #ddd;
+  text-align: center;
+  color: #666;
+}
+
+.camera-feed-preview-container {
+  margin-top: 15px;
+  border-top: 1px solid #eee;
+  padding-top: 10px;
+}
+
+.source-url {
+  display: block; 
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-all;
+}
+
+.status-indicator {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.status-indicator.running {
+  background-color: #4CAF50;
+  color: white;
+}
+
+.status-indicator.stopped {
+  background-color: #f44336;
+  color: white;
+}
+
+.status-indicator.created {
+  background-color: #2196F3;
+  color: white;
+}
+
+.status-indicator.error {
+  background-color: #ff9800;
+  color: white;
+}
+
+.stream-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.stream-actions .btn {
+  padding: 5px 10px;
+  background: #f0f0f0;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.stream-actions .btn:hover {
+  background: #e5e5e5;
+}
+
+.stream-actions .btn.btn-secondary {
+  background: #ff9800;
+  color: white;
+  border: none;
+}
+
+.stream-actions .btn.btn-secondary:hover {
+  background: #e68a00;
+}
+
+.stream-actions .btn.btn-danger {
+  background: #f44336;
+  color: white;
+  border: none;
+}
+
+.stream-actions .btn.btn-danger:hover {
+  background: #d32f2f;
 } 

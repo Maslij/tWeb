@@ -11,9 +11,28 @@ import apiService, {
 } from '../services/api';
 import StreamView from '../components/StreamView';
 import StreamViewWS from '../components/StreamViewWS';
-import PolygonEditor from '../components/PolygonEditor';
 import VisionPipelineBuilder from '../components/VisionPipelineBuilder';
 import '../styles/VisionPipelineBuilder.css';
+
+// Modal component for enlarged stream view
+interface ModalProps {
+  children: React.ReactNode;
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+const Modal: React.FC<ModalProps> = ({ children, isOpen, onClose }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={e => e.stopPropagation()}>
+        <button className="modal-close-btn" onClick={onClose}>×</button>
+        {children}
+      </div>
+    </div>
+  );
+};
 
 const StreamDetails = () => {
   const { id } = useParams<{ id: string }>();
@@ -24,12 +43,12 @@ const StreamDetails = () => {
   const [actionLoading, setActionLoading] = useState<boolean>(false);
   const [useWebSocket, setUseWebSocket] = useState<boolean>(false);
   const [fps, setFps] = useState<number>(15);
-  const [showPolygonEditor, setShowPolygonEditor] = useState<boolean>(false);
-  const [viewMode, setViewMode] = useState<'stream' | 'pipeline'>('stream');
+  const [viewMode, setViewMode] = useState<'pipeline'>('pipeline');
   const [visionComponents, setVisionComponents] = useState<any[]>([]);
   const [pipelines, setPipelines] = useState<any[]>([]);
   const [activePipeline, setActivePipeline] = useState<any>(null);
   const [loadingVisionData, setLoadingVisionData] = useState<boolean>(false);
+  const [isStreamModalOpen, setIsStreamModalOpen] = useState<boolean>(false);
   const isPollingRef = useRef<boolean>(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const pollIntervalRef = useRef<number | null>(null);
@@ -198,21 +217,13 @@ const StreamDetails = () => {
     };
   }, [id]);
 
-  // Fetch vision data when switching to pipeline view
+  // Fetch vision data when loading the page if stream is running
   useEffect(() => {
-    if (viewMode === 'pipeline' && stream?.status === 'running') {
+    if (stream?.status === 'running') {
       fetchVisionComponents();
       fetchPipelines();
     }
-  }, [viewMode, stream?.status, id]);
-
-  // Handle stream status changes
-  useEffect(() => {
-    // If stream is stopped and viewMode is pipeline, switch to stream view
-    if (stream && stream.status !== 'running' && viewMode === 'pipeline') {
-      setViewMode('stream');
-    }
-  }, [stream?.status, viewMode]);
+  }, [stream?.status, id]);
 
   const handleStartStream = async () => {
     if (!id) return;
@@ -234,8 +245,6 @@ const StreamDetails = () => {
     
     try {
       setActionLoading(true);
-      // Switch to stream view before stopping
-      setViewMode('stream');
       await apiService.stopStream(id);
       fetchStream();
     } catch (err) {
@@ -311,6 +320,34 @@ const StreamDetails = () => {
     }
   };
 
+  // This function will be passed to VisionPipelineBuilder to enable showing the stream view
+  const renderCameraFeedPreview = () => {
+    if (!id || stream?.status !== 'running') {
+      return (
+        <div className="camera-feed-preview-placeholder">
+          Stream is not running
+        </div>
+      );
+    }
+
+    return (
+      <div className="camera-feed-preview">
+        <StreamView 
+          streamId={id} 
+          refreshRate={1000} 
+          width="100%" 
+          height="auto"
+        />
+        <button 
+          className="preview-enlarge-btn" 
+          onClick={() => setIsStreamModalOpen(true)}
+        >
+          Enlarge Stream View
+        </button>
+      </div>
+    );
+  };
+
   if (loading) {
     return <div className="loading">Loading stream details...</div>;
   }
@@ -354,200 +391,50 @@ const StreamDetails = () => {
         </button>
       </header>
 
-      <div className="card">
-        <div className="details-section">
-          <h3>Stream Details</h3>
-          <div className="details-info">
-            <p><strong>ID:</strong> {stream.id}</p>
-            <p><strong>Source:</strong> {stream.source}</p>
-            <p><strong>Type:</strong> {stream.type || 'unknown'}</p>
-            <p><strong>Status:</strong> {stream.status}</p>
-            {stream.width && stream.height && (
-              <p><strong>Resolution:</strong> {stream.width}x{stream.height}</p>
-            )}
-            {stream.fps && (
-              <p><strong>FPS:</strong> {stream.fps}</p>
-            )}
-          </div>
-        </div>
-
-        <div className="details-section">
-          <h3>Stream Controls</h3>
-          <div className="stream-actions">
-            <button 
-              className="btn" 
-              onClick={handleStartStream}
-              disabled={stream.status === 'running' || actionLoading}
-            >
-              Start Stream
-            </button>
-            <button 
-              className="btn btn-secondary" 
-              onClick={handleStopStream}
-              disabled={stream.status !== 'running' || actionLoading}
-            >
-              Stop Stream
-            </button>
-            <button 
-              className="btn btn-danger" 
-              onClick={handleDeleteStream}
-              disabled={actionLoading}
-            >
-              Delete Stream
-            </button>
-          </div>
-        </div>
-      </div>
-
       <div className="card" style={{ marginTop: '20px' }}>
-        <div className="view-mode-tabs">
-          <button 
-            className={`tab-button ${viewMode === 'stream' ? 'active' : ''}`} 
-            onClick={() => setViewMode('stream')}
-          >
-            Stream View
-          </button>
-          {stream.status === 'running' && (
-            <button 
-              className={`tab-button ${viewMode === 'pipeline' ? 'active' : ''}`} 
-              onClick={() => setViewMode('pipeline')}
-            >
-              Vision Pipeline Builder
-            </button>
+        <h3>Vision Pipeline Builder</h3>
+        <div style={{ margin: '20px 0' }}>
+          <p style={{ marginBottom: '15px' }}>
+            Build a computer vision pipeline by dragging components from the left panel to the canvas.
+            Connect components by clicking the arrow button and dragging to another component.
+          </p>
+          {loadingVisionData ? (
+            <div className="loading-indicator">Loading vision components...</div>
+          ) : error ? (
+            <div className="error" style={{ marginBottom: '15px', padding: '10px' }}>
+              {error}
+              <button 
+                className="btn btn-small" 
+                style={{ marginLeft: '10px' }}
+                onClick={() => {
+                  setError(null);
+                  fetchVisionComponents();
+                  fetchPipelines();
+                }}
+              >
+                Retry
+              </button>
+            </div>
+          ) : (
+            <VisionPipelineBuilder 
+              streamId={stream.id}
+              streamName={stream.name || 'Unnamed Stream'}
+              streamSource={stream.source}
+              streamType={stream.type || 'camera'}
+              streamStatus={stream.status}
+              streamResolution={stream.width && stream.height ? `${stream.width}x${stream.height}` : undefined}
+              streamFps={stream.fps}
+              onSave={handleSavePipeline}
+              onStartStream={handleStartStream}
+              onStopStream={handleStopStream}
+              onDeleteStream={handleDeleteStream}
+              actionLoading={actionLoading}
+              availableComponents={visionComponents}
+              initialPipeline={activePipeline}
+              renderCameraFeedPreview={renderCameraFeedPreview}
+            />
           )}
         </div>
-
-        {viewMode === 'stream' ? (
-          <>
-            <h3>Stream View</h3>
-            {stream.status === 'running' ? (
-              <div className="stream-view-container">
-                <div className="stream-settings" style={{ marginBottom: '10px' }}>
-                  <div className="form-group">
-                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                      <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-                        <input 
-                          type="checkbox" 
-                          checked={useWebSocket} 
-                          onChange={(e) => setUseWebSocket(e.target.checked)} 
-                          style={{ marginRight: '5px' }}
-                        />
-                        Use WebSocket (Experimental)
-                      </label>
-                      
-                      <div className="stream-mode-info" style={{ fontSize: '12px', color: '#666', marginLeft: '5px' }}>
-                        {useWebSocket ? 
-                          'WebSocket mode: Higher performance but may be unstable' : 
-                          'HTTP mode: More reliable, works in all browsers'
-                        }
-                      </div>
-                      
-                      {useWebSocket && (
-                        <div style={{ display: 'flex', alignItems: 'center', marginLeft: '20px' }}>
-                          <label htmlFor="fps-slider" style={{ marginRight: '10px' }}>FPS: {fps}</label>
-                          <input 
-                            id="fps-slider"
-                            type="range" 
-                            min="1" 
-                            max="30" 
-                            value={fps} 
-                            onChange={(e) => setFps(parseInt(e.target.value))}
-                            style={{ width: '150px' }}
-                          />
-                        </div>
-                      )}
-                      
-                      <button 
-                        className={`btn ${showPolygonEditor ? 'btn-primary' : ''}`}
-                        onClick={() => setShowPolygonEditor(!showPolygonEditor)}
-                        style={{ marginLeft: 'auto' }}
-                      >
-                        {showPolygonEditor ? 'Hide Polygon Editor' : 'Show Polygon Editor'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                
-                {!showPolygonEditor && (
-                  useWebSocket ? (
-                    <StreamViewWS 
-                      key={`ws-${stream.id}-${Date.now()}`} 
-                      streamId={stream.id} 
-                      fps={fps} 
-                    />
-                  ) : (
-                    <StreamView 
-                      key={`http-${stream.id}-${Date.now()}`} 
-                      streamId={stream.id} 
-                      refreshRate={1000} 
-                    />
-                  )
-                )}
-                
-                {showPolygonEditor && (
-                  <div className="polygon-editor-container">
-                    <PolygonEditor 
-                      streamId={stream.id}
-                      width={stream.width || 640}
-                      height={stream.height || 480}
-                      onPolygonCreated={(polygon) => {
-                        console.log('Polygon created:', polygon);
-                      }}
-                      onPolygonUpdated={(polygon) => {
-                        console.log('Polygon updated:', polygon);
-                      }}
-                      onPolygonDeleted={(polygonId) => {
-                        console.log('Polygon deleted:', polygonId);
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="error stream-placeholder">
-                Stream is not running. Start the stream to view it.
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            <h3>Vision Pipeline Builder</h3>
-            <div style={{ margin: '20px 0' }}>
-              <p style={{ marginBottom: '15px' }}>
-                Build a computer vision pipeline by dragging components from the left panel to the canvas.
-                Connect components by clicking the arrow button and dragging to another component.
-              </p>
-              {loadingVisionData ? (
-                <div className="loading-indicator">Loading vision components...</div>
-              ) : error ? (
-                <div className="error" style={{ marginBottom: '15px', padding: '10px' }}>
-                  {error}
-                  <button 
-                    className="btn btn-small" 
-                    style={{ marginLeft: '10px' }}
-                    onClick={() => {
-                      setError(null);
-                      fetchVisionComponents();
-                      fetchPipelines();
-                    }}
-                  >
-                    Retry
-                  </button>
-                </div>
-              ) : (
-                <VisionPipelineBuilder 
-                  streamId={stream.id}
-                  streamName={stream.name || 'Unnamed Stream'}
-                  streamSource={stream.source}
-                  streamType={stream.type || 'camera'}
-                  onSave={handleSavePipeline}
-                  availableComponents={visionComponents}
-                  initialPipeline={activePipeline}
-                />
-              )}
-            </div>
-          </>
-        )}
       </div>
 
       <div style={{ marginTop: '20px' }}>
@@ -558,6 +445,64 @@ const StreamDetails = () => {
           Back to Dashboard
         </button>
       </div>
+
+      {/* Modal for enlarged stream view */}
+      <Modal 
+        isOpen={isStreamModalOpen} 
+        onClose={() => setIsStreamModalOpen(false)}
+      >
+        <div className="stream-modal-content">
+          <h3>Stream View</h3>
+          <div className="stream-modal-settings">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                <input 
+                  type="checkbox" 
+                  checked={useWebSocket} 
+                  onChange={(e) => setUseWebSocket(e.target.checked)} 
+                  style={{ marginRight: '5px' }}
+                />
+                Use WebSocket (Experimental)
+              </label>
+              
+              {useWebSocket && (
+                <div style={{ display: 'flex', alignItems: 'center', marginLeft: '20px' }}>
+                  <label htmlFor="fps-slider" style={{ marginRight: '10px' }}>FPS: {fps}</label>
+                  <input 
+                    id="fps-slider"
+                    type="range" 
+                    min="1" 
+                    max="30" 
+                    value={fps} 
+                    onChange={(e) => setFps(parseInt(e.target.value))}
+                    style={{ width: '150px' }}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <div className="stream-view-container">
+            {useWebSocket ? (
+              <StreamViewWS 
+                key={`ws-modal-${stream.id}-${Date.now()}`} 
+                streamId={stream.id} 
+                fps={fps} 
+                width="100%" 
+                height="100%"
+              />
+            ) : (
+              <StreamView 
+                key={`http-modal-${stream.id}-${Date.now()}`} 
+                streamId={stream.id} 
+                refreshRate={1000} 
+                width="100%"
+                height="100%"
+              />
+            )}
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };
