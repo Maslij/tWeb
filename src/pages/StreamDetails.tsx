@@ -4,6 +4,8 @@ import apiService, { Stream } from '../services/api';
 import StreamView from '../components/StreamView';
 import StreamViewWS from '../components/StreamViewWS';
 import PolygonEditor from '../components/PolygonEditor';
+import VisionPipelineBuilder from '../components/VisionPipelineBuilder';
+import '../styles/VisionPipelineBuilder.css';
 
 const StreamDetails = () => {
   const { id } = useParams<{ id: string }>();
@@ -15,6 +17,7 @@ const StreamDetails = () => {
   const [useWebSocket, setUseWebSocket] = useState<boolean>(false);
   const [fps, setFps] = useState<number>(15);
   const [showPolygonEditor, setShowPolygonEditor] = useState<boolean>(false);
+  const [viewMode, setViewMode] = useState<'stream' | 'pipeline'>('stream');
   const isPollingRef = useRef<boolean>(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const pollIntervalRef = useRef<number | null>(null);
@@ -105,6 +108,14 @@ const StreamDetails = () => {
     };
   }, [id]);
 
+  // Handle stream status changes
+  useEffect(() => {
+    // If stream is stopped and viewMode is pipeline, switch to stream view
+    if (stream && stream.status !== 'running' && viewMode === 'pipeline') {
+      setViewMode('stream');
+    }
+  }, [stream?.status, viewMode]);
+
   const handleStartStream = async () => {
     if (!id) return;
     
@@ -125,6 +136,8 @@ const StreamDetails = () => {
     
     try {
       setActionLoading(true);
+      // Switch to stream view before stopping
+      setViewMode('stream');
       await apiService.stopStream(id);
       fetchStream();
     } catch (err) {
@@ -149,6 +162,12 @@ const StreamDetails = () => {
         setActionLoading(false);
       }
     }
+  };
+
+  const handleSavePipeline = (pipeline: any) => {
+    console.log('Saving pipeline:', pipeline);
+    // Here you would integrate with your API to save the pipeline
+    alert('Pipeline saved successfully (demo only)');
   };
 
   if (loading) {
@@ -240,94 +259,132 @@ const StreamDetails = () => {
       </div>
 
       <div className="card" style={{ marginTop: '20px' }}>
-        <h3>Stream View</h3>
-        {stream.status === 'running' ? (
-          <div className="stream-view-container">
-            <div className="stream-settings" style={{ marginBottom: '10px' }}>
-              <div className="form-group">
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-                    <input 
-                      type="checkbox" 
-                      checked={useWebSocket} 
-                      onChange={(e) => setUseWebSocket(e.target.checked)} 
-                      style={{ marginRight: '5px' }}
-                    />
-                    Use WebSocket (Experimental)
-                  </label>
-                  
-                  <div className="stream-mode-info" style={{ fontSize: '12px', color: '#666', marginLeft: '5px' }}>
-                    {useWebSocket ? 
-                      'WebSocket mode: Higher performance but may be unstable' : 
-                      'HTTP mode: More reliable, works in all browsers'
-                    }
-                  </div>
-                  
-                  {useWebSocket && (
-                    <div style={{ display: 'flex', alignItems: 'center', marginLeft: '20px' }}>
-                      <label htmlFor="fps-slider" style={{ marginRight: '10px' }}>FPS: {fps}</label>
-                      <input 
-                        id="fps-slider"
-                        type="range" 
-                        min="1" 
-                        max="30" 
-                        value={fps} 
-                        onChange={(e) => setFps(parseInt(e.target.value))}
-                        style={{ width: '150px' }}
-                      />
+        <div className="view-mode-tabs">
+          <button 
+            className={`tab-button ${viewMode === 'stream' ? 'active' : ''}`} 
+            onClick={() => setViewMode('stream')}
+          >
+            Stream View
+          </button>
+          {stream.status === 'running' && (
+            <button 
+              className={`tab-button ${viewMode === 'pipeline' ? 'active' : ''}`} 
+              onClick={() => setViewMode('pipeline')}
+            >
+              Vision Pipeline Builder
+            </button>
+          )}
+        </div>
+
+        {viewMode === 'stream' ? (
+          <>
+            <h3>Stream View</h3>
+            {stream.status === 'running' ? (
+              <div className="stream-view-container">
+                <div className="stream-settings" style={{ marginBottom: '10px' }}>
+                  <div className="form-group">
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={useWebSocket} 
+                          onChange={(e) => setUseWebSocket(e.target.checked)} 
+                          style={{ marginRight: '5px' }}
+                        />
+                        Use WebSocket (Experimental)
+                      </label>
+                      
+                      <div className="stream-mode-info" style={{ fontSize: '12px', color: '#666', marginLeft: '5px' }}>
+                        {useWebSocket ? 
+                          'WebSocket mode: Higher performance but may be unstable' : 
+                          'HTTP mode: More reliable, works in all browsers'
+                        }
+                      </div>
+                      
+                      {useWebSocket && (
+                        <div style={{ display: 'flex', alignItems: 'center', marginLeft: '20px' }}>
+                          <label htmlFor="fps-slider" style={{ marginRight: '10px' }}>FPS: {fps}</label>
+                          <input 
+                            id="fps-slider"
+                            type="range" 
+                            min="1" 
+                            max="30" 
+                            value={fps} 
+                            onChange={(e) => setFps(parseInt(e.target.value))}
+                            style={{ width: '150px' }}
+                          />
+                        </div>
+                      )}
+                      
+                      <button 
+                        className={`btn ${showPolygonEditor ? 'btn-primary' : ''}`}
+                        onClick={() => setShowPolygonEditor(!showPolygonEditor)}
+                        style={{ marginLeft: 'auto' }}
+                      >
+                        {showPolygonEditor ? 'Hide Polygon Editor' : 'Show Polygon Editor'}
+                      </button>
                     </div>
-                  )}
-                  
-                  <button 
-                    className={`btn ${showPolygonEditor ? 'btn-primary' : ''}`}
-                    onClick={() => setShowPolygonEditor(!showPolygonEditor)}
-                    style={{ marginLeft: 'auto' }}
-                  >
-                    {showPolygonEditor ? 'Hide Polygon Editor' : 'Show Polygon Editor'}
-                  </button>
+                  </div>
                 </div>
+                
+                {!showPolygonEditor && (
+                  useWebSocket ? (
+                    <StreamViewWS 
+                      key={`ws-${stream.id}-${Date.now()}`} 
+                      streamId={stream.id} 
+                      fps={fps} 
+                    />
+                  ) : (
+                    <StreamView 
+                      key={`http-${stream.id}-${Date.now()}`} 
+                      streamId={stream.id} 
+                      refreshRate={1000} 
+                    />
+                  )
+                )}
+                
+                {showPolygonEditor && (
+                  <div className="polygon-editor-container">
+                    <PolygonEditor 
+                      streamId={stream.id}
+                      width={stream.width || 640}
+                      height={stream.height || 480}
+                      onPolygonCreated={(polygon) => {
+                        console.log('Polygon created:', polygon);
+                      }}
+                      onPolygonUpdated={(polygon) => {
+                        console.log('Polygon updated:', polygon);
+                      }}
+                      onPolygonDeleted={(polygonId) => {
+                        console.log('Polygon deleted:', polygonId);
+                      }}
+                    />
+                  </div>
+                )}
               </div>
-            </div>
-            
-            {!showPolygonEditor && (
-              useWebSocket ? (
-                <StreamViewWS 
-                  key={`ws-${stream.id}-${Date.now()}`} 
-                  streamId={stream.id} 
-                  fps={fps} 
-                />
-              ) : (
-                <StreamView 
-                  key={`http-${stream.id}-${Date.now()}`} 
-                  streamId={stream.id} 
-                  refreshRate={1000} 
-                />
-              )
-            )}
-            
-            {showPolygonEditor && (
-              <div className="polygon-editor-container">
-                <PolygonEditor 
-                  streamId={stream.id}
-                  width={stream.width || 640}
-                  height={stream.height || 480}
-                  onPolygonCreated={(polygon) => {
-                    console.log('Polygon created:', polygon);
-                  }}
-                  onPolygonUpdated={(polygon) => {
-                    console.log('Polygon updated:', polygon);
-                  }}
-                  onPolygonDeleted={(polygonId) => {
-                    console.log('Polygon deleted:', polygonId);
-                  }}
-                />
+            ) : (
+              <div className="error stream-placeholder">
+                Stream is not running. Start the stream to view it.
               </div>
             )}
-          </div>
+          </>
         ) : (
-          <div className="error stream-placeholder">
-            Stream is not running. Start the stream to view it.
-          </div>
+          <>
+            <h3>Vision Pipeline Builder</h3>
+            <div style={{ margin: '20px 0' }}>
+              <p style={{ marginBottom: '15px' }}>
+                Build a computer vision pipeline by dragging components from the left panel to the canvas.
+                Connect components by clicking the arrow button and dragging to another component.
+              </p>
+              <VisionPipelineBuilder 
+                streamId={stream.id}
+                streamName={stream.name || 'Unnamed Stream'}
+                streamSource={stream.source}
+                streamType={stream.type || 'camera'}
+                onSave={handleSavePipeline}
+              />
+            </div>
+          </>
         )}
       </div>
 
