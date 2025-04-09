@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import '../styles/VisionPipelineBuilder.css';
 
 // Define types for our vision components
@@ -6,7 +6,7 @@ interface VisionComponent {
   id: string;
   type: string;
   name: string;
-  category: 'source' | 'detector' | 'tracker' | 'classifier' | 'geometry' | 'sink';
+  category: string;
   description: string;
   inputs?: string[];
   outputs?: string[];
@@ -38,20 +38,49 @@ interface VisionPipelineBuilderProps {
   streamName: string;
   streamSource: string;
   streamType: 'camera' | 'file' | 'rtsp';
-  onSave: (pipeline: Pipeline) => void;
+  onSave: (pipeline: any) => void;
+  availableComponents?: any[]; // Optional array of available components from API
+  initialPipeline?: any; // Optional initial pipeline data
 }
+
+// Add a utility function to normalize component formats from the API
+const normalizeComponent = (component: any): VisionComponent => {
+  // Make sure the component has all the required fields
+  return {
+    id: component.id,
+    name: component.name,
+    type: component.type || component.id,
+    category: component.category,
+    description: component.description || '',
+    inputs: component.inputs || [],
+    outputs: component.outputs || [],
+    requiresParent: component.requiresParent || [],
+    config: component.config || {}
+  };
+};
 
 const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({ 
   streamId, 
   streamName, 
   streamSource, 
   streamType, 
-  onSave 
+  onSave, 
+  availableComponents, 
+  initialPipeline 
 }) => {
-  const [pipeline, setPipeline] = useState<Pipeline>({
-    id: `pipeline_${Date.now()}`,
-    name: `${streamName || 'New'} Vision Pipeline`,
-    nodes: [],
+  const [pipeline, setPipeline] = useState<Pipeline>(() => {
+    // If initialPipeline is provided, use it
+    if (initialPipeline) {
+      console.log("Using initial pipeline:", initialPipeline);
+      return initialPipeline;
+    }
+    
+    // Otherwise create a new empty pipeline
+    return {
+      id: `pipeline_${Date.now()}`,
+      name: `${streamName || 'New'} Vision Pipeline`,
+      nodes: [],
+    };
   });
   
   const [activeComponent, setActiveComponent] = useState<VisionComponent | null>(null);
@@ -68,130 +97,155 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
   
   const builderRef = useRef<HTMLDivElement>(null);
 
-  // Define available components
-  const AVAILABLE_COMPONENTS: VisionComponent[] = [
-    // Source components
-    {
-      id: 'camera_feed',
-      type: 'source',
-      name: 'Camera Feed',
-      category: 'source',
-      description: `Stream source: ${streamSource}`,
-      outputs: ['image'],
-    },
-    
-    // Detector components
-    {
-      id: 'object_detector',
-      type: 'detector',
-      name: 'Object Detector',
-      category: 'detector',
-      description: 'Detects objects in frames',
-      inputs: ['image'],
-      outputs: ['detections'],
-      config: { confidence: 0.5, classes: ['person', 'car', 'dog'] }
-    },
-    {
-      id: 'motion_detector',
-      type: 'detector',
-      name: 'Motion Detector',
-      category: 'detector',
-      description: 'Detects motion between frames',
-      inputs: ['image'],
-      outputs: ['motion_regions'],
-    },
-    {
-      id: 'face_detector',
-      type: 'detector',
-      name: 'Face Detector',
-      category: 'detector',
-      description: 'Detects faces in frames',
-      inputs: ['image'],
-      outputs: ['faces'],
-    },
-    
-    // Tracker components
-    {
-      id: 'object_tracker',
-      type: 'tracker',
-      name: 'Object Tracker',
-      category: 'tracker',
-      description: 'Tracks detected objects across frames',
-      inputs: ['image', 'detections'],
-      outputs: ['tracked_objects'],
-      requiresParent: ['object_detector'],
-    },
-    {
-      id: 'face_tracker',
-      type: 'tracker',
-      name: 'Face Tracker',
-      category: 'tracker',
-      description: 'Tracks detected faces across frames',
-      inputs: ['image', 'faces'],
-      outputs: ['tracked_faces'],
-      requiresParent: ['face_detector'],
-    },
-    
-    // Classifier components
-    {
-      id: 'object_classifier',
-      type: 'classifier',
-      name: 'Object Classifier',
-      category: 'classifier',
-      description: 'Classifies detected objects',
-      inputs: ['image', 'detections'],
-      outputs: ['classified_objects'],
-      requiresParent: ['object_detector'],
-    },
-    {
-      id: 'face_recognition',
-      type: 'classifier',
-      name: 'Face Recognition',
-      category: 'classifier',
-      description: 'Recognizes faces against a database',
-      inputs: ['image', 'faces'],
-      outputs: ['recognized_faces'],
-      requiresParent: ['face_detector'],
-    },
+  // Modify the componentsList definition to ensure there's a source component
+  const componentsList: VisionComponent[] = useMemo(() => {
+    // Get API components or use the built-in ones
+    const components = availableComponents 
+      ? availableComponents.map(normalizeComponent)
+      : [
+        // Source components
+        {
+          id: 'camera_feed',
+          type: 'source',
+          name: 'Camera Feed',
+          category: 'source',
+          description: `Stream source: ${streamSource}`,
+          outputs: ['image'],
+        },
+        
+        // Detector components
+        {
+          id: 'object_detector',
+          type: 'detector',
+          name: 'Object Detector',
+          category: 'detector',
+          description: 'Detects objects in frames',
+          inputs: ['image'],
+          outputs: ['detections'],
+          config: { confidence: 0.5, classes: ['person', 'car', 'dog'] }
+        },
+        {
+          id: 'motion_detector',
+          type: 'detector',
+          name: 'Motion Detector',
+          category: 'detector',
+          description: 'Detects motion between frames',
+          inputs: ['image'],
+          outputs: ['motion_regions'],
+        },
+        {
+          id: 'face_detector',
+          type: 'detector',
+          name: 'Face Detector',
+          category: 'detector',
+          description: 'Detects faces in frames',
+          inputs: ['image'],
+          outputs: ['faces'],
+        },
+        
+        // Tracker components
+        {
+          id: 'object_tracker',
+          type: 'tracker',
+          name: 'Object Tracker',
+          category: 'tracker',
+          description: 'Tracks detected objects across frames',
+          inputs: ['image', 'detections'],
+          outputs: ['tracked_objects'],
+          requiresParent: ['object_detector'],
+        },
+        {
+          id: 'face_tracker',
+          type: 'tracker',
+          name: 'Face Tracker',
+          category: 'tracker',
+          description: 'Tracks detected faces across frames',
+          inputs: ['image', 'faces'],
+          outputs: ['tracked_faces'],
+          requiresParent: ['face_detector'],
+        },
+        
+        // Classifier components
+        {
+          id: 'object_classifier',
+          type: 'classifier',
+          name: 'Object Classifier',
+          category: 'classifier',
+          description: 'Classifies detected objects',
+          inputs: ['image', 'detections'],
+          outputs: ['classified_objects'],
+          requiresParent: ['object_detector'],
+        },
+        {
+          id: 'face_recognition',
+          type: 'classifier',
+          name: 'Face Recognition',
+          category: 'classifier',
+          description: 'Recognizes faces against a database',
+          inputs: ['image', 'faces'],
+          outputs: ['recognized_faces'],
+          requiresParent: ['face_detector'],
+        },
 
-    // Geometry components
-    {
-      id: 'polygon_drawer',
-      type: 'geometry',
-      name: 'Polygon Drawer',
-      category: 'geometry',
-      description: 'Draw polygons to define regions of interest',
-      inputs: ['image', 'detections', 'tracked_objects', 'classified_objects', 'faces', 'tracked_faces', 'recognized_faces'],
-      outputs: ['polygons'],
-    },
-    {
-      id: 'line_crossing',
-      type: 'geometry',
-      name: 'Line Crossing',
-      category: 'geometry',
-      description: 'Define lines for object crossing detection',
-      inputs: ['image', 'detections', 'tracked_objects', 'classified_objects', 'faces', 'tracked_faces', 'recognized_faces'],
-      outputs: ['crossing_events'],
-    },
+        // Geometry components
+        {
+          id: 'polygon_drawer',
+          type: 'geometry',
+          name: 'Polygon Drawer',
+          category: 'geometry',
+          description: 'Draw polygons to define regions of interest',
+          inputs: ['image', 'detections', 'tracked_objects', 'classified_objects', 'faces', 'tracked_faces', 'recognized_faces'],
+          outputs: ['polygons'],
+        },
+        {
+          id: 'line_crossing',
+          type: 'geometry',
+          name: 'Line Crossing',
+          category: 'geometry',
+          description: 'Define lines for object crossing detection',
+          inputs: ['image', 'detections', 'tracked_objects', 'classified_objects', 'faces', 'tracked_faces', 'recognized_faces'],
+          outputs: ['crossing_events'],
+        },
+        
+        // Sink/output components
+        {
+          id: 'telemetry_sink',
+          type: 'sink',
+          name: 'Telemetry Output',
+          category: 'sink',
+          description: 'Outputs detection results as telemetry data',
+          inputs: ['detections', 'tracked_objects', 'classified_objects', 'faces', 'tracked_faces', 'recognized_faces', 'polygons', 'crossing_events'],
+        },
+        {
+          id: 'annotated_video_sink',
+          type: 'sink',
+          name: 'Annotated Video',
+          category: 'sink',
+          description: 'Outputs video with annotations',
+          inputs: ['image', 'detections', 'tracked_objects', 'classified_objects', 'faces', 'tracked_faces', 'recognized_faces', 'polygons'],
+        },
+      ];
     
-    // Sink/output components
-    {
-      id: 'telemetry_sink',
-      type: 'sink',
-      name: 'Telemetry Output',
-      category: 'sink',
-      description: 'Outputs detection results as telemetry data',
-      inputs: ['detections', 'tracked_objects', 'classified_objects', 'faces', 'tracked_faces', 'recognized_faces', 'polygons', 'crossing_events'],
-    },
-    {
-      id: 'annotated_video_sink',
-      type: 'sink',
-      name: 'Annotated Video',
-      category: 'sink',
-      description: 'Outputs video with annotations',
-      inputs: ['image', 'detections', 'tracked_objects', 'classified_objects', 'faces', 'tracked_faces', 'recognized_faces', 'polygons'],
-    },
-  ];
+    // Check if we have any source component
+    const hasSourceComponent = components.some(comp => comp.category === 'source');
+    
+    // If no source component, add a camera feed component based on stream details
+    if (!hasSourceComponent) {
+      components.push({
+        id: 'camera_feed',
+        type: 'source',
+        name: 'Camera Feed',
+        category: 'source',
+        description: `Stream source: ${streamSource}`,
+        inputs: [],
+        outputs: ['image'],
+        requiresParent: [],
+        config: {}
+      });
+    }
+    
+    return components;
+  }, [availableComponents, streamSource]);
 
   // Update available categories based on the pipeline state
   useEffect(() => {
@@ -199,7 +253,7 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     
     // Check if a source node exists
     const hasSource = pipeline.nodes.some(node => {
-      const component = AVAILABLE_COMPONENTS.find(c => c.id === node.componentId);
+      const component = componentsList.find(c => c.id === node.componentId);
       return component?.category === 'source';
     });
     
@@ -209,7 +263,7 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     
     // Check if a detector node exists
     const hasDetector = pipeline.nodes.some(node => {
-      const component = AVAILABLE_COMPONENTS.find(c => c.id === node.componentId);
+      const component = componentsList.find(c => c.id === node.componentId);
       return component?.category === 'detector';
     });
     
@@ -217,22 +271,37 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
       newCategories.push('tracker', 'classifier', 'geometry', 'sink');
     }
     
-    setAvailableCategories(newCategories);
-    
-    // If the currently selected category is no longer available, switch to the first available
-    if (!newCategories.includes(selectedCategory)) {
-      setSelectedCategory(newCategories[0]);
+    // Only set state if categories have actually changed
+    if (!arraysEqual(availableCategories, newCategories)) {
+      setAvailableCategories(newCategories);
     }
-  }, [pipeline.nodes, selectedCategory]);
+    
+    // Helper function to compare arrays
+    function arraysEqual(a: string[], b: string[]) {
+      if (a.length !== b.length) return false;
+      for (let i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) return false;
+      }
+      return true;
+    }
+  }, [pipeline.nodes, componentsList, availableCategories]);
+
+  // Separate effect to update selected category when available categories change
+  useEffect(() => {
+    // If the currently selected category is no longer available, switch to the first available
+    if (!availableCategories.includes(selectedCategory)) {
+      setSelectedCategory(availableCategories[0]);
+    }
+  }, [availableCategories, selectedCategory]);
 
   // Filter components based on selected category
-  const filteredComponents = AVAILABLE_COMPONENTS.filter(
+  const filteredComponents = componentsList.filter(
     component => component.category === selectedCategory
   );
 
   // Get all component categories
   const componentCategories = Array.from(
-    new Set(AVAILABLE_COMPONENTS.map(comp => comp.category))
+    new Set(componentsList.map(comp => comp.category))
   ).filter(category => availableCategories.includes(category));
 
   // Check if adding a component is allowed
@@ -240,7 +309,7 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     // If the component requires a parent, check if a compatible parent exists
     if (component.requiresParent && component.requiresParent.length > 0) {
       return pipeline.nodes.some(node => {
-        const nodeComponent = AVAILABLE_COMPONENTS.find(c => c.id === node.componentId);
+        const nodeComponent = componentsList.find(c => c.id === node.componentId);
         return nodeComponent && component.requiresParent?.includes(nodeComponent.id);
       });
     }
@@ -248,7 +317,7 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     // For source components, only allow one
     if (component.category === 'source') {
       return !pipeline.nodes.some(node => {
-        const nodeComponent = AVAILABLE_COMPONENTS.find(c => c.id === node.componentId);
+        const nodeComponent = componentsList.find(c => c.id === node.componentId);
         return nodeComponent?.category === 'source';
       });
     }
@@ -325,19 +394,19 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     }
   };
 
-  // Check if a connection is valid between two components
-  const isValidConnection = (sourceComponent: VisionComponent, targetComponent: VisionComponent): boolean => {
+  // Function to check if a connection is valid
+  const isValidConnection = (sourceComponent: any, targetComponent: any) => {
     // Only allow connection if source has outputs and target has inputs
     if (!sourceComponent.outputs || !targetComponent.inputs) {
       return false;
     }
     
     // Check if any output of source matches any input of target
-    const hasMatchingIO = sourceComponent.outputs.some(output => 
+    const hasMatchingIO = sourceComponent.outputs.some((output: string) => 
       targetComponent.inputs?.includes(output)
     );
     
-    // Special cases for geometry components - they can connect to/from multiple component types
+    // Special cases for geometry components
     const isSourceGeometry = sourceComponent.category === 'geometry';
     const isTargetGeometry = targetComponent.category === 'geometry';
     
@@ -362,14 +431,14 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     const sourceNode = pipeline.nodes.find(n => n.id === nodeId);
     if (!sourceNode) return [];
     
-    const sourceComponent = AVAILABLE_COMPONENTS.find(c => c.id === sourceNode.componentId);
+    const sourceComponent = componentsList.find(c => c.id === sourceNode.componentId);
     if (!sourceComponent) return [];
     
     return pipeline.nodes
       .filter(node => {
         if (node.id === nodeId) return false; // Can't connect to self
         
-        const targetComponent = AVAILABLE_COMPONENTS.find(c => c.id === node.componentId);
+        const targetComponent = componentsList.find(c => c.id === node.componentId);
         if (!targetComponent) return false;
         
         return isValidConnection(sourceComponent, targetComponent);
@@ -435,9 +504,9 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
       if (targetNode && targetNode.id !== connectionStart.nodeId) {
         // Check if connection is valid (source to target)
         const sourceNode = pipeline.nodes.find(n => n.id === connectionStart.nodeId);
-        const sourceComponent = AVAILABLE_COMPONENTS.find(c => c.id === sourceNode?.componentId);
+        const sourceComponent = componentsList.find(c => c.id === sourceNode?.componentId);
         
-        const targetComponent = AVAILABLE_COMPONENTS.find(c => c.id === targetNode.componentId);
+        const targetComponent = componentsList.find(c => c.id === targetNode.componentId);
         
         if (sourceComponent && targetComponent && isValidConnection(sourceComponent, targetComponent)) {
           // Connect the nodes
@@ -493,7 +562,7 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     const node = pipeline.nodes.find(n => n.id === nodeId);
     if (!node) return;
     
-    const component = AVAILABLE_COMPONENTS.find(c => c.id === node.componentId);
+    const component = componentsList.find(c => c.id === node.componentId);
     if (!component) return;
     
     // If it's a source or detector, check if it has dependent nodes
@@ -503,7 +572,7 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
         if (n.id === nodeId) return false;
         
         // Check if this node depends on the node being deleted
-        const nodeComponent = AVAILABLE_COMPONENTS.find(c => c.id === n.componentId);
+        const nodeComponent = componentsList.find(c => c.id === n.componentId);
         
         // If the node being deleted is a source, any detector depends on it
         if (component.category === 'source' && nodeComponent?.category === 'detector') {
@@ -547,7 +616,7 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
           if (n.id === nodeId) return false;
           
           // Check if this node depends on the detector
-          const nodeComponent = AVAILABLE_COMPONENTS.find(c => c.id === n.componentId);
+          const nodeComponent = componentsList.find(c => c.id === n.componentId);
           return nodeComponent?.category === 'tracker' || 
                  nodeComponent?.category === 'classifier' ||
                  nodeComponent?.category === 'geometry' || 
@@ -580,7 +649,16 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
 
   // Handle saving the pipeline
   const handleSavePipeline = () => {
-    onSave(pipeline);
+    // Prepare the pipeline for API
+    const apiPipeline = {
+      ...pipeline,
+      streamId,
+      active: true,  // Mark as active when saving
+    };
+    
+    // If using a client-generated ID with a prefix, leave it for tracking
+    // The StreamDetails component will handle removing it for new pipelines
+    onSave(apiPipeline);
   };
 
   return (
@@ -649,6 +727,15 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
           onMouseUp={handleMouseUp}
           onDragOver={handleDragOver}
         >
+          {/* Add this render element inside the builder-canvas div, just before the connections-layer svg */}
+          {pipeline.nodes.length === 0 && (
+            <div className="empty-pipeline-hint">
+              <h3>Start Building Your Pipeline</h3>
+              <p>Drag a source component here to begin.</p>
+              <div className="arrow-hint">⟵ Select components from the panel</div>
+            </div>
+          )}
+          
           {/* Draw connections between nodes */}
           <svg className="connections-layer">
             {pipeline.nodes.map(node => 
@@ -694,7 +781,7 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
           
           {/* Render nodes */}
           {pipeline.nodes.map(node => {
-            const component = AVAILABLE_COMPONENTS.find(c => c.id === node.componentId);
+            const component = componentsList.find(c => c.id === node.componentId);
             if (!component) return null;
             
             const isPossibleTarget = possibleConnectionTargets.includes(node.id);
@@ -772,7 +859,7 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
               const node = pipeline.nodes.find(n => n.id === selectedNode);
               if (!node) return null;
               
-              const component = AVAILABLE_COMPONENTS.find(c => c.id === node.componentId);
+              const component = componentsList.find(c => c.id === node.componentId);
               if (!component) return null;
               
               return (

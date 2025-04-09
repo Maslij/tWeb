@@ -210,4 +210,155 @@ const apiService = {
     `${getFullUrl(`/api/streams/${id}/frame`)}?t=${new Date().getTime()}`
 };
 
+// Vision component API methods
+export const getVisionComponents = async (): Promise<any[]> => {
+  try {
+    const response = await fetch(`${API_URL}/api/vision/components`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch vision components: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching vision components:', error);
+    throw error;
+  }
+};
+
+// Pipeline API methods
+export const getPipelinesForStream = async (streamId: string): Promise<any[]> => {
+  try {
+    const response = await fetch(`${API_URL}/api/streams/${streamId}/pipelines`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch pipelines: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching pipelines:', error);
+    throw error;
+  }
+};
+
+export const getPipeline = async (streamId: string, pipelineId: string): Promise<any> => {
+  try {
+    const response = await fetch(`${API_URL}/api/streams/${streamId}/pipelines/${pipelineId}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch pipeline: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching pipeline:', error);
+    throw error;
+  }
+};
+
+export const createPipeline = async (streamId: string, pipeline: any): Promise<any> => {
+  try {
+    const response = await fetch(`${API_URL}/api/streams/${streamId}/pipelines`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(pipeline),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to create pipeline: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error creating pipeline:', error);
+    throw error;
+  }
+};
+
+export const updatePipeline = async (streamId: string, pipelineId: string, pipeline: any): Promise<any> => {
+  try {
+    const response = await fetch(`${API_URL}/api/streams/${streamId}/pipelines/${pipelineId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(pipeline),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to update pipeline: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error updating pipeline:', error);
+    throw error;
+  }
+};
+
+export const deletePipeline = async (streamId: string, pipelineId: string): Promise<void> => {
+  try {
+    const response = await fetch(`${API_URL}/api/streams/${streamId}/pipelines/${pipelineId}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to delete pipeline: ${response.status}`);
+    }
+  } catch (error) {
+    console.error('Error deleting pipeline:', error);
+    throw error;
+  }
+};
+
+export const activatePipeline = async (streamId: string, pipelineId: string): Promise<void> => {
+  console.log(`Activating pipeline ${pipelineId} for stream ${streamId}`);
+  try {
+    const response = await fetch(`${API_URL}/api/streams/${streamId}/pipelines/${pipelineId}/activate`, {
+      method: 'POST',
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to activate pipeline (${response.status}): ${errorText}`);
+    }
+    
+    console.log(`Successfully activated pipeline ${pipelineId}`);
+  } catch (error) {
+    console.error('Error activating pipeline:', error);
+    throw error;
+  }
+};
+
+export const deactivatePipeline = async (streamId: string, pipelineId: string): Promise<void> => {
+  try {
+    const response = await fetch(`${API_URL}/api/streams/${streamId}/pipelines/${pipelineId}/deactivate`, {
+      method: 'POST',
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to deactivate pipeline: ${response.status}`);
+    }
+  } catch (error) {
+    console.error('Error deactivating pipeline:', error);
+    throw error;
+  }
+};
+
+export const getActivePipeline = async (streamId: string): Promise<any> => {
+  try {
+    const response = await fetch(`${API_URL}/api/streams/${streamId}/pipelines/active`);
+    
+    // If the response is 404, it means there's no active pipeline - this is not an error
+    if (response.status === 404) {
+      return { active: false };
+    }
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch active pipeline: ${response.status}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    // Only log actual errors, not expected 404s
+    if (!(error instanceof Error && error.message.includes("404"))) {
+      console.error('Error fetching active pipeline:', error);
+    }
+    
+    // Return a default response that indicates no active pipeline
+    return { active: false };
+  }
+};
+
 export default apiService; 

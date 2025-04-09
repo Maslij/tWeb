@@ -460,4 +460,35 @@
 .polygon-editor-container {
   width: 100%;
   height: 100%;
+}
+
+/* Add this CSS rule to the end of the file */
+.empty-pipeline-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: rgba(245, 245, 245, 0.9);
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  max-width: 300px;
+  z-index: 5;
+}
+
+.empty-pipeline-hint h3 {
+  margin-top: 0;
+  color: #333;
+}
+
+.empty-pipeline-hint p {
+  margin-bottom: 15px;
+  color: #666;
+}
+
+.arrow-hint {
+  font-size: 20px;
+  color: #888;
+  margin-top: 10px;
 } 

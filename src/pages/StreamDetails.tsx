@@ -1,6 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import apiService, { Stream } from '../services/api';
+import apiService, { 
+  Stream, 
+  getVisionComponents, 
+  getPipelinesForStream, 
+  getActivePipeline,
+  createPipeline,
+  updatePipeline,
+  activatePipeline
+} from '../services/api';
 import StreamView from '../components/StreamView';
 import StreamViewWS from '../components/StreamViewWS';
 import PolygonEditor from '../components/PolygonEditor';
@@ -18,6 +26,10 @@ const StreamDetails = () => {
   const [fps, setFps] = useState<number>(15);
   const [showPolygonEditor, setShowPolygonEditor] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'stream' | 'pipeline'>('stream');
+  const [visionComponents, setVisionComponents] = useState<any[]>([]);
+  const [pipelines, setPipelines] = useState<any[]>([]);
+  const [activePipeline, setActivePipeline] = useState<any>(null);
+  const [loadingVisionData, setLoadingVisionData] = useState<boolean>(false);
   const isPollingRef = useRef<boolean>(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const pollIntervalRef = useRef<number | null>(null);
@@ -82,6 +94,84 @@ const StreamDetails = () => {
     }
   };
 
+  // Fetch vision components
+  const fetchVisionComponents = async () => {
+    if (!id) return;
+    
+    try {
+      setLoadingVisionData(true);
+      console.log("Fetching vision components...");
+      const components = await getVisionComponents();
+      console.log("Received components:", components);
+      setVisionComponents(components);
+    } catch (err) {
+      console.error('Error fetching vision components:', err);
+      // Show a temporary error notification but don't block the UI
+      setError(`Error loading vision components: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setTimeout(() => setError(null), 5000); // Clear error after 5 seconds
+    } finally {
+      setLoadingVisionData(false);
+    }
+  };
+
+  // Fetch pipelines for the stream
+  const fetchPipelines = async () => {
+    if (!id) return;
+    
+    try {
+      setLoadingVisionData(true);
+      console.log("Fetching pipelines for stream:", id);
+      
+      try {
+        const pipelineData = await getPipelinesForStream(id);
+        console.log("Received pipelines:", pipelineData);
+        setPipelines(pipelineData);
+        
+        // If there are pipelines and no active pipeline is set yet, use the first one
+        if (pipelineData.length > 0 && !activePipeline) {
+          console.log("Setting initial pipeline from list:", pipelineData[0]);
+          setActivePipeline(pipelineData[0]);
+        }
+      } catch (err) {
+        console.error('Error fetching pipelines list:', err);
+        // Continue with empty pipelines list
+        setPipelines([]);
+      }
+      
+      // Also get the active pipeline
+      console.log("Fetching active pipeline...");
+      try {
+        const activePipelineData = await getActivePipeline(id);
+        console.log("Received active pipeline data:", activePipelineData);
+        
+        // Only update active pipeline if one was returned as active
+        if (activePipelineData.active && activePipelineData.pipeline) {
+          console.log("Setting active pipeline from API:", activePipelineData.pipeline);
+          setActivePipeline(activePipelineData.pipeline);
+        } else if (pipelines.length > 0 && !activePipeline) {
+          // If no active pipeline but we have pipelines, use the first one
+          console.log("No active pipeline returned, using first from list:", pipelines[0]);
+          setActivePipeline(pipelines[0]);
+        }
+      } catch (err) {
+        console.error('Error fetching active pipeline:', err);
+        // If we have pipelines but no active pipeline, use the first one
+        if (pipelines.length > 0 && !activePipeline) {
+          console.log("Error getting active pipeline, using first from list:", pipelines[0]);
+          setActivePipeline(pipelines[0]);
+        }
+      }
+      
+    } catch (err) {
+      console.error('Error in pipeline fetching process:', err);
+      // Show a temporary error notification but don't block the UI
+      setError(`Error loading pipelines: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      setTimeout(() => setError(null), 5000); // Clear error after 5 seconds
+    } finally {
+      setLoadingVisionData(false);
+    }
+  };
+
   useEffect(() => {
     // Initial fetch
     fetchStream();
@@ -107,6 +197,14 @@ const StreamDetails = () => {
       }
     };
   }, [id]);
+
+  // Fetch vision data when switching to pipeline view
+  useEffect(() => {
+    if (viewMode === 'pipeline' && stream?.status === 'running') {
+      fetchVisionComponents();
+      fetchPipelines();
+    }
+  }, [viewMode, stream?.status, id]);
 
   // Handle stream status changes
   useEffect(() => {
@@ -164,10 +262,53 @@ const StreamDetails = () => {
     }
   };
 
-  const handleSavePipeline = (pipeline: any) => {
-    console.log('Saving pipeline:', pipeline);
-    // Here you would integrate with your API to save the pipeline
-    alert('Pipeline saved successfully (demo only)');
+  const handleSavePipeline = async (pipeline: any) => {
+    if (!id) return;
+    
+    try {
+      setActionLoading(true);
+      
+      let savedPipeline;
+      
+      // Check if this pipeline already exists in our known pipelines list
+      const existingPipeline = pipelines.find(p => p.id === pipeline.id);
+      
+      console.log("Saving pipeline:", pipeline);
+      console.log("Existing pipelines:", pipelines);
+      console.log("Is existing pipeline:", !!existingPipeline);
+      
+      if (existingPipeline) {
+        // Update existing pipeline
+        console.log("Updating existing pipeline:", pipeline.id);
+        savedPipeline = await updatePipeline(id, pipeline.id, pipeline);
+      } else {
+        // Create new pipeline - don't use the client-generated ID
+        console.log("Creating new pipeline");
+        const { id: generatedId, ...pipelineWithoutId } = pipeline;
+        savedPipeline = await createPipeline(id, pipelineWithoutId);
+      }
+      
+      console.log('Pipeline saved:', savedPipeline);
+      
+      // Reload pipelines
+      await fetchPipelines();
+      
+      // If the pipeline should be activated
+      if (pipeline.active) {
+        await activatePipeline(id, savedPipeline.id);
+        // Update active pipeline
+        await fetchPipelines();
+      }
+      
+      // Show success message
+      alert('Pipeline saved successfully');
+      
+    } catch (err) {
+      console.error('Error saving pipeline:', err);
+      alert('Error saving pipeline: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   if (loading) {
@@ -376,13 +517,34 @@ const StreamDetails = () => {
                 Build a computer vision pipeline by dragging components from the left panel to the canvas.
                 Connect components by clicking the arrow button and dragging to another component.
               </p>
-              <VisionPipelineBuilder 
-                streamId={stream.id}
-                streamName={stream.name || 'Unnamed Stream'}
-                streamSource={stream.source}
-                streamType={stream.type || 'camera'}
-                onSave={handleSavePipeline}
-              />
+              {loadingVisionData ? (
+                <div className="loading-indicator">Loading vision components...</div>
+              ) : error ? (
+                <div className="error" style={{ marginBottom: '15px', padding: '10px' }}>
+                  {error}
+                  <button 
+                    className="btn btn-small" 
+                    style={{ marginLeft: '10px' }}
+                    onClick={() => {
+                      setError(null);
+                      fetchVisionComponents();
+                      fetchPipelines();
+                    }}
+                  >
+                    Retry
+                  </button>
+                </div>
+              ) : (
+                <VisionPipelineBuilder 
+                  streamId={stream.id}
+                  streamName={stream.name || 'Unnamed Stream'}
+                  streamSource={stream.source}
+                  streamType={stream.type || 'camera'}
+                  onSave={handleSavePipeline}
+                  availableComponents={visionComponents}
+                  initialPipeline={activePipeline}
+                />
+              )}
             </div>
           </>
         )}
