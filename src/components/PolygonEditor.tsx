@@ -12,12 +12,12 @@ interface PolygonEditorProps {
 
 // Default colors to cycle through when creating new polygons
 const DEFAULT_COLORS: [number, number, number][] = [
-  [0, 255, 0],   // Green
-  [255, 0, 0],   // Red
-  [0, 0, 255],   // Blue
-  [255, 255, 0], // Yellow
-  [255, 0, 255], // Magenta
-  [0, 255, 255], // Cyan
+  [255, 69, 0],    // Orange-Red
+  [70, 130, 180],  // Steel Blue
+  [255, 215, 0],   // Gold
+  [199, 21, 133],  // Medium Violet Red
+  [32, 178, 170],  // Light Sea Green
+  [148, 0, 211],   // Dark Violet
 ];
 
 const PolygonEditor: React.FC<PolygonEditorProps> = ({
