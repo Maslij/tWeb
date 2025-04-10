@@ -438,6 +438,12 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
         return nodeComponent?.category === 'source';
       });
     }
+
+    // Check if component type already exists in pipeline
+    const componentExists = pipeline.nodes.some(node => node.componentId === component.id);
+    if (componentExists) {
+      return false;
+    }
     
     return true;
   };
@@ -1067,6 +1073,8 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
                     <div className="component-disabled-reason">
                       {component.category === 'source' ? 
                         'Only one source allowed' : 
+                        pipeline.nodes.some(node => node.componentId === component.id) ?
+                        'Component already in use' :
                         'Requires compatible parent component'}
                     </div>
                   )}
