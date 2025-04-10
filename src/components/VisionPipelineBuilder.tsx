@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import '../styles/VisionPipelineBuilder.css';
 
 // Define types for our vision components
@@ -180,6 +180,76 @@ const FlashMessage: React.FC<FlashMessageProps> = ({ message, type, onClose }) =
   );
 };
 
+// Confirmation Dialog component
+interface ConfirmationDialogProps {
+  isOpen: boolean;
+  title: string;
+  message: string;
+  confirmText: string;
+  cancelText: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}
+
+const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
+  isOpen,
+  title,
+  message,
+  confirmText,
+  cancelText,
+  onConfirm,
+  onCancel
+}) => {
+  if (!isOpen) return null;
+  
+  return (
+    <div className="confirmation-dialog-overlay">
+      <div className="confirmation-dialog">
+        <h3>{title}</h3>
+        <p>{message}</p>
+        <div className="confirmation-buttons">
+          <button className="btn-cancel" onClick={onCancel}>
+            {cancelText}
+          </button>
+          <button className="btn-confirm" onClick={onConfirm}>
+            {confirmText}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Debounce hooks to prevent accidental double-clicks
+const useDebounce = (callback: Function, delay: number) => {
+  const timeoutRef = useRef<number | null>(null);
+  const [isDebouncing, setIsDebouncing] = useState(false);
+  
+  const debouncedCallback = useCallback((...args: any[]) => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    
+    setIsDebouncing(true);
+    
+    timeoutRef.current = window.setTimeout(() => {
+      callback(...args);
+      setIsDebouncing(false);
+      timeoutRef.current = null;
+    }, delay);
+  }, [callback, delay]);
+  
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+  
+  return { debouncedCallback, isDebouncing };
+};
+
 const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({ 
   streamId, 
   streamName, 
@@ -225,6 +295,7 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
   const [possibleConnectionTargets, setPossibleConnectionTargets] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [flashMessage, setFlashMessage] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   
   const builderRef = useRef<HTMLDivElement>(null);
 
@@ -925,6 +996,24 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     });
   };
 
+  // Add these handlers after the pipeline state
+  // Create debounced stream control handlers
+  const { debouncedCallback: handleStartStreamDebounced, isDebouncing: isStartingStream } = 
+    useDebounce(() => onStartStream && onStartStream(), 300);
+
+  const { debouncedCallback: handleStopStreamDebounced, isDebouncing: isStoppingStream } = 
+    useDebounce(() => onStopStream && onStopStream(), 300);
+
+  const { debouncedCallback: handleDeleteStreamDebounced, isDebouncing: isDeletingStream } = 
+    useDebounce(() => {
+      setShowDeleteConfirmation(false);
+      onDeleteStream && onDeleteStream();
+    }, 300);
+
+  // Add a debounced save handler
+  const { debouncedCallback: handleSavePipelineDebounced, isDebouncing: isSavingPipeline } = 
+    useDebounce(handleSavePipeline, 300);
+
   return (
     <div className="vision-pipeline-builder">
       {/* Flash message */}
@@ -950,17 +1039,17 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
             {showComponentList ? 'Hide Components' : 'Show Components'}
           </button>
           <button 
-            onClick={handleSavePipeline} 
-            className={`save-button ${isSaving ? 'saving' : ''}`}
-            disabled={isSaving}
+            onClick={handleSavePipelineDebounced} 
+            className={`save-button ${isSaving || isSavingPipeline ? 'saving' : ''}`}
+            disabled={isSaving || isSavingPipeline}
           >
-            {isSaving ? (
+            {isSaving || isSavingPipeline ? (
               <>
                 <span className="spinner"></span>
-                Saving...
+                <span className="button-text">Saving...</span>
               </>
             ) : (
-              'Save Pipeline'
+              <span className="button-text">Save Pipeline</span>
             )}
           </button>
         </div>
@@ -1542,29 +1631,50 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
                           <div className="stream-actions">
                             {streamStatus !== 'running' && onStartStream && (
                               <button 
-                                className="btn" 
-                                onClick={onStartStream}
-                                disabled={actionLoading}
+                                className={`btn ${actionLoading || isStartingStream ? 'loading' : ''}`}
+                                onClick={handleStartStreamDebounced}
+                                disabled={actionLoading || isStartingStream}
                               >
-                                Start Stream
+                                {actionLoading || isStartingStream ? (
+                                  <>
+                                    <span className="spinner"></span>
+                                    <span className="button-text">Starting...</span>
+                                  </>
+                                ) : (
+                                  <span className="button-text">Start Stream</span>
+                                )}
                               </button>
                             )}
                             {streamStatus === 'running' && onStopStream && (
                               <button 
-                                className="btn btn-secondary" 
-                                onClick={onStopStream}
-                                disabled={actionLoading}
+                                className={`btn btn-secondary ${actionLoading || isStoppingStream ? 'loading' : ''}`}
+                                onClick={handleStopStreamDebounced}
+                                disabled={actionLoading || isStoppingStream}
                               >
-                                Stop Stream
+                                {actionLoading || isStoppingStream ? (
+                                  <>
+                                    <span className="spinner"></span>
+                                    <span className="button-text">Stopping...</span>
+                                  </>
+                                ) : (
+                                  <span className="button-text">Stop Stream</span>
+                                )}
                               </button>
                             )}
                             {onDeleteStream && (
                               <button 
-                                className="btn btn-danger" 
-                                onClick={onDeleteStream}
-                                disabled={actionLoading}
+                                className={`btn btn-danger ${actionLoading || isDeletingStream ? 'loading' : ''}`}
+                                onClick={() => setShowDeleteConfirmation(true)}
+                                disabled={actionLoading || isDeletingStream}
                               >
-                                Delete Stream
+                                {actionLoading || isDeletingStream ? (
+                                  <>
+                                    <span className="spinner"></span>
+                                    <span className="button-text">Deleting...</span>
+                                  </>
+                                ) : (
+                                  <span className="button-text">Delete Stream</span>
+                                )}
                               </button>
                             )}
                           </div>
@@ -1720,6 +1830,19 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
           </div>
         )}
       </div>
+      
+      {/* Delete Confirmation Dialog */}
+      {showDeleteConfirmation && (
+        <ConfirmationDialog
+          isOpen={showDeleteConfirmation}
+          title="Delete Stream"
+          message="Are you sure you want to delete this stream? This action cannot be undone."
+          confirmText="Delete"
+          cancelText="Cancel"
+          onConfirm={handleDeleteStreamDebounced}
+          onCancel={() => setShowDeleteConfirmation(false)}
+        />
+      )}
     </div>
   );
 };

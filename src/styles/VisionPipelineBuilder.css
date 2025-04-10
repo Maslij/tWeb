@@ -649,6 +649,13 @@
   color: white;
 }
 
+/* Stream controls container */
+.stream-controls {
+  margin-top: 10px;
+  margin-bottom: 15px;
+}
+
+/* Stream actions container */
 .stream-actions {
   display: flex;
   flex-wrap: wrap;
@@ -656,6 +663,16 @@
   margin-top: 10px;
 }
 
+/* Ensure consistent button sizing and text positioning */
+.button-text {
+  display: inline-block;
+  line-height: 1.2;
+  height: 16px; /* Fixed height for text */
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* Fixed height and consistent sizing for all buttons */
 .stream-actions .btn {
   padding: 5px 10px;
   background: #4CAF50;
@@ -665,6 +682,15 @@
   cursor: pointer;
   font-size: 12px;
   font-weight: bold;
+  width: 120px; /* Use fixed width instead of min-width */
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  transition: background-color 0.2s, opacity 0.2s;
+  position: relative; /* For absolute positioning of spinner */
+  box-sizing: border-box; /* Make sure padding doesn't affect size */
 }
 
 .stream-actions .btn:hover {
@@ -691,6 +717,36 @@
 
 .stream-actions .btn.btn-danger:hover {
   background: #d32f2f;
+}
+
+/* Loading state styles for buttons */
+.stream-actions .btn.loading {
+  opacity: 0.8;
+  cursor: not-allowed;
+  /* Remove min-width to avoid size changes */
+}
+
+.loading {
+  min-height: 30px;
+}
+
+/* Fixed position spinner to avoid affecting button layout */
+.stream-actions .btn.loading .spinner {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  margin-top: -6px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 1s ease-in-out infinite;
+}
+
+.stream-actions .btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 /* Flash Messages */
@@ -758,6 +814,15 @@
 }
 
 /* Save button with spinner */
+.save-button {
+  width: 120px; /* Use fixed width */
+  box-sizing: border-box;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .save-button.saving {
   position: relative;
   background-color: #3a80d2;
@@ -773,8 +838,6 @@
   border-radius: 50%;
   border-top-color: #fff;
   animation: spin 1s ease-in-out infinite;
-  margin-right: 8px;
-  vertical-align: middle;
 }
 
 @keyframes spin {
@@ -818,4 +881,104 @@
 .config-item input[type="checkbox"] {
   transform: scale(1.2);
   margin-right: 3px;
+}
+
+/* Confirmation Dialog Styles */
+.confirmation-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1100; /* Higher than other modals */
+  animation: fadeIn 0.2s ease-out;
+}
+
+.confirmation-dialog {
+  background-color: white;
+  border-radius: 8px;
+  padding: 20px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  animation: scaleIn 0.2s ease-out;
+}
+
+.confirmation-dialog h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #d32f2f; /* Red for warning */
+  font-size: 18px;
+}
+
+.confirmation-dialog p {
+  margin-bottom: 20px;
+  color: #333;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.confirmation-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.btn-cancel {
+  padding: 8px 16px;
+  background-color: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  color: #333;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-cancel:hover {
+  background-color: #e8e8e8;
+}
+
+.btn-confirm {
+  padding: 8px 16px;
+  background-color: #f44336; /* Red for delete */
+  border: none;
+  border-radius: 4px;
+  color: white;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-confirm:hover {
+  background-color: #d32f2f;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* Spinner styles for all buttons */
+.save-button.saving .spinner,
+.stream-actions .btn.loading .spinner {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  margin-top: -6px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 1s ease-in-out infinite;
 } 
