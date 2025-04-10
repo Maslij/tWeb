@@ -478,6 +478,44 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
   // Handle drag over the canvas
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+
+  // Handle drop on the canvas
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    
+    if (!builderRef.current || !activeComponent) return;
+    
+    const rect = builderRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    // Add new component to pipeline
+    const newNode: PipelineNode = {
+      id: `${activeComponent.id}_${Date.now()}`,
+      componentId: activeComponent.id,
+      position: { x: x - dragOffset.x, y: y - dragOffset.y },
+      connections: [],
+      config: activeComponent.config ? { ...activeComponent.config } : undefined
+    };
+    
+    // If it's a source component, add stream details
+    if (activeComponent.category === 'source') {
+      newNode.sourceDetails = {
+        name: streamName,
+        source: streamSource,
+        type: streamType
+      };
+    }
+    
+    setPipeline(prev => ({
+      ...prev,
+      nodes: [...prev.nodes, newNode]
+    }));
+    
+    setActiveComponent(null);
+    setSelectedComponent(null);
   };
 
   // Handle mouse move for dragging nodes and drawing connections
@@ -1007,6 +1045,19 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
                   key={component.id}
                   className={`component-item ${selectedComponent === component.id ? 'selected' : ''} ${!canAddComponent(component) ? 'disabled' : ''}`}
                   draggable={canAddComponent(component)}
+                  onDragStart={(e) => {
+                    if (canAddComponent(component)) {
+                      setActiveComponent(component);
+                      setSelectedComponent(component.id);
+                      if (builderRef.current) {
+                        const rect = builderRef.current.getBoundingClientRect();
+                        setDragOffset({
+                          x: 90, // Half the component width for centered placement
+                          y: 40  // Half the component height for centered placement
+                        });
+                      }
+                    }
+                  }}
                   onMouseDown={(e) => handleDragStart(component, e)}
                   onClick={() => canAddComponent(component) && setSelectedComponent(component.id)}
                 >
@@ -1031,6 +1082,7 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onDragOver={handleDragOver}
+          onDrop={handleDrop}
         >
           {/* Add this render element inside the builder-canvas div, just before the connections-layer svg */}
           {pipeline.nodes.length === 0 && (
