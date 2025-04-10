@@ -4,9 +4,12 @@ import AlarmModal from './AlarmModal';
 
 interface StreamViewProps {
   streamId: string;
+  width?: string | number;
+  height?: string | number;
+  refreshRate?: number;
 }
 
-const StreamView = ({ streamId }: StreamViewProps) => {
+const StreamView = ({ streamId, width = '100%', height = 'auto', refreshRate = 1000 }: StreamViewProps) => {
   const [imageUrl, setImageUrl] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [hasAlarms, setHasAlarms] = useState<boolean>(false);
@@ -80,10 +83,10 @@ const StreamView = ({ streamId }: StreamViewProps) => {
     // Set up periodic refresh
     const intervalId = setInterval(() => {
       setImageUrl(apiService.getFrameUrlWithTimestamp(streamId));
-    }, 1000); // Refresh every second
+    }, refreshRate); // Use the refreshRate prop
     
     return () => clearInterval(intervalId);
-  }, [streamId]);
+  }, [streamId, refreshRate]); // Add refreshRate to dependencies
 
   const handleAlarmClick = () => {
     setShowAlarmModal(true);
@@ -117,15 +120,15 @@ const StreamView = ({ streamId }: StreamViewProps) => {
             src={imageUrl} 
             alt="Stream view" 
             className="stream-image"
-            style={{ width: '100%', height: 'auto', maxHeight: '70vh', objectFit: 'contain' }}
+            style={{ width, height, maxHeight: '70vh', objectFit: 'contain' }}
             onError={() => setImageUrl('/placeholder-error.jpg')}
           />
         ) : (
           <div 
             style={{ 
               backgroundColor: '#eee',
-              width: '100%',
-              height: '70vh',
+              width,
+              height: height === 'auto' ? '70vh' : height,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',

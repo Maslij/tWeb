@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-// Use relative URLs to work with the Vite proxy
+// DEPRECATED: Use getFullUrl() instead of API_URL directly
+// This remains empty for backwards compatibility
 const API_URL = '';
 
 // Stream type definitions
@@ -77,21 +78,39 @@ const ensureArray = (data: any): any[] => {
 const getFullUrl = (path: string): string => {
   // For development with the proxy, we use relative URLs
   if (window.location.hostname === 'localhost') {
-    return path;
+    // Check if this is a development environment or production
+    // If we have VITE_TAPI_SERVER environment variable, use it
+    const apiServer = import.meta.env.VITE_TAPI_SERVER || 'localhost:8080';
+    const protocol = window.location.protocol;
+    return `${protocol}//${apiServer}${path}`;
   }
   
   // For production, we need to use the actual API server
   // You might need to configure this based on your deployment setup
-  const apiBaseUrl = 'http://localhost:8080'; // Default for development without proxy
+  const apiBaseUrl = window.location.origin; // Use the same origin in production
   return `${apiBaseUrl}${path}`;
 };
 
 // API Service
 const apiService = {
+  // Check if the API is reachable
+  checkServerHealth: async () => {
+    try {
+      // Use a simple HEAD request to check if the server is reachable
+      const response = await fetch(getFullUrl('/api/streams'), {
+        method: 'HEAD'
+      });
+      return response.ok;
+    } catch (error) {
+      console.error('API server health check failed:', error);
+      return false;
+    }
+  },
+
   // Get API status
   getStatus: async () => {
     try {
-      const response = await axios.get(`${API_URL}/`);
+      const response = await axios.get(getFullUrl(`/`));
       return response.data;
     } catch (error) {
       console.error('Error getting API status:', error);
@@ -102,7 +121,7 @@ const apiService = {
   // Stream Management
   getStreams: async (): Promise<Stream[]> => {
     try {
-      const response = await axios.get(`${API_URL}/api/streams`);
+      const response = await axios.get(getFullUrl(`/api/streams`));
       return ensureArray(response.data);
     } catch (error) {
       console.error('Error fetching streams:', error);
@@ -112,7 +131,7 @@ const apiService = {
 
   getStreamById: async (id: string): Promise<Stream> => {
     try {
-      const response = await axios.get(`${API_URL}/api/streams/${id}`);
+      const response = await axios.get(getFullUrl(`/api/streams/${id}`));
       return response.data;
     } catch (error) {
       console.error(`Error fetching stream ${id}:`, error);
@@ -123,7 +142,7 @@ const apiService = {
 
   createStream: async (payload: CreateStreamPayload): Promise<{ id: string }> => {
     try {
-      const response = await axios.post(`${API_URL}/api/streams`, payload);
+      const response = await axios.post(getFullUrl(`/api/streams`), payload);
       return response.data;
     } catch (error) {
       console.error('Error creating stream:', error);
@@ -133,7 +152,7 @@ const apiService = {
 
   startStream: async (id: string): Promise<{ success: boolean; id: string }> => {
     try {
-      const response = await axios.post(`${API_URL}/api/streams/${id}/start`);
+      const response = await axios.post(getFullUrl(`/api/streams/${id}/start`));
       return response.data;
     } catch (error) {
       console.error(`Error starting stream ${id}:`, error);
@@ -143,7 +162,7 @@ const apiService = {
 
   stopStream: async (id: string): Promise<{ success: boolean; id: string }> => {
     try {
-      const response = await axios.post(`${API_URL}/api/streams/${id}/stop`);
+      const response = await axios.post(getFullUrl(`/api/streams/${id}/stop`));
       return response.data;
     } catch (error) {
       console.error(`Error stopping stream ${id}:`, error);
@@ -153,7 +172,7 @@ const apiService = {
 
   deleteStream: async (id: string): Promise<{ success: boolean; id: string }> => {
     try {
-      const response = await axios.delete(`${API_URL}/api/streams/${id}`);
+      const response = await axios.delete(getFullUrl(`/api/streams/${id}`));
       return response.data;
     } catch (error) {
       console.error(`Error deleting stream ${id}:`, error);
@@ -164,7 +183,7 @@ const apiService = {
   // Polygon Management
   getPolygons: async (streamId: string): Promise<Polygon[]> => {
     try {
-      const response = await axios.get(`${API_URL}/api/streams/${streamId}/polygons`);
+      const response = await axios.get(getFullUrl(`/api/streams/${streamId}/polygons`));
       return ensureArray(response.data);
     } catch (error) {
       console.error(`Error fetching polygons for stream ${streamId}:`, error);
@@ -174,7 +193,7 @@ const apiService = {
 
   createPolygon: async (streamId: string, payload: CreatePolygonPayload): Promise<{ id: string }> => {
     try {
-      const response = await axios.post(`${API_URL}/api/streams/${streamId}/polygons`, payload);
+      const response = await axios.post(getFullUrl(`/api/streams/${streamId}/polygons`), payload);
       return response.data;
     } catch (error) {
       console.error(`Error creating polygon for stream ${streamId}:`, error);
@@ -184,7 +203,7 @@ const apiService = {
 
   updatePolygon: async (streamId: string, polygonId: string, payload: UpdatePolygonPayload): Promise<{ success: boolean }> => {
     try {
-      const response = await axios.put(`${API_URL}/api/streams/${streamId}/polygons/${polygonId}`, payload);
+      const response = await axios.put(getFullUrl(`/api/streams/${streamId}/polygons/${polygonId}`), payload);
       return response.data;
     } catch (error) {
       console.error(`Error updating polygon ${polygonId}:`, error);
@@ -194,7 +213,7 @@ const apiService = {
 
   deletePolygon: async (streamId: string, polygonId: string): Promise<{ success: boolean }> => {
     try {
-      const response = await axios.delete(`${API_URL}/api/streams/${streamId}/polygons/${polygonId}`);
+      const response = await axios.delete(getFullUrl(`/api/streams/${streamId}/polygons/${polygonId}`));
       return response.data;
     } catch (error) {
       console.error(`Error deleting polygon ${polygonId}:`, error);
@@ -211,9 +230,8 @@ const apiService = {
   
   // WebSocket URL host
   getWebSocketHost: () => {
-    // For development with the proxy, we need to use the actual API server
-    // since WebSocket connections cannot be proxied by the dev server
-    return 'localhost:8080'; // Always use the direct API server for WebSockets
+    // Always use the VITE_TAPI_SERVER environment variable if available
+    return import.meta.env.VITE_TAPI_SERVER || 'localhost:8080';
   },
   
   // Helper method to get a frame URL with timestamp to prevent caching
@@ -224,7 +242,7 @@ const apiService = {
 // Vision component API methods
 export const getVisionComponents = async (): Promise<any[]> => {
   try {
-    const response = await fetch(`${API_URL}/api/vision/components`);
+    const response = await fetch(getFullUrl(`/api/vision/components`));
     if (!response.ok) {
       throw new Error(`Failed to fetch vision components: ${response.status}`);
     }
@@ -238,7 +256,7 @@ export const getVisionComponents = async (): Promise<any[]> => {
 // Pipeline API methods
 export const getPipelinesForStream = async (streamId: string): Promise<any[]> => {
   try {
-    const response = await fetch(`${API_URL}/api/streams/${streamId}/pipelines`);
+    const response = await fetch(getFullUrl(`/api/streams/${streamId}/pipelines`));
     if (!response.ok) {
       throw new Error(`Failed to fetch pipelines: ${response.status}`);
     }
@@ -251,7 +269,7 @@ export const getPipelinesForStream = async (streamId: string): Promise<any[]> =>
 
 export const getPipeline = async (streamId: string, pipelineId: string): Promise<any> => {
   try {
-    const response = await fetch(`${API_URL}/api/streams/${streamId}/pipelines/${pipelineId}`);
+    const response = await fetch(getFullUrl(`/api/streams/${streamId}/pipelines/${pipelineId}`));
     if (!response.ok) {
       throw new Error(`Failed to fetch pipeline: ${response.status}`);
     }
@@ -264,7 +282,7 @@ export const getPipeline = async (streamId: string, pipelineId: string): Promise
 
 export const createPipeline = async (streamId: string, pipeline: any): Promise<any> => {
   try {
-    const response = await fetch(`${API_URL}/api/streams/${streamId}/pipelines`, {
+    const response = await fetch(getFullUrl(`/api/streams/${streamId}/pipelines`), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -283,7 +301,7 @@ export const createPipeline = async (streamId: string, pipeline: any): Promise<a
 
 export const updatePipeline = async (streamId: string, pipelineId: string, pipeline: any): Promise<any> => {
   try {
-    const response = await fetch(`${API_URL}/api/streams/${streamId}/pipelines/${pipelineId}`, {
+    const response = await fetch(getFullUrl(`/api/streams/${streamId}/pipelines/${pipelineId}`), {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -302,7 +320,7 @@ export const updatePipeline = async (streamId: string, pipelineId: string, pipel
 
 export const deletePipeline = async (streamId: string, pipelineId: string): Promise<void> => {
   try {
-    const response = await fetch(`${API_URL}/api/streams/${streamId}/pipelines/${pipelineId}`, {
+    const response = await fetch(getFullUrl(`/api/streams/${streamId}/pipelines/${pipelineId}`), {
       method: 'DELETE',
     });
     if (!response.ok) {
@@ -317,7 +335,7 @@ export const deletePipeline = async (streamId: string, pipelineId: string): Prom
 export const activatePipeline = async (streamId: string, pipelineId: string): Promise<void> => {
   console.log(`Activating pipeline ${pipelineId} for stream ${streamId}`);
   try {
-    const response = await fetch(`${API_URL}/api/streams/${streamId}/pipelines/${pipelineId}/activate`, {
+    const response = await fetch(getFullUrl(`/api/streams/${streamId}/pipelines/${pipelineId}/activate`), {
       method: 'POST',
     });
     
@@ -335,7 +353,7 @@ export const activatePipeline = async (streamId: string, pipelineId: string): Pr
 
 export const deactivatePipeline = async (streamId: string, pipelineId: string): Promise<void> => {
   try {
-    const response = await fetch(`${API_URL}/api/streams/${streamId}/pipelines/${pipelineId}/deactivate`, {
+    const response = await fetch(getFullUrl(`/api/streams/${streamId}/pipelines/${pipelineId}/deactivate`), {
       method: 'POST',
     });
     if (!response.ok) {
@@ -349,7 +367,7 @@ export const deactivatePipeline = async (streamId: string, pipelineId: string): 
 
 export const getActivePipeline = async (streamId: string): Promise<any> => {
   try {
-    const response = await fetch(`${API_URL}/api/streams/${streamId}/pipelines/active`);
+    const response = await fetch(getFullUrl(`/api/streams/${streamId}/pipelines/active`));
     
     // If the response is 404, it means there's no active pipeline - this is not an error
     if (response.status === 404) {
@@ -413,7 +431,7 @@ export const getStreamAlarms = async (streamId: string): Promise<AlarmEvent[]> =
   try {
     // Try to get real alarms from the API if it exists
     try {
-      const response = await fetch(`${API_URL}/api/streams/${streamId}/alarms`);
+      const response = await fetch(getFullUrl(`/api/streams/${streamId}/alarms`));
       if (response.ok) {
         return await response.json();
       }

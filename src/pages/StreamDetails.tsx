@@ -492,7 +492,7 @@ const StreamDetails = () => {
           <div className="stream-view-container">
             {useWebSocket ? (
               <StreamViewWS 
-                key={`ws-modal-${stream.id}-${Date.now()}`} 
+                key={`ws-modal-${stream.id}`}
                 streamId={stream.id} 
                 fps={fps} 
                 width="100%" 
