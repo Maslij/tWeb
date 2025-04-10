@@ -771,6 +771,31 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     }
   };
 
+  // Update the pipeline when initialPipeline prop changes
+  useEffect(() => {
+    if (initialPipeline) {
+      console.log("Updating pipeline from props:", initialPipeline);
+      setPipeline(prev => {
+        // Keep node positions from the current pipeline when receiving updated pipeline data
+        const updatedPipeline = {
+          ...initialPipeline,
+          nodes: initialPipeline.nodes.map((newNode: any) => {
+            // Find matching node in current pipeline to preserve position
+            const currentNode = prev.nodes.find(n => n.id === newNode.id);
+            if (currentNode) {
+              return {
+                ...newNode,
+                position: currentNode.position,
+              };
+            }
+            return newNode;
+          })
+        };
+        return updatedPipeline;
+      });
+    }
+  }, [initialPipeline]);
+
   // Handle saving the pipeline
   const handleSavePipeline = () => {
     // Set saving state
@@ -783,10 +808,8 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
       active: true,  // Mark as active when saving
     };
     
-    // If using a client-generated ID with a prefix, leave it for tracking
-    // The StreamDetails component will handle removing it for new pipelines
-    
     try {
+      // Call the onSave handler passed from parent
       onSave(apiPipeline);
       
       // Show success message
@@ -801,12 +824,12 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
         type: 'error'
       });
       console.error('Error saving pipeline:', error);
-    } finally {
-      // End saving state after a short delay to ensure spinner is visible
-      setTimeout(() => {
-        setIsSaving(false);
-      }, 500);
     }
+    
+    // End saving state after a short delay
+    setTimeout(() => {
+      setIsSaving(false);
+    }, 500);
   };
 
   // Clear flash message
@@ -1008,137 +1031,6 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
                   {component.outputs && component.outputs.length > 0 && (
                     <div className="node-info">
                       <small>Outputs: {component.outputs.join(', ')}</small>
-                    </div>
-                  )}
-                  
-                  {node.config && Object.entries(node.config).length > 0 && (
-                    <div className="node-config">
-                      <h5>Configuration</h5>
-                      {Object.entries(node.config).map(([key, value]) => {
-                        if (Array.isArray(value)) {
-                          // Special handling for text_color to show a color preview
-                          if (key === 'text_color' && value.length === 3) {
-                            return (
-                              <div key={key} className="config-item">
-                                <label>{key.replace(/_/g, ' ')}:</label>
-                                <ColorPickerControl 
-                                  value={value as number[]} 
-                                  onChange={(newColor) => {
-                                    setPipeline(prev => ({
-                                      ...prev,
-                                      nodes: prev.nodes.map(n => 
-                                        n.id === node.id 
-                                          ? { 
-                                              ...n, 
-                                              config: { 
-                                                ...n.config, 
-                                                [key]: newColor 
-                                              } 
-                                            } 
-                                          : n
-                                      )
-                                    }));
-                                  }}
-                                />
-                              </div>
-                            );
-                          }
-                          
-                          // Position arrays
-                          if ((key === 'title_position' || key === 'timestamp_position') && value.length === 2) {
-                            return (
-                              <div key={key} className="config-item">
-                                <label>{key.replace(/_/g, ' ')}:</label>
-                                <div className="position-config">
-                                  <span>x: {value[0]}, y: {value[1]}</span>
-                                </div>
-                              </div>
-                            );
-                          }
-                          
-                          // Standard array display for other arrays
-                          return (
-                            <div key={key} className="config-item">
-                              <label>{key.replace(/_/g, ' ')}:</label>
-                              <div className="array-config">
-                                {value.map((item, idx) => (
-                                  <div key={idx} className="array-item">
-                                    {item.toString()}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          );
-                        }
-                        
-                        // Handle boolean values as toggles
-                        if (typeof value === 'boolean') {
-                          return (
-                            <div key={key} className="config-item">
-                              <label>{key.replace(/_/g, ' ')}:</label>
-                              <input 
-                                type="checkbox" 
-                                checked={value}
-                                onChange={(e) => {
-                                  setPipeline(prev => ({
-                                    ...prev,
-                                    nodes: prev.nodes.map(n => 
-                                      n.id === node.id 
-                                        ? { 
-                                            ...n, 
-                                            config: { 
-                                              ...n.config, 
-                                              [key]: e.target.checked 
-                                            } 
-                                          } 
-                                        : n
-                                    )
-                                  }));
-                                }}
-                              />
-                            </div>
-                          );
-                        }
-                        
-                        if (typeof value === 'number') {
-                          return (
-                            <div key={key} className="config-item">
-                              <label>{key.replace(/_/g, ' ')}:</label>
-                              <input 
-                                type="range" 
-                                min={key === 'label_font_scale' ? "0.1" : "0"} 
-                                max={key === 'label_font_scale' ? "2" : "1"} 
-                                step={key === 'label_font_scale' ? "0.1" : "0.1"}
-                                value={value}
-                                onChange={(e) => {
-                                  setPipeline(prev => ({
-                                    ...prev,
-                                    nodes: prev.nodes.map(n => 
-                                      n.id === node.id 
-                                        ? { 
-                                            ...n, 
-                                            config: { 
-                                              ...n.config, 
-                                              [key]: parseFloat(e.target.value) 
-                                            } 
-                                          } 
-                                        : n
-                                    )
-                                  }));
-                                }}
-                              />
-                              <span>{typeof value === 'number' ? value.toFixed(1) : value}</span>
-                            </div>
-                          );
-                        }
-                        
-                        return (
-                          <div key={key} className="config-item">
-                            <label>{key.replace(/_/g, ' ')}:</label>
-                            <span>{value.toString()}</span>
-                          </div>
-                        );
-                      })}
                     </div>
                   )}
                 </div>
