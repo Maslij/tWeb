@@ -17,7 +17,7 @@
   border-radius: 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
   width: 90%;
-  max-width: 800px;
+  max-width: 1000px;
   max-height: 90vh;
   overflow: hidden;
   display: flex;
@@ -28,7 +28,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 24px;
+  padding: 16px 24px;
   border-bottom: 1px solid #eee;
   background-color: #f8f9fa;
 }
@@ -62,7 +62,7 @@
 }
 
 .modal-body {
-  padding: 24px;
+  padding: 0;
   overflow-y: auto;
   flex: 1;
 }
@@ -102,98 +102,124 @@
   opacity: 0.5;
 }
 
-/* Alarm List Styles */
-.alarm-list {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.alarm-item {
-  background-color: #fff;
-  border-radius: 8px;
-  padding: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  border: 1px solid #e9ecef;
-  transition: all 0.2s ease;
-}
-
-.alarm-item:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.alarm-item-person {
-  border-left: 4px solid #e74c3c;
-}
-
-.alarm-item-object {
-  border-left: 4px solid #2ecc71;
-}
-
-.alarm-time {
-  color: #666;
-  font-size: 0.9rem;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.alarm-content {
-  margin-top: 16px;
-}
-
-.alarm-message {
-  font-size: 1.1rem;
-  color: #2c3e50;
-  margin-bottom: 20px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.alarm-message i {
-  color: #e74c3c;
-}
-
-.alarm-image-container {
+/* Alarm Table Styles */
+.alarm-table {
   width: 100%;
-  max-width: 600px;
-  margin: 0 auto;
-  background-color: #f8f9fa;
-  border-radius: 8px;
-  overflow: hidden;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
 }
 
-.alarm-image-container img {
-  width: 100%;
-  height: auto;
-  max-height: 400px;
-  object-fit: contain;
-  display: block;
-}
-
-.alarm-detection-info {
-  padding: 16px;
-  background-color: #fff;
-  border-top: 1px solid #e9ecef;
+.alarm-table-header {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.detection-label {
-  font-size: 1rem;
-  color: #2c3e50;
+  padding: 12px 16px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
   font-weight: 600;
-  padding: 4px 12px;
-  background-color: #e9ecef;
-  border-radius: 16px;
+  color: #495057;
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
-.detection-confidence {
+.alarm-table-body {
+  overflow-y: auto;
+}
+
+.alarm-row {
+  display: flex;
+  padding: 8px 16px;
+  border-bottom: 1px solid #e9ecef;
+  align-items: center;
+  transition: background-color 0.2s;
+}
+
+.alarm-row:hover {
+  background-color: rgba(248, 249, 250, 0.8);
+}
+
+.alarm-col {
+  padding: 4px 8px;
+}
+
+.alarm-col.timestamp {
+  width: 200px;
+  flex-shrink: 0;
   color: #666;
   font-size: 0.9rem;
+}
+
+.alarm-col.detection {
+  flex: 1;
+  min-width: 150px;
+}
+
+.alarm-col.image {
+  width: 100px;
+  flex-shrink: 0;
+}
+
+/* Detection Pill Styles */
+.detection-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  gap: 8px;
+  background: #e9ecef;
+}
+
+.detection-pill.person {
+  background: rgba(231, 76, 60, 0.1);
+  color: #c0392b;
+}
+
+.detection-pill.object {
+  background: rgba(46, 204, 113, 0.1);
+  color: #27ae60;
+}
+
+.detection-pill .object-class {
+  font-weight: 600;
+}
+
+.detection-pill .confidence {
+  opacity: 0.8;
+}
+
+/* Thumbnail and Enlarged Image Styles */
+.thumbnail-container {
+  width: 60px;
+  height: 60px;
+  border-radius: 4px;
+  overflow: hidden;
+  cursor: zoom-in;
+}
+
+.thumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.2s;
+}
+
+.enlarged-image-container {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1100;
+  background: rgba(0, 0, 0, 0.8);
+  padding: 20px;
+  border-radius: 8px;
+  max-width: 90vw;
+  max-height: 90vh;
+}
+
+.enlarged-image-container img {
+  max-width: 100%;
+  max-height: calc(90vh - 40px);
+  object-fit: contain;
 }
 
 /* Error States */
@@ -202,21 +228,22 @@
   padding: 20px;
   color: #e74c3c;
   background-color: #fdf3f2;
+  margin: 20px;
   border-radius: 8px;
-  margin: 20px 0;
 }
 
 .image-error {
-  width: 100%;
-  height: 200px;
+  width: 60px;
+  height: 60px;
   background-color: #fdf3f2;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #e74c3c;
-  font-size: 0.9rem;
+  font-size: 0.7rem;
   text-align: center;
-  padding: 20px;
+  padding: 4px;
+  border-radius: 4px;
 }
 
 /* Responsive adjustments */
@@ -226,15 +253,31 @@
     max-height: 95vh;
   }
   
-  .alarm-image-container {
-    max-width: 100%;
-  }
-  
-  .alarm-detection-info {
+  .alarm-row {
     flex-direction: column;
-    align-items: flex-start;
+    padding: 12px;
     gap: 8px;
   }
+  
+  .alarm-col {
+    width: 100% !important;
+    padding: 4px 0;
+  }
+  
+  .thumbnail-container {
+    width: 100%;
+    height: 120px;
+  }
+  
+  .alarm-table-header {
+    display: none;
+  }
+}
+
+/* Stream Card Container */
+.stream-card {
+  position: relative;
+  overflow: hidden;
 }
 
 /* Stream Card Alarm Indicator */
@@ -254,10 +297,12 @@
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
   cursor: pointer;
   z-index: 10;
+  transition: transform 0.2s ease-in-out;
 }
 
 .alarm-indicator:hover {
   background-color: #c0392b;
+  transform: scale(1.1);
 }
 
 .alarm-pulse {

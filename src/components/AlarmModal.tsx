@@ -11,6 +11,7 @@ const AlarmModal = ({ streamId, isOpen, onClose }: AlarmModalProps) => {
   const [alarms, setAlarms] = useState<AlarmEvent[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [enlargedImage, setEnlargedImage] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -48,12 +49,12 @@ const AlarmModal = ({ streamId, isOpen, onClose }: AlarmModalProps) => {
   if (!isOpen) return null;
 
   const formatTimestamp = (timestamp: number) => {
-    return new Date(timestamp).toLocaleString();
+    return new Date(timestamp).toLocaleTimeString() + ' ' + new Date(timestamp).toLocaleDateString();
   };
 
   return (
-    <div className="modal-backdrop">
-      <div className="modal-content alarm-modal">
+    <div className="modal-backdrop" onClick={() => setEnlargedImage(null)}>
+      <div className="modal-content alarm-modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2>Stream Alarms</h2>
           <button className="close-button" onClick={onClose}>×</button>
@@ -77,51 +78,63 @@ const AlarmModal = ({ streamId, isOpen, onClose }: AlarmModalProps) => {
           )}
           
           {!loading && !error && alarms.length > 0 && (
-            <div className="alarm-list">
-              {alarms.map((alarm, index) => (
-                <div key={`${alarm.timestamp}-${index}`} className={`alarm-item ${alarm.objectClass === 'person' ? 'alarm-item-person' : 'alarm-item-object'}`}>
-                  <div className="alarm-header">
-                    <span className="alarm-time">
-                      <i className="fas fa-clock"></i> {formatTimestamp(alarm.timestamp)}
-                    </span>
-                  </div>
-                  
-                  <div className="alarm-content">
-                    <div className="alarm-message">
-                      <i className="fas fa-bell"></i> {alarm.message}
+            <div className="alarm-table">
+              <div className="alarm-table-header">
+                <div className="alarm-col timestamp">Time</div>
+                <div className="alarm-col detection">Detection</div>
+                <div className="alarm-col image">Image</div>
+              </div>
+              <div className="alarm-table-body">
+                {alarms.map((alarm, index) => (
+                  <div key={`${alarm.timestamp}-${index}`} className="alarm-row">
+                    <div className="alarm-col timestamp">
+                      {formatTimestamp(alarm.timestamp)}
                     </div>
-                    
-                    {alarm.objectImageBase64 && (
-                      <div className="alarm-image-container">
-                        <img 
-                          src={`data:image/jpeg;base64,${alarm.objectImageBase64}`} 
-                          alt={`Object: ${alarm.objectClass || 'unknown'}`}
-                          onError={(e) => {
-                            console.error('Failed to load image', e);
-                            e.currentTarget.src = '';
-                            e.currentTarget.classList.add('image-error');
-                            e.currentTarget.parentElement?.setAttribute('data-error', 'Image failed to load');
-                          }}
-                        />
-                        {alarm.objectClass && (
-                          <div className="alarm-detection-info">
-                            <span className="detection-label">{alarm.objectClass}</span>
-                            {alarm.confidence !== undefined && (
-                              <span className="detection-confidence">
-                                {Math.round(alarm.confidence * 100)}% confidence
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
+                    <div className="alarm-col detection">
+                      {alarm.objectClass && (
+                        <div className={`detection-pill ${alarm.objectClass.toLowerCase()}`}>
+                          <span className="object-class">{alarm.objectClass}</span>
+                          {alarm.confidence !== undefined && (
+                            <span className="confidence">
+                              {Math.round(alarm.confidence * 100)}%
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="alarm-col image">
+                      {alarm.objectImageBase64 && (
+                        <div 
+                          className="thumbnail-container"
+                          onMouseEnter={() => setEnlargedImage(`data:image/jpeg;base64,${alarm.objectImageBase64}`)}
+                          onMouseLeave={() => setEnlargedImage(null)}
+                        >
+                          <img 
+                            src={`data:image/jpeg;base64,${alarm.objectImageBase64}`} 
+                            alt={`Object: ${alarm.objectClass || 'unknown'}`}
+                            className="thumbnail"
+                            onError={(e) => {
+                              console.error('Failed to load image', e);
+                              e.currentTarget.src = '';
+                              e.currentTarget.classList.add('image-error');
+                              e.currentTarget.parentElement?.setAttribute('data-error', 'Image failed to load');
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           )}
         </div>
       </div>
+      {enlargedImage && (
+        <div className="enlarged-image-container">
+          <img src={enlargedImage} alt="Enlarged view" />
+        </div>
+      )}
     </div>
   );
 };
