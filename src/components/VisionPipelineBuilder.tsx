@@ -1083,6 +1083,46 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
           onMouseUp={handleMouseUp}
           onDragOver={handleDragOver}
           onDrop={handleDrop}
+          onClick={(e) => {
+            // If a component is selected, place it at the click position
+            if (selectedComponent && builderRef.current) {
+              const component = componentsList.find(c => c.id === selectedComponent);
+              if (component && canAddComponent(component)) {
+                const rect = builderRef.current.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                // Add new component to pipeline
+                const newNode: PipelineNode = {
+                  id: `${component.id}_${Date.now()}`,
+                  componentId: component.id,
+                  position: { 
+                    x: x - 90, // Center the component horizontally (half of typical width)
+                    y: y - 40  // Center the component vertically (half of typical height)
+                  },
+                  connections: [],
+                  config: component.config ? { ...component.config } : undefined
+                };
+                
+                // If it's a source component, add stream details
+                if (component.category === 'source') {
+                  newNode.sourceDetails = {
+                    name: streamName,
+                    source: streamSource,
+                    type: streamType
+                  };
+                }
+                
+                setPipeline(prev => ({
+                  ...prev,
+                  nodes: [...prev.nodes, newNode]
+                }));
+                
+                setActiveComponent(null);
+                setSelectedComponent(null);
+              }
+            }
+          }}
         >
           {/* Add this render element inside the builder-canvas div, just before the connections-layer svg */}
           {pipeline.nodes.length === 0 && (
