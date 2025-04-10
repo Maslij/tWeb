@@ -1,153 +1,149 @@
-import { useState, useEffect, useRef } from 'react';
-import apiService from '../services/api';
+import { useState, useEffect } from 'react';
+import apiService, { getStreamAlarms, hasPipelineComponent } from '../services/api';
+import AlarmModal from './AlarmModal';
 
 interface StreamViewProps {
   streamId: string;
-  refreshRate?: number; // In milliseconds
-  width?: string | number;
-  height?: string | number;
 }
 
-const StreamView = ({ 
-  streamId, 
-  refreshRate = 1000, 
-  width = '100%', 
-  height = 'auto' 
-}: StreamViewProps) => {
+const StreamView = ({ streamId }: StreamViewProps) => {
+  const [imageUrl, setImageUrl] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
-  const [retryCount, setRetryCount] = useState(0);
-  const intervalRef = useRef<number | null>(null);
-  const imgRef = useRef<HTMLImageElement>(null);
-  const loadingRef = useRef<boolean>(false);
-  const requestIdRef = useRef<number>(0);
-  
-  // Clear any existing interval
-  const clearRefreshInterval = () => {
-    if (intervalRef.current !== null) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    
-    // Also cancel any pending animation frame
-    if (requestIdRef.current) {
-      cancelAnimationFrame(requestIdRef.current);
-      requestIdRef.current = 0;
-    }
-  };
+  const [hasAlarms, setHasAlarms] = useState<boolean>(false);
+  const [alarmCount, setAlarmCount] = useState<number>(0);
+  const [hasAlarmComponent, setHasAlarmComponent] = useState<boolean>(false);
+  const [showAlarmModal, setShowAlarmModal] = useState<boolean>(false);
 
-  // Set up the refresh
+  // Check if the stream has an EventAlarm component
+  useEffect(() => {
+    if (!streamId) return;
+
+    let mounted = true;
+    
+    const checkForAlarmComponent = async () => {
+      try {
+        const hasComponent = await hasPipelineComponent(streamId, 'EventAlarm');
+        if (mounted) {
+          setHasAlarmComponent(hasComponent);
+        }
+      } catch (error) {
+        console.error('Error checking for alarm component:', error);
+      }
+    };
+    
+    checkForAlarmComponent();
+    
+    return () => {
+      mounted = false;
+    };
+  }, [streamId]);
+
+  // Check for alarms if the stream has an EventAlarm component
+  useEffect(() => {
+    if (!streamId || !hasAlarmComponent) return;
+
+    let mounted = true;
+    
+    const checkForAlarms = async () => {
+      try {
+        const alarms = await getStreamAlarms(streamId);
+        if (mounted) {
+          setHasAlarms(alarms.length > 0);
+          setAlarmCount(alarms.length);
+        }
+      } catch (error) {
+        console.error('Error checking for alarms:', error);
+      }
+    };
+    
+    // Initial check
+    checkForAlarms();
+    
+    // Set up periodic checks
+    const intervalId = setInterval(checkForAlarms, 5000);
+    
+    return () => {
+      mounted = false;
+      clearInterval(intervalId);
+    };
+  }, [streamId, hasAlarmComponent]);
+
   useEffect(() => {
     if (!streamId) {
-      setError('Invalid stream ID');
+      setError('Missing stream ID');
       return;
     }
 
     // Initial image load
-    refreshImage();
+    setImageUrl(apiService.getFrameUrlWithTimestamp(streamId));
     
-    // Set up image refresh interval using requestAnimationFrame instead of setInterval
-    // for better performance and to avoid timing issues
-    const scheduleNextFrame = () => {
-      requestIdRef.current = requestAnimationFrame(() => {
-        // Only attempt to refresh if we're not already loading an image
-        if (!loadingRef.current) {
-          refreshImage();
-        }
-        
-        // Schedule next frame after the refresh rate
-        setTimeout(() => {
-          scheduleNextFrame();
-        }, refreshRate);
-      });
-    };
+    // Set up periodic refresh
+    const intervalId = setInterval(() => {
+      setImageUrl(apiService.getFrameUrlWithTimestamp(streamId));
+    }, 1000); // Refresh every second
     
-    scheduleNextFrame();
-    
-    // Clean up on unmount
-    return () => {
-      clearRefreshInterval();
-    };
-  }, [streamId, refreshRate]);
+    return () => clearInterval(intervalId);
+  }, [streamId]);
 
-  const refreshImage = () => {
-    if (!streamId || !imgRef.current) return;
-
-    try {
-      // Set loading state to prevent simultaneous image loads
-      loadingRef.current = true;
-      
-      // Create a new image object that won't affect the DOM or cause page refreshes
-      const newImage = new Image();
-      
-      // Set up listeners before setting the src
-      newImage.onload = () => {
-        // Only update the visible image when the new one is fully loaded
-        if (imgRef.current) {
-          imgRef.current.src = newImage.src;
-        }
-        loadingRef.current = false;
-        if (error) setError(null);
-        if (retryCount > 0) setRetryCount(0);
-      };
-      
-      newImage.onerror = () => {
-        loadingRef.current = false;
-        handleImageError();
-      };
-      
-      // Set the source last, which triggers the loading
-      const baseUrl = apiService.getFrameUrl(streamId);
-      const timestamp = Date.now();
-      newImage.src = `${baseUrl}?t=${timestamp}`;
-    } catch (err) {
-      loadingRef.current = false;
-      console.error('Error refreshing image:', err);
-      handleImageError();
-    }
+  const handleAlarmClick = () => {
+    setShowAlarmModal(true);
   };
 
-  const handleImageError = () => {
-    const newRetryCount = retryCount + 1;
-    setRetryCount(newRetryCount);
-    
-    if (newRetryCount >= 3) {
-      setError('Failed to load stream. The stream may be stopped or unavailable.');
-      
-      // Slow down the retry rate after multiple failures
-      clearRefreshInterval();
-      intervalRef.current = window.setInterval(refreshImage, refreshRate * 2);
-    }
-  };
+  if (error) {
+    return <div className="error">{error}</div>;
+  }
 
   return (
-    <div className="stream-view">
-      {error ? (
-        <div className="error stream-error">
-          {error}
-          <button 
-            className="btn retry-btn" 
-            onClick={() => {
-              setError(null);
-              setRetryCount(0);
-              loadingRef.current = false;
-              refreshImage();
-              
-              // Reset interval to normal rate
-              clearRefreshInterval();
-              intervalRef.current = window.setInterval(refreshImage, refreshRate);
+    <div className="stream-view-container">
+      <div className="stream-view" style={{ position: 'relative' }}>
+        {hasAlarmComponent && hasAlarms && (
+          <div 
+            className={`alarm-indicator ${alarmCount > 0 ? 'alarm-pulse' : ''}`}
+            onClick={handleAlarmClick}
+            style={{ 
+              top: '20px', 
+              right: '20px', 
+              width: '30px', 
+              height: '30px',
+              fontSize: '1.1rem'
             }}
           >
-            Retry
-          </button>
-        </div>
-      ) : (
-        <img
-          ref={imgRef}
-          src={`${apiService.getFrameUrl(streamId)}?t=${Date.now()}`}
-          alt="Stream View"
-          className="stream-image"
-          onError={handleImageError}
-          style={{ width, height }}
+            {alarmCount > 99 ? '99+' : alarmCount}
+          </div>
+        )}
+        
+        {imageUrl ? (
+          <img 
+            src={imageUrl} 
+            alt="Stream view" 
+            className="stream-image"
+            style={{ width: '100%', height: 'auto', maxHeight: '70vh', objectFit: 'contain' }}
+            onError={() => setImageUrl('/placeholder-error.jpg')}
+          />
+        ) : (
+          <div 
+            style={{ 
+              backgroundColor: '#eee',
+              width: '100%',
+              height: '70vh',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#999',
+              fontWeight: 'bold',
+              fontSize: '1.5rem'
+            }}
+          >
+            LOADING...
+          </div>
+        )}
+      </div>
+      
+      {showAlarmModal && (
+        <AlarmModal
+          streamId={streamId}
+          isOpen={showAlarmModal}
+          onClose={() => setShowAlarmModal(false)}
         />
       )}
     </div>

@@ -1,459 +1,291 @@
 import { useState, useEffect, useRef } from 'react';
-import apiService from '../services/api';
+import apiService, { getStreamAlarms, hasPipelineComponent } from '../services/api';
+import AlarmModal from './AlarmModal';
 
 interface StreamViewWSProps {
   streamId: string;
-  fps?: number; // Target framerate
   width?: string | number;
   height?: string | number;
 }
 
-const StreamViewWS = ({ 
-  streamId, 
-  fps = 15, 
-  width = '100%', 
-  height = 'auto' 
-}: StreamViewWSProps) => {
+const StreamViewWS = ({ streamId, width = '100%', height = 'auto' }: StreamViewWSProps) => {
   const [error, setError] = useState<string | null>(null);
-  const [connected, setConnected] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [useFallback, setUseFallback] = useState(false);
-  const [streamExists, setStreamExists] = useState<boolean | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [connected, setConnected] = useState<boolean>(false);
+  const [frameData, setFrameData] = useState<string | null>(null);
+  const [reconnectCount, setReconnectCount] = useState<number>(0);
   const wsRef = useRef<WebSocket | null>(null);
-  const imageRef = useRef<HTMLImageElement | null>(null);
-  const fallbackImageRef = useRef<HTMLImageElement | null>(null);
-  const reconnectTimeoutRef = useRef<number | null>(null);
-  const fallbackIntervalRef = useRef<number | null>(null);
-  const connectionTimeoutRef = useRef<number | null>(null);
-  const maxRetries = 3; // Limit retries before committing to fallback
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [hasAlarms, setHasAlarms] = useState<boolean>(false);
+  const [alarmCount, setAlarmCount] = useState<number>(0);
+  const [hasAlarmComponent, setHasAlarmComponent] = useState<boolean>(false);
+  const [showAlarmModal, setShowAlarmModal] = useState<boolean>(false);
 
-  // First check if the stream exists
+  // Check if the stream has an EventAlarm component
   useEffect(() => {
-    if (!streamId) {
-      setError('Invalid stream ID');
-      setLoading(false);
-      return;
-    }
+    if (!streamId) return;
 
-    const checkStreamExists = async () => {
+    let mounted = true;
+    
+    const checkForAlarmComponent = async () => {
       try {
-        // Check if the stream exists by making a GET request
-        const stream = await apiService.getStreamById(streamId);
-        if (stream && stream.id) {
-          console.log(`Stream ${streamId} exists, status: ${stream.status}`);
-          setStreamExists(true);
-          setError(null);
-        } else {
-          console.error(`Stream ${streamId} doesn't exist or returned invalid data`);
-          setStreamExists(false);
-          setError(`Stream ${streamId} not found. The stream may have been deleted or doesn't exist.`);
-          setLoading(false);
+        const hasComponent = await hasPipelineComponent(streamId, 'EventAlarm');
+        if (mounted) {
+          setHasAlarmComponent(hasComponent);
         }
-      } catch (err) {
-        console.error(`Error checking if stream ${streamId} exists:`, err);
-        setStreamExists(false);
-        setError(`Error checking stream: ${err instanceof Error ? err.message : 'Unknown error'}`);
-        setLoading(false);
+      } catch (error) {
+        console.error('Error checking for alarm component:', error);
       }
     };
-
-    checkStreamExists();
+    
+    checkForAlarmComponent();
+    
+    return () => {
+      mounted = false;
+    };
   }, [streamId]);
 
-  // Create a WebSocket connection once we confirm the stream exists
+  // Check for alarms if the stream has an EventAlarm component
   useEffect(() => {
-    if (!streamId || streamExists !== true) {
-      return; // Don't try to connect if stream doesn't exist
-    }
+    if (!streamId || !hasAlarmComponent || !connected) return;
 
-    // If we've tried several times and failed, stick with fallback
-    if (retryCount >= maxRetries) {
-      console.log(`WebSocket failed ${retryCount} times, staying with fallback mode`);
-      setUseFallback(true);
-      setLoading(false);
+    let mounted = true;
+    
+    const checkForAlarms = async () => {
+      try {
+        const alarms = await getStreamAlarms(streamId);
+        if (mounted) {
+          setHasAlarms(alarms.length > 0);
+          setAlarmCount(alarms.length);
+        }
+      } catch (error) {
+        console.error('Error checking for alarms:', error);
+      }
+    };
+    
+    // Initial check
+    checkForAlarms();
+    
+    // Set up periodic checks
+    const intervalId = setInterval(checkForAlarms, 5000);
+    
+    return () => {
+      mounted = false;
+      clearInterval(intervalId);
+    };
+  }, [streamId, hasAlarmComponent, connected]);
+
+  // WebSocket connection
+  useEffect(() => {
+    // Don't attempt connection without a streamId
+    if (!streamId) {
+      setError('Missing stream ID');
       return;
     }
-
-    // Clean up existing connections before creating a new one
-    cleanupConnections();
-
-    // Create an image for pre-loading frames
-    if (!imageRef.current) {
-      imageRef.current = new Image();
-    }
-
-    // Get WebSocket URL (using the API server directly)
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const apiHost = apiService.getWebSocketHost();
-    
-    // Connect directly to the tAPI WebSocket endpoint
-    const wsUrl = `${protocol}//${apiHost}/api/streams/${streamId}/ws`;
-    
-    console.log(`Connecting to WebSocket at: ${wsUrl}`);
-    setLoading(true);
-    
-    try {
-      // Start fallback mode immediately
-      setUseFallback(true);
-      
-      // Create WebSocket connection
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
-      
-      // Set connection timeout - if not connected within 2 seconds, stay with fallback
-      connectionTimeoutRef.current = window.setTimeout(() => {
-        if (wsRef.current && wsRef.current.readyState !== WebSocket.OPEN) {
-          console.log('WebSocket connection timeout - keeping fallback mode');
-          if (wsRef.current) {
-            wsRef.current.close();
-          }
-        }
-      }, 2000);
-      
-      // Connection opened
-      ws.addEventListener('open', () => {
-        console.log('WebSocket connected');
-        // Clear connection timeout
-        if (connectionTimeoutRef.current !== null) {
-          window.clearTimeout(connectionTimeoutRef.current);
-          connectionTimeoutRef.current = null;
-        }
-        
-        setConnected(true);
-        setError(null);
-        setRetryCount(0);
-        setLoading(false);
-        // Keep fallback active until we confirm WebSocket works
-        
-        // Send desired FPS setting
-        try {
-          ws.send(JSON.stringify({
-            command: 'set_framerate',
-            fps: fps
-          }));
-        } catch (e) {
-          console.error('Error sending FPS setting:', e);
-        }
-      });
-      
-      // Connection closed
-      ws.addEventListener('close', (event) => {
-        console.log(`WebSocket disconnected with code ${event.code} - ${event.reason || 'No reason provided'}`);
-        setConnected(false);
-        setLoading(false);
-        
-        // If fallback isn't already active, activate it
-        if (!useFallback) {
-          setUseFallback(true);
-        }
-        
-        // Increment retry count
-        const newRetryCount = retryCount + 1;
-        
-        if (newRetryCount < maxRetries) {
-          // Retry with increasing delay
-          const timeout = Math.min(2000 * Math.pow(2, newRetryCount), 10000);
-          console.log(`Will attempt to reconnect in ${timeout}ms (retry ${newRetryCount}/${maxRetries})...`);
-          
-          if (reconnectTimeoutRef.current !== null) {
-            window.clearTimeout(reconnectTimeoutRef.current);
-          }
-          
-          reconnectTimeoutRef.current = window.setTimeout(() => {
-            setRetryCount(newRetryCount);
-          }, timeout);
-        } else {
-          setRetryCount(newRetryCount);
-          console.log(`Maximum retry attempts (${maxRetries}) reached, staying in fallback mode`);
-        }
-      });
-      
-      // Connection error
-      ws.addEventListener('error', (event) => {
-        console.error('WebSocket error:', event);
-        setLoading(false);
-        if (!useFallback) {
-          setUseFallback(true);
-        }
-      });
-      
-      // Handle incoming messages (frames)
-      ws.addEventListener('message', (event) => {
-        try {
-          const message = JSON.parse(event.data);
-          
-          if (message.type === 'frame') {
-            if (message.frame && message.frame.length > 0) {
-              // If we've received a successful frame, we can turn off fallback mode
-              if (useFallback && connected) {
-                console.log('Received WebSocket frame successfully, switching from fallback to WebSocket');
-                setUseFallback(false);
-              }
-              
-              // Decode base64 frame data and draw to canvas
-              const img = imageRef.current;
-              if (img && canvasRef.current) {
-                // Set the source of the image to the base64 data
-                img.onload = () => {
-                  const canvas = canvasRef.current;
-                  if (canvas) {
-                    const ctx = canvas.getContext('2d');
-                    if (ctx) {
-                      // If width/height provided in message, update canvas size
-                      if (message.width && message.height && 
-                         (canvas.width !== message.width || canvas.height !== message.height)) {
-                        canvas.width = message.width;
-                        canvas.height = message.height;
-                      }
-                      
-                      // Draw the image to the canvas
-                      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    }
-                  }
-                };
-                
-                img.onerror = (e) => {
-                  console.error('Error loading image from base64 data:', e);
-                };
-                
-                // Set image source to trigger loading - add cache buster to prevent browser caching
-                const timestamp = new Date().getTime();
-                img.src = `data:image/jpeg;base64,${message.frame}#${timestamp}`;
-              }
-            }
-          } else if (message.type === 'ping') {
-            // Respond to ping with a pong to keep connection alive
-            try {
-              if (ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                  type: 'pong',
-                  timestamp: new Date().getTime()
-                }));
-              }
-            } catch (e) {
-              console.error('Error sending pong:', e);
-            }
-          } else if (message.type === 'error') {
-            console.error('WebSocket error message:', message.message);
-          }
-        } catch (err) {
-          console.error('Error handling WebSocket message:', err);
-        }
-      });
-    } catch (e) {
-      console.error('Error creating WebSocket:', e);
-      setLoading(false);
-      if (!useFallback) {
-        setUseFallback(true);
-      }
-    }
-    
-    // Clean up on unmount
-    return cleanupConnections;
-  }, [streamId, fps, retryCount, streamExists]);
-
-  // Helper function to clean up all connections and timers
-  const cleanupConnections = () => {
-    // Close WebSocket if it exists
+  
+    // Close any existing connection
     if (wsRef.current) {
-      try {
-        const ws = wsRef.current;
-        // Remove all event listeners to prevent any callbacks
-        ws.onopen = null;
-        ws.onclose = null;
-        ws.onerror = null;
-        ws.onmessage = null;
-        
-        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-          ws.close(1000, "Component unmounting");
-        }
-      } catch (e) {
-        console.error('Error closing WebSocket:', e);
-      }
+      wsRef.current.close();
       wsRef.current = null;
     }
+  
+    // Connection logic
+    const connect = () => {
+      try {
+        // Get the WebSocket host from the API service
+        const wsHost = apiService.getWebSocketHost();
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${wsHost}/api/streams/${streamId}/ws`;
+        
+        console.log(`Connecting to WebSocket: ${wsUrl}`);
+        const ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
+        
+        ws.onopen = () => {
+          console.log('WebSocket connection opened');
+          setConnected(true);
+          setError(null);
+          setReconnectCount(0);
+        };
+        
+        ws.onclose = (event) => {
+          console.log(`WebSocket connection closed: ${event.code} ${event.reason}`);
+          setConnected(false);
+          wsRef.current = null;
+          
+          // Only attempt reconnect if this wasn't a normal closure
+          if (event.code !== 1000) {
+            handleReconnect();
+          }
+        };
+        
+        ws.onerror = (event) => {
+          console.error('WebSocket error:', event);
+          setError('Connection error');
+        };
+        
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            
+            // Check if this is a frame message
+            if (data.type === 'frame' && data.data) {
+              setFrameData(data.data);
+            }
+            
+            // No error if we got a message
+            if (error) setError(null);
+          } catch (err) {
+            console.error('Error processing WebSocket message:', err);
+          }
+        };
+      } catch (err) {
+        console.error('Error creating WebSocket:', err);
+        setError('Failed to connect to stream');
+        handleReconnect();
+      }
+    };
     
-    // Clear any pending reconnect timeout
-    if (reconnectTimeoutRef.current !== null) {
-      window.clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
-    }
+    const handleReconnect = () => {
+      const newReconnectCount = reconnectCount + 1;
+      setReconnectCount(newReconnectCount);
+      
+      // Implement exponential backoff for reconnection attempts
+      const backoff = Math.min(30000, Math.pow(2, newReconnectCount) * 1000);
+      console.log(`Attempting to reconnect in ${backoff}ms (attempt ${newReconnectCount})`);
+      
+      setTimeout(() => {
+        if (newReconnectCount <= 10) {
+          connect();
+        } else {
+          setError('Failed to connect after multiple attempts');
+        }
+      }, backoff);
+    };
     
-    // Clear connection timeout
-    if (connectionTimeoutRef.current !== null) {
-      window.clearTimeout(connectionTimeoutRef.current);
-      connectionTimeoutRef.current = null;
-    }
+    connect();
     
-    // Clear fallback interval
-    if (fallbackIntervalRef.current !== null) {
-      window.clearInterval(fallbackIntervalRef.current);
-      fallbackIntervalRef.current = null;
-    }
+    // Clean up on unmount
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+    };
+  }, [streamId]);
+  
+  // Draw frame data on canvas
+  useEffect(() => {
+    if (!frameData || !canvasRef.current) return;
+    
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    // Create a new image from the frame data
+    const img = new Image();
+    img.onload = () => {
+      // Set canvas dimensions to match the image
+      canvas.width = img.width;
+      canvas.height = img.height;
+      
+      // Draw the image on the canvas
+      ctx.drawImage(img, 0, 0);
+    };
+    
+    // Handle any errors loading the image
+    img.onerror = () => {
+      console.error('Error loading frame image');
+    };
+    
+    // Set the source to load the image
+    img.src = `data:image/jpeg;base64,${frameData}`;
+  }, [frameData]);
+
+  const handleAlarmClick = () => {
+    setShowAlarmModal(true);
   };
 
-  // Reset FPS when it changes
-  useEffect(() => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      try {
-        wsRef.current.send(JSON.stringify({
-          command: 'set_framerate',
-          fps: fps
-        }));
-      } catch (e) {
-        console.error('Error sending FPS update:', e);
-      }
-    }
-  }, [fps]);
-  
-  // Fallback image polling mechanism
-  useEffect(() => {
-    if (useFallback && streamId && streamExists === true) {
-      if (!fallbackImageRef.current) {
-        fallbackImageRef.current = new Image();
-      }
-      
-      // Start polling for frames via HTTP if WebSocket fails
-      console.log('Using fallback HTTP polling mode');
-      
-      // Clear any existing interval
-      if (fallbackIntervalRef.current !== null) {
-        window.clearInterval(fallbackIntervalRef.current);
-        fallbackIntervalRef.current = null;
-      }
-      
-      // Function to refresh the image
-      const refreshFallbackImage = () => {
-        if (fallbackImageRef.current && canvasRef.current) {
-          const img = fallbackImageRef.current;
-          
-          img.onload = () => {
-            const canvas = canvasRef.current;
-            if (canvas) {
-              const ctx = canvas.getContext('2d');
-              if (ctx) {
-                // Set canvas size if needed
-                if (canvas.width === 0 || canvas.height === 0) {
-                  canvas.width = img.width;
-                  canvas.height = img.height;
-                }
-                
-                // Draw the image to the canvas
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-              }
-            }
-          };
-          
-          img.onerror = (e) => {
-            console.error('Error loading fallback image:', e);
-          };
-          
-          // Get a fresh frame with timestamp to prevent caching
-          const timestamp = new Date().getTime();
-          img.src = `${apiService.getFrameUrlWithTimestamp(streamId)}&nocache=${timestamp}`;
-        }
-      };
-      
-      // Initial refresh
-      refreshFallbackImage();
-      
-      // Set up polling interval
-      fallbackIntervalRef.current = window.setInterval(refreshFallbackImage, 1000);
-      
-      return () => {
-        if (fallbackIntervalRef.current !== null) {
-          window.clearInterval(fallbackIntervalRef.current);
-          fallbackIntervalRef.current = null;
-        }
-      };
-    } else if (!useFallback && fallbackIntervalRef.current !== null) {
-      // If we're not using fallback anymore but interval is running, stop it
-      window.clearInterval(fallbackIntervalRef.current);
-      fallbackIntervalRef.current = null;
-    }
-  }, [useFallback, streamId, streamExists]);
-
-  // Ensure we clean up when component unmounts
-  useEffect(() => {
-    // This effect will run when the component unmounts
-    return () => {
-      console.log('StreamViewWS component unmounting, cleaning up all resources');
-      
-      // Cancel all connection attempts and clean up
-      cleanupConnections();
-      
-      // Reset state to prevent any lingering effects
-      setConnected(false);
-      setUseFallback(false);
-      setRetryCount(0);
-      setLoading(false);
-    };
-  }, []);
-
   return (
-    <div className="stream-view-ws">
-      {error ? (
-        <div className="error stream-error">
-          {error}
-          <button 
-            className="btn retry-btn" 
-            onClick={() => {
-              setError(null);
-              setRetryCount(0);
-              setLoading(true);
-              setStreamExists(null); // Reset stream existence status to trigger another check
-              
-              // Clean up existing connections and force reconnect
-              cleanupConnections();
-              
-              // Clear fallback interval
-              if (fallbackIntervalRef.current !== null) {
-                window.clearInterval(fallbackIntervalRef.current);
-                fallbackIntervalRef.current = null;
-              }
-              
-              // Start with fallback mode for immediate feedback
-              setUseFallback(true);
+    <div className="stream-view-container">
+      <div className="stream-view" style={{ position: 'relative' }}>
+        {hasAlarmComponent && hasAlarms && connected && (
+          <div 
+            className={`alarm-indicator ${alarmCount > 0 ? 'alarm-pulse' : ''}`}
+            onClick={handleAlarmClick}
+            style={{ 
+              top: '20px', 
+              right: '20px', 
+              width: '30px', 
+              height: '30px',
+              fontSize: '1.1rem',
+              zIndex: 100
             }}
           >
-            Retry
-          </button>
-        </div>
-      ) : (
-        <div className="stream-container">
-          {loading && !useFallback && (
-            <div className="loading-overlay">
-              <div className="loading-spinner"></div>
-              <div className="loading-text">Connecting to stream...</div>
-            </div>
-          )}
-          {streamExists === false && (
-            <div className="error stream-placeholder">
-              Stream not found or has been deleted.
-            </div>
-          )}
-          {useFallback && !connected && streamExists === true && (
-            <div className="fallback-notice">
-              Using HTTP fallback mode
-            </div>
-          )}
-          {connected && !useFallback && (
-            <div className="websocket-notice">
-              WebSocket connected
-            </div>
-          )}
-          <canvas 
-            ref={canvasRef} 
-            className="stream-canvas"
-            style={{ 
-              width, 
-              height,
-              display: (connected || (useFallback && streamExists === true)) ? 'block' : 'none' 
-            }}
-          />
-        </div>
+            {alarmCount > 99 ? '99+' : alarmCount}
+          </div>
+        )}
+        
+        {error ? (
+          <div className="error stream-error">
+            {error}
+            <button 
+              className="btn retry-btn" 
+              onClick={() => {
+                setError(null);
+                setReconnectCount(0);
+                if (wsRef.current) {
+                  wsRef.current.close();
+                  wsRef.current = null;
+                }
+                // This will trigger the reconnect in the useEffect
+                setReconnectCount(0);
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        ) : (
+          <>
+            {!connected && (
+              <div 
+                style={{ 
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                  color: 'white',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  zIndex: 10
+                }}
+              >
+                Connecting...
+              </div>
+            )}
+            <canvas 
+              ref={canvasRef}
+              className="stream-canvas"
+              style={{ 
+                width, 
+                height,
+                maxHeight: '70vh',
+                objectFit: 'contain',
+                opacity: connected ? 1 : 0.5
+              }}
+            />
+          </>
+        )}
+      </div>
+      
+      {showAlarmModal && (
+        <AlarmModal
+          streamId={streamId}
+          isOpen={showAlarmModal}
+          onClose={() => setShowAlarmModal(false)}
+        />
       )}
     </div>
   );
