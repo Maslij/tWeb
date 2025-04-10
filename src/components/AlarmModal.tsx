@@ -52,8 +52,13 @@ const AlarmModal = ({ streamId, isOpen, onClose }: AlarmModalProps) => {
     return new Date(timestamp).toLocaleTimeString() + ' ' + new Date(timestamp).toLocaleDateString();
   };
 
+  const handleBackdropClick = () => {
+    setEnlargedImage(null);
+    onClose();
+  };
+
   return (
-    <div className="modal-backdrop" onClick={() => setEnlargedImage(null)}>
+    <div className="modal-backdrop" onClick={handleBackdropClick}>
       <div className="modal-content alarm-modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2>Stream Alarms</h2>
