@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { Stream } from '../services/api';
 import apiService, { getStreamAlarms, hasPipelineComponent } from '../services/api';
 import AlarmModal from './AlarmModal';
+import Modal from './Modal';
+import StreamView from './StreamView';
+import StreamViewWS from './StreamViewWS';
 
 interface StreamCardProps {
   stream: Stream;
@@ -15,6 +18,9 @@ const StreamCard = ({ stream }: StreamCardProps) => {
   const [alarmCount, setAlarmCount] = useState<number>(0);
   const [hasAlarmComponent, setHasAlarmComponent] = useState<boolean>(false);
   const [showAlarmModal, setShowAlarmModal] = useState<boolean>(false);
+  const [showStreamModal, setShowStreamModal] = useState<boolean>(false);
+  const [useWebSocket, setUseWebSocket] = useState<boolean>(false);
+  const [fps, setFps] = useState<number>(15);
 
   // Validate stream has required properties
   const isValidStream = stream && stream.id && stream.status;
@@ -108,8 +114,9 @@ const StreamCard = ({ stream }: StreamCardProps) => {
   const handleClick = (e: React.MouseEvent) => {
     if (!isValidStream) return;
     
-    // Don't navigate if clicking on the alarm indicator
-    if ((e.target as HTMLElement).closest('.alarm-indicator')) {
+    // Don't navigate if clicking on the alarm indicator or fullscreen button
+    if ((e.target as HTMLElement).closest('.alarm-indicator') || 
+        (e.target as HTMLElement).closest('.fullscreen-button')) {
       e.stopPropagation();
       return;
     }
@@ -168,29 +175,42 @@ const StreamCard = ({ stream }: StreamCardProps) => {
         )}
         
         {status === 'running' ? (
-          imageUrl ? (
-            <img 
-              src={imageUrl} 
-              alt={stream.name || 'Unnamed Stream'} 
-              className="stream-img"
-              onError={() => setImageUrl('/placeholder-error.jpg')}
-            />
-          ) : (
-            <div 
-              className="stream-img" 
-              style={{ 
-                backgroundColor: '#eee',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#999',
-                fontWeight: 'bold',
-                fontSize: '1.2rem'
-              }}
-            >
-              LOADING...
-            </div>
-          )
+          <div className="stream-img-container" style={{ position: 'relative' }}>
+            {imageUrl ? (
+              <>
+                <img 
+                  src={imageUrl} 
+                  alt={stream.name || 'Unnamed Stream'} 
+                  className="stream-img"
+                  onError={() => setImageUrl('/placeholder-error.jpg')}
+                />
+                <button 
+                  className="fullscreen-button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowStreamModal(true);
+                  }}
+                >
+                  <span>⤢</span>
+                </button>
+              </>
+            ) : (
+              <div 
+                className="stream-img" 
+                style={{ 
+                  backgroundColor: '#eee',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#999',
+                  fontWeight: 'bold',
+                  fontSize: '1.2rem'
+                }}
+              >
+                LOADING...
+              </div>
+            )}
+          </div>
         ) : (
           <div 
             className="stream-img" 
@@ -240,6 +260,64 @@ const StreamCard = ({ stream }: StreamCardProps) => {
           onClose={() => setShowAlarmModal(false)}
         />
       )}
+
+      {/* Modal for enlarged stream view */}
+      <Modal 
+        isOpen={showStreamModal} 
+        onClose={() => setShowStreamModal(false)}
+      >
+        <div className="stream-modal-content">
+          <h3>{stream.name || 'Stream View'}</h3>
+          <div className="stream-modal-settings">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                <input 
+                  type="checkbox" 
+                  checked={useWebSocket} 
+                  onChange={(e) => setUseWebSocket(e.target.checked)} 
+                  style={{ marginRight: '5px' }}
+                />
+                Use WebSocket (Experimental)
+              </label>
+              
+              {useWebSocket && (
+                <div style={{ display: 'flex', alignItems: 'center', marginLeft: '20px' }}>
+                  <label htmlFor="fps-slider" style={{ marginRight: '10px' }}>FPS: {fps}</label>
+                  <input 
+                    id="fps-slider"
+                    type="range" 
+                    min="1" 
+                    max="30" 
+                    value={fps} 
+                    onChange={(e) => setFps(parseInt(e.target.value))}
+                    style={{ width: '150px' }}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <div className="stream-view-container">
+            {useWebSocket ? (
+              <StreamViewWS 
+                key={`ws-modal-${stream.id}`}
+                streamId={stream.id} 
+                fps={fps} 
+                width="100%" 
+                height="100%"
+              />
+            ) : (
+              <StreamView 
+                key={`http-modal-${stream.id}-${Date.now()}`} 
+                streamId={stream.id} 
+                refreshRate={1000} 
+                width="100%"
+                height="100%"
+              />
+            )}
+          </div>
+        </div>
+      </Modal>
     </>
   );
 };

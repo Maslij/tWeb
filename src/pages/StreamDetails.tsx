@@ -12,27 +12,8 @@ import apiService, {
 import StreamView from '../components/StreamView';
 import StreamViewWS from '../components/StreamViewWS';
 import VisionPipelineBuilder from '../components/VisionPipelineBuilder';
+import Modal from '../components/Modal';
 import '../styles/VisionPipelineBuilder.css';
-
-// Modal component for enlarged stream view
-interface ModalProps {
-  children: React.ReactNode;
-  isOpen: boolean;
-  onClose: () => void;
-}
-
-const Modal: React.FC<ModalProps> = ({ children, isOpen, onClose }) => {
-  if (!isOpen) return null;
-
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={e => e.stopPropagation()}>
-        <button className="modal-close-btn" onClick={onClose}>×</button>
-        {children}
-      </div>
-    </div>
-  );
-};
 
 const StreamDetails = () => {
   const { id } = useParams<{ id: string }>();

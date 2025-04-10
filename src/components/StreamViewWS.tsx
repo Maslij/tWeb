@@ -11,6 +11,18 @@ declare global {
   }
 }
 
+// Add this at the top of the file after the existing declarations
+declare global {
+  interface WebSocket {
+    lastLogTime?: number;
+  }
+}
+
+// Add at the top with other declarations
+interface WebSocketWithLogging extends WebSocket {
+  lastLogTime?: number;
+}
+
 interface StreamViewWSProps {
   streamId: string;
   width?: string | number;
@@ -24,6 +36,7 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
   const [frameData, setFrameData] = useState<string | null>(null);
   const [reconnectCount, setReconnectCount] = useState<number>(0);
   const wsRef = useRef<WebSocket | null>(null);
+  const disconnectedRef = useRef<boolean>(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hasAlarms, setHasAlarms] = useState<boolean>(false);
   const [alarmCount, setAlarmCount] = useState<number>(0);
@@ -163,6 +176,7 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
   // Helper function to properly clean up WebSocket connection
   const cleanupWebSocketConnection = () => {
     try {
+      disconnectedRef.current = true;
       if (wsRef.current) {
         const state = wsRef.current.readyState;
         const stateMap: Record<number, string> = {
@@ -247,90 +261,62 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
     }
   };
 
-  // Clean up when component unmounts
+  // Modify the cleanup effect to be more aggressive
   useEffect(() => {
-    console.log('[StreamViewWS] Component unmounting, cleaning up WebSocket');
-    cleanupWebSocketConnection();
-    
-    // Force cleanup any lingering connections after a short delay
-    const cleanupTimeout = setTimeout(() => {
-      if (wsRef.current) {
-        console.warn('[StreamViewWS] Found lingering WebSocket after unmount, forcing cleanup');
-        forceCloseConnection();
-      }
-    }, 100);
-
-    return () => {
-      clearTimeout(cleanupTimeout);
-      cleanupWebSocketConnection();
-    };
-  }, []);
-
-  // Add an effect to handle parent component's WebSocket toggle
-  useEffect(() => {
-    // This will run whenever the component is mounted or remounted
     console.log('[StreamViewWS] Component mounted/remounted');
     
+    // Cleanup function that will run when component unmounts
     return () => {
-      // This will run whenever the component is unmounted
-      console.log('[StreamViewWS] Component will unmount, ensuring cleanup');
+      console.log('[StreamViewWS] Component unmounting, performing cleanup');
+      
+      // First try normal cleanup
       cleanupWebSocketConnection();
       
-      // Force close any remaining connection
+      // Force immediate cleanup of any remaining connection
       if (wsRef.current) {
-        console.warn('[StreamViewWS] Found WebSocket during unmount, forcing close');
-        forceCloseConnection();
+        console.warn('[StreamViewWS] Found lingering WebSocket, forcing immediate closure');
+        const ws = wsRef.current;
+        
+        // Remove all event handlers immediately
+        ws.onopen = null;
+        ws.onclose = null;
+        ws.onerror = null;
+        ws.onmessage = null;
+        
+        // Force close the connection
+        try {
+          ws.close(1000, 'Component unmounted');
+        } catch (err) {
+          console.error('[StreamViewWS] Error during forced close:', err);
+        }
+        
+        // Immediately clear the reference and state
+        wsRef.current = null;
+        setConnected(false);
+        setFrameData(null);
       }
     };
-  }, [streamId]); // Only re-run if streamId changes
+  }, []); // Empty dependency array since this is for mount/unmount only
 
-  // WebSocket connection
+  // Modify the WebSocket connection effect to properly handle cleanup
   useEffect(() => {
+    disconnectedRef.current = false;
+    
     // Don't attempt connection without a streamId
     if (!streamId) {
       setError('Missing stream ID');
       return;
     }
-  
-    // Close any existing connection before creating a new one
-    cleanupWebSocketConnection();
-  
-    // Rest of connection logic
-    const connect = () => {
-      try {
-        const wsHost = apiService.getWebSocketHost();
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${wsHost}/api/streams/${streamId}/ws?fps=${fps}`;
-        
-        console.log(`[WS] Connecting to WebSocket: ${wsUrl}`);
-        
-        // Check if the API server is reachable first
-        apiService.checkServerHealth()
-          .then(isHealthy => {
-            if (isHealthy) {
-              console.log('[WS] API server is reachable, establishing WebSocket connection');
-              startWebSocketConnection(wsUrl);
-            } else {
-              console.error('[WS] API server is not reachable');
-              setError('Cannot connect to API server');
-              handleReconnect();
-            }
-          })
-          .catch(error => {
-            console.error('[WS] Error checking API server health:', error);
-            setError('Cannot connect to API server');
-            handleReconnect();
-          });
-      } catch (err) {
-        console.error('[WS] Error creating WebSocket:', err);
-        setError('Failed to connect to stream');
-        handleReconnect();
-      }
-    };
+
+    console.log('[StreamViewWS] Setting up new WebSocket connection');
     
+    // First, clean up any existing connection
+    cleanupWebSocketConnection();
+    
+    // Define WebSocket connection setup
     const startWebSocketConnection = (wsUrl: string) => {
       try {
-        const ws = new WebSocket(wsUrl);
+        const ws = new WebSocket(wsUrl) as WebSocketWithLogging;
         wsRef.current = ws;
         
         // Register this WebSocket in the global registry
@@ -338,20 +324,10 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
           window.__registerWs(ws);
         }
         
-        let connectionTimeout = setTimeout(() => {
-          if (wsRef.current && wsRef.current.readyState !== WebSocket.OPEN) {
-            console.error('[WS] Connection timed out');
-            ws.close();
-            setError('Connection timed out');
-          }
-        }, 10000); // 10 second timeout
-        
         ws.onopen = () => {
           console.log('[WS] WebSocket connection opened');
-          clearTimeout(connectionTimeout);
           setConnected(true);
           setError(null);
-          setReconnectCount(0);
           
           // Send a ping to ensure connection is fully established
           try {
@@ -363,7 +339,6 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
         
         ws.onclose = (event) => {
           console.log(`[WS] WebSocket connection closed: ${event.code} ${event.reason || ''}`);
-          clearTimeout(connectionTimeout);
           setConnected(false);
           
           // Unregister from global registry
@@ -372,122 +347,42 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
           }
           
           wsRef.current = null;
-          
-          // Check closure code
-          if (event.code === 1000) {
-            // Normal closure
-            console.log('[WS] Normal closure, not reconnecting');
-          } else if (event.code === 1006) {
-            // Abnormal closure - likely server not running
-            setError(`Connection lost: Server may be unavailable (Code ${event.code})`);
-            handleReconnect();
-          } else if (event.code === 1011) {
-            // Server error
-            setError(`Server error: ${event.reason || 'Unknown error'} (Code ${event.code})`);
-            handleReconnect();
-          } else {
-            // Other errors
-            setError(`Connection closed: ${event.reason || 'Unknown reason'} (Code ${event.code})`);
-            handleReconnect();
-          }
         };
         
         ws.onerror = (event) => {
           console.error('[WS] WebSocket error:', event);
-          // Don't set error here, let onclose handle it
-          // This prevents duplicate error messages
         };
         
         ws.onmessage = (event) => {
           try {
-            // If we're in the process of disconnecting or already disconnected, don't process new messages
-            if (!wsRef.current) {
-              console.log('[WS] Received message after disconnection, ignoring');
-              return;
-            }
-            
-            // Show the first 100 characters of the message for debugging
-            const previewData = typeof event.data === 'string' 
-              ? (event.data.length > 100 ? event.data.substring(0, 100) + '...' : event.data)
-              : '[Binary data]';
-            console.log('[WS] Received message:', previewData);
-            
-            // Check if the data might be a binary message
-            if (typeof event.data !== 'string') {
-              console.error('[WS] Received binary data which is not supported');
-              return;
-            }
-            
-            // Check if this looks like raw base64 image data
-            if (event.data.startsWith('/9j/') || event.data.startsWith('iVBOR')) {
-              // This appears to be raw base64 image data
-              console.log('[WS] Detected raw base64 image data');
-              setFrameData(event.data);
-              return;
-            }
-            
-            // Try to parse as JSON
-            let data;
-            try {
-              data = JSON.parse(event.data);
-            } catch (parseError) {
-              console.error('[WS] Error parsing message as JSON:', parseError);
-              
-              // See if we can extract a base64 image from the corrupted data
-              const base64Match = /\/9j\/[A-Za-z0-9+/=]+/.exec(event.data);
-              if (base64Match) {
-                console.log('[WS] Extracted base64 image data from corrupted message');
-                setFrameData(base64Match[0]);
+            // If we're disconnected or disconnecting, ignore all messages
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+              // Only log every 5 seconds to prevent spam
+              const now = Date.now();
+              if (!ws.lastLogTime || now - ws.lastLogTime >= 5000) {
+                console.log('[WS] Ignoring messages - connection not open');
+                ws.lastLogTime = now;
               }
               return;
             }
             
-            // Handle JSON messages
-            if (data.type === 'frame') {
-              // Check if frame data exists and process it
-              if (data.data || data.frame) {
-                const frameContent = data.data || data.frame;
-                // Verify it looks like base64 data
-                if (typeof frameContent === 'string' && 
-                    (frameContent.startsWith('/9j/') || 
-                     frameContent.startsWith('iVBOR'))) {
-                  setFrameData(frameContent);
-                } else {
-                  console.error('[WS] Received invalid frame data format:', 
-                              typeof frameContent === 'string' 
-                              ? frameContent.substring(0, 20) + '...' 
-                              : typeof frameContent);
-                }
-              } else {
-                console.error('[WS] Frame message missing data field:', data);
-              }
-            } else if (data.type === 'error') {
-              // Handle error messages from the server
-              console.error('[WS] Server sent error:', data.message || 'Unknown error');
-              setError(data.message || 'Unknown error');
-              if (wsRef.current) {
-                wsRef.current.close();
-                wsRef.current = null;
-              }
-            } else if (data.type === 'info') {
-              // Info messages from server
-              console.log('[WS] Server info:', data.message);
-            } else if (data.type === 'ping') {
-              // Server ping message, respond with pong to keep connection alive
+            // Process the message
+            if (typeof event.data === 'string') {
               try {
-                if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                  wsRef.current.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+                const data = JSON.parse(event.data);
+                if (data.type === 'frame' && (data.data || data.frame)) {
+                  const frameContent = data.data || data.frame;
+                  if (typeof frameContent === 'string') {
+                    setFrameData(frameContent);
+                  }
                 }
               } catch (err) {
-                console.error('[WS] Error sending pong response:', err);
+                // If it's not JSON, check if it's raw base64 image data
+                if (event.data.startsWith('/9j/') || event.data.startsWith('iVBOR')) {
+                  setFrameData(event.data);
+                }
               }
-            } else if (data.frame) {
-              // Direct frame data without type field
-              setFrameData(data.frame);
             }
-            
-            // No error if we got a message
-            if (error) setError(null);
           } catch (err) {
             console.error('[WS] Error processing WebSocket message:', err);
           }
@@ -498,80 +393,84 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
       }
     };
     
-    const handleReconnect = () => {
-      const newReconnectCount = reconnectCount + 1;
-      setReconnectCount(newReconnectCount);
-      
-      // Implement exponential backoff for reconnection attempts
-      const backoff = Math.min(30000, Math.pow(2, newReconnectCount) * 1000);
-      console.log(`[WS] Attempting to reconnect in ${backoff}ms (attempt ${newReconnectCount})`);
-      
-      // If we've had too many failures, check server health before reconnecting
-      if (newReconnectCount > 3) {
-        apiService.checkServerHealth()
-          .then(isHealthy => {
-            if (!isHealthy) {
-              console.error('[WS] API server health check failed before reconnect');
-              setError('Server appears to be unavailable. Please check that the API server is running.');
-              return;
-            }
-            
-            // Server is healthy, schedule reconnect with backoff
-            setTimeout(() => {
-              if (newReconnectCount <= 10) {
-                connect();
-              } else {
-                setError('Failed to connect after multiple attempts. Please check the server status and try again.');
-              }
-            }, backoff);
-          })
-          .catch(() => {
-            // Health check itself failed
-            setError('Cannot connect to API server. Please check that it is running.');
-          });
-      } else {
-        // For first few attempts, just try reconnecting
-        setTimeout(() => {
-          if (newReconnectCount <= 10) {
-            connect();
-          } else {
-            setError('Failed to connect after multiple attempts. Please check the server status and try again.');
-          }
-        }, backoff);
+    // Define connection logic
+    const connect = () => {
+      try {
+        const wsHost = apiService.getWebSocketHost();
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${wsHost}/api/streams/${streamId}/ws?fps=${fps}`;
+        
+        console.log(`[WS] Connecting to WebSocket: ${wsUrl}`);
+        startWebSocketConnection(wsUrl);
+      } catch (err) {
+        console.error('[WS] Error creating WebSocket:', err);
+        setError('Failed to connect to stream');
       }
     };
     
+    // Create new connection
     connect();
     
     // Cleanup function
     return () => {
-      console.log('[StreamViewWS] Effect cleanup - closing connection');
+      console.log('[StreamViewWS] WebSocket effect cleanup - ensuring connection is closed');
       cleanupWebSocketConnection();
+      
+      // Force cleanup any lingering connection
+      if (wsRef.current) {
+        console.warn('[StreamViewWS] Found lingering WebSocket in cleanup, forcing immediate closure');
+        const ws = wsRef.current;
+        ws.onopen = null;
+        ws.onclose = null;
+        ws.onerror = null;
+        ws.onmessage = null;
+        try {
+          ws.close(1000, 'Effect cleanup');
+        } catch (err) {
+          console.error('[StreamViewWS] Error during forced cleanup:', err);
+        }
+        wsRef.current = null;
+        setConnected(false);
+        setFrameData(null);
+      }
     };
-  }, [streamId, fps]); // Add fps to dependencies to reconnect when it changes
+  }, [streamId, fps]); // Dependencies that should trigger reconnection
 
   // Draw frame data on canvas
   useEffect(() => {
-    if (!frameData || !canvasRef.current) return;
+    if (!frameData || !canvasRef.current) {
+      console.log('[Canvas] No frame data or canvas ref available');
+      return;
+    }
     
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) {
+      console.error('[Canvas] Failed to get canvas context');
+      return;
+    }
+    
+    console.log('[Canvas] Starting to process frame data, length:', frameData.length);
     
     // Create a new image from the frame data
     const img = new Image();
     img.onload = () => {
+      console.log('[Canvas] Image loaded successfully, dimensions:', img.width, 'x', img.height);
       // Set canvas dimensions to match the image
       canvas.width = img.width;
       canvas.height = img.height;
       
+      // Clear the canvas before drawing
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
       // Draw the image on the canvas
       ctx.drawImage(img, 0, 0);
+      console.log('[Canvas] Image drawn on canvas');
     };
     
     // Handle any errors loading the image
     img.onerror = (e) => {
-      console.error('[WS] Error loading frame image:', e);
+      console.error('[Canvas] Error loading frame image:', e);
       
       // Draw error message on canvas
       ctx.fillStyle = '#333';
@@ -582,20 +481,19 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
       ctx.fillStyle = 'white';
       ctx.font = '14px Arial';
       ctx.fillText('Error loading image', 10, 30);
+      
+      // Log the first 100 characters of the frame data to help debug
+      console.error('[Canvas] Frame data preview:', 
+        frameData.substring(0, 100) + '...',
+        'Total length:', frameData.length);
     };
     
     try {
-      // Check if the frameData is valid base64
-      const isValidBase64 = /^[A-Za-z0-9+/=]+$/.test(frameData.trim());
-      if (!isValidBase64) {
-        console.error('[WS] Received invalid base64 data');
-        throw new Error('Invalid base64 data');
-      }
-      
       // Set the source to load the image
       img.src = `data:image/jpeg;base64,${frameData}`;
+      console.log('[Canvas] Set image source with base64 data');
     } catch (err) {
-      console.error('[WS] Error processing frame data:', err);
+      console.error('[Canvas] Error processing frame data:', err);
       
       // Draw error message on canvas
       ctx.fillStyle = '#333';
