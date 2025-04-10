@@ -366,7 +366,7 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
 
   // Update available categories based on the pipeline state
   useEffect(() => {
-    let newCategories = ['source'];
+    let newCategories = ['source', 'sink'];  // Make sink always available
     
     // Check if a source node exists
     const hasSource = pipeline.nodes.some(node => {
@@ -385,7 +385,7 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     });
     
     if (hasDetector) {
-      newCategories.push('tracker', 'classifier', 'geometry', 'sink');
+      newCategories.push('tracker', 'classifier', 'geometry');
     }
     
     // Only set state if categories have actually changed
