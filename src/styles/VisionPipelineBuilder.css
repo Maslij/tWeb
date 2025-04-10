@@ -779,4 +779,43 @@
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* Config section styles */
+.config-section {
+  margin-bottom: 15px;
+  padding: 5px;
+  border: 1px solid #eee;
+  border-radius: 5px;
+  background-color: #f9f9f9;
+}
+
+.config-section h6 {
+  margin: 0 0 10px 0;
+  padding: 5px;
+  background-color: #f0f0f0;
+  border-radius: 3px;
+  font-size: 14px;
+  color: #333;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.position-inputs {
+  display: flex;
+  align-items: center;
+}
+
+.position-label {
+  display: inline-block;
+  min-width: 15px;
+  font-weight: bold;
+  margin-right: 5px;
+  color: #555;
+}
+
+/* Make sure checkboxes look more prominent */
+.config-item input[type="checkbox"] {
+  transform: scale(1.2);
+  margin-right: 3px;
 } 

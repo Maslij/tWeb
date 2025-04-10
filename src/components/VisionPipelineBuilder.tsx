@@ -17,7 +17,7 @@ interface VisionComponent {
 // Add a utility function to normalize component formats from the API
 const normalizeComponent = (component: any): VisionComponent => {
   // Make sure the component has all the required fields
-  return {
+  const normalizedComponent = {
     id: component.id,
     name: component.name,
     type: component.type || component.id,
@@ -28,6 +28,24 @@ const normalizeComponent = (component: any): VisionComponent => {
     requiresParent: component.requiresParent || [],
     config: component.config || {}
   };
+  
+  // Special handling for annotated stream components to ensure they have all the config options
+  if (normalizedComponent.id === 'annotated_stream' || normalizedComponent.id === 'annotated_video_sink') {
+    normalizedComponent.config = {
+      show_labels: true,
+      show_bounding_boxes: true,
+      show_tracks: true,
+      show_title: true,
+      show_timestamp: true,
+      label_font_scale: 0.5,
+      text_color: [255, 255, 255],
+      title_position: [10, 30],
+      timestamp_position: [10, 60],
+      ...normalizedComponent.config // Keep any existing config values
+    };
+  }
+  
+  return normalizedComponent;
 };
 
 interface PipelineNode {
@@ -346,6 +364,26 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
             text_color: [255, 255, 255],  // RGB (white)
             title_position: [10, 30],     // x, y position for title
             timestamp_position: [10, 60]  // x, y position for timestamp
+          }
+        },
+        // Alternative name for annotated video sink
+        {
+          id: 'annotated_stream',
+          type: 'sink',
+          name: 'Annotated Stream',
+          category: 'sink',
+          description: 'Outputs stream with annotations',
+          inputs: ['image', 'detections', 'tracked_objects', 'classified_objects', 'faces', 'tracked_faces', 'recognized_faces', 'polygons'],
+          config: {
+            show_labels: true,
+            show_bounding_boxes: true,
+            show_tracks: true,
+            show_title: true,
+            show_timestamp: true,
+            label_font_scale: 0.5,
+            text_color: [255, 255, 255],
+            title_position: [10, 30],
+            timestamp_position: [10, 60]
           }
         },
       ];
@@ -1106,6 +1144,354 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
               
               const component = componentsList.find(c => c.id === node.componentId);
               if (!component) return null;
+              
+              // Special case handling for annotated video components
+              if (component.id === 'annotated_video_sink' || component.id === 'annotated_stream') {
+                return (
+                  <div>
+                    <h4>{component.name}</h4>
+                    <p>{component.description}</p>
+                    
+                    <div className="node-config">
+                      <h5>Configuration</h5>
+                      
+                      {/* Show/Hide Options */}
+                      <div className="config-section">
+                        <h6>Display Options</h6>
+                        
+                        {/* Show Labels */}
+                        <div className="config-item">
+                          <label>Show Labels:</label>
+                          <input 
+                            type="checkbox" 
+                            checked={node.config?.show_labels ?? true}
+                            onChange={(e) => {
+                              // Create a deep copy of the config to avoid reference issues
+                              const newConfig = node.config ? JSON.parse(JSON.stringify(node.config)) : {};
+                              newConfig.show_labels = e.target.checked;
+                              console.log(`Updating node ${node.id} config: show_labels = `, e.target.checked);
+                              
+                              // Update the pipeline with the modified node
+                              setPipeline(prev => {
+                                // Deep copy the pipeline to avoid reference issues
+                                const newPipeline = JSON.parse(JSON.stringify(prev));
+                                const targetNode = newPipeline.nodes.find((n: any) => n.id === node.id);
+                                if (targetNode) {
+                                  targetNode.config = newConfig;
+                                }
+                                return newPipeline;
+                              });
+                            }}
+                          />
+                        </div>
+                        
+                        {/* Show Bounding Boxes */}
+                        <div className="config-item">
+                          <label>Show Bounding Boxes:</label>
+                          <input 
+                            type="checkbox" 
+                            checked={node.config?.show_bounding_boxes ?? true}
+                            onChange={(e) => {
+                              // Create a deep copy of the config to avoid reference issues
+                              const newConfig = node.config ? JSON.parse(JSON.stringify(node.config)) : {};
+                              newConfig.show_bounding_boxes = e.target.checked;
+                              console.log(`Updating node ${node.id} config: show_bounding_boxes = `, e.target.checked);
+                              
+                              // Update the pipeline with the modified node
+                              setPipeline(prev => {
+                                // Deep copy the pipeline to avoid reference issues
+                                const newPipeline = JSON.parse(JSON.stringify(prev));
+                                const targetNode = newPipeline.nodes.find((n: any) => n.id === node.id);
+                                if (targetNode) {
+                                  targetNode.config = newConfig;
+                                }
+                                return newPipeline;
+                              });
+                            }}
+                          />
+                        </div>
+                        
+                        {/* Show Tracks */}
+                        <div className="config-item">
+                          <label>Show Tracks:</label>
+                          <input 
+                            type="checkbox" 
+                            checked={node.config?.show_tracks ?? true}
+                            onChange={(e) => {
+                              // Create a deep copy of the config to avoid reference issues
+                              const newConfig = node.config ? JSON.parse(JSON.stringify(node.config)) : {};
+                              newConfig.show_tracks = e.target.checked;
+                              console.log(`Updating node ${node.id} config: show_tracks = `, e.target.checked);
+                              
+                              // Update the pipeline with the modified node
+                              setPipeline(prev => {
+                                // Deep copy the pipeline to avoid reference issues
+                                const newPipeline = JSON.parse(JSON.stringify(prev));
+                                const targetNode = newPipeline.nodes.find((n: any) => n.id === node.id);
+                                if (targetNode) {
+                                  targetNode.config = newConfig;
+                                }
+                                return newPipeline;
+                              });
+                            }}
+                          />
+                        </div>
+                        
+                        {/* Show Title */}
+                        <div className="config-item">
+                          <label>Show Title:</label>
+                          <input 
+                            type="checkbox" 
+                            checked={node.config?.show_title ?? true}
+                            onChange={(e) => {
+                              // Create a deep copy of the config to avoid reference issues
+                              const newConfig = node.config ? JSON.parse(JSON.stringify(node.config)) : {};
+                              newConfig.show_title = e.target.checked;
+                              console.log(`Updating node ${node.id} config: show_title = `, e.target.checked);
+                              
+                              // Update the pipeline with the modified node
+                              setPipeline(prev => {
+                                // Deep copy the pipeline to avoid reference issues
+                                const newPipeline = JSON.parse(JSON.stringify(prev));
+                                const targetNode = newPipeline.nodes.find((n: any) => n.id === node.id);
+                                if (targetNode) {
+                                  targetNode.config = newConfig;
+                                }
+                                return newPipeline;
+                              });
+                            }}
+                          />
+                        </div>
+                        
+                        {/* Show Timestamp */}
+                        <div className="config-item">
+                          <label>Show Timestamp:</label>
+                          <input 
+                            type="checkbox" 
+                            checked={node.config?.show_timestamp ?? true}
+                            onChange={(e) => {
+                              // Create a deep copy of the config to avoid reference issues
+                              const newConfig = node.config ? JSON.parse(JSON.stringify(node.config)) : {};
+                              newConfig.show_timestamp = e.target.checked;
+                              console.log(`Updating node ${node.id} config: show_timestamp = `, e.target.checked);
+                              
+                              // Update the pipeline with the modified node
+                              setPipeline(prev => {
+                                // Deep copy the pipeline to avoid reference issues
+                                const newPipeline = JSON.parse(JSON.stringify(prev));
+                                const targetNode = newPipeline.nodes.find((n: any) => n.id === node.id);
+                                if (targetNode) {
+                                  targetNode.config = newConfig;
+                                }
+                                return newPipeline;
+                              });
+                            }}
+                          />
+                        </div>
+                      </div>
+                      
+                      {/* Font and Color Settings */}
+                      <div className="config-section">
+                        <h6>Font and Color Settings</h6>
+                        
+                        {/* Label Font Scale */}
+                        <div className="config-item">
+                          <label>Label Font Scale:</label>
+                          <input 
+                            type="range" 
+                            min="0.1" 
+                            max="2.0" 
+                            step="0.1"
+                            value={node.config?.label_font_scale ?? 0.5}
+                            onChange={(e) => {
+                              // Create a deep copy of the config to avoid reference issues
+                              const newConfig = node.config ? JSON.parse(JSON.stringify(node.config)) : {};
+                              newConfig.label_font_scale = parseFloat(e.target.value);
+                              console.log(`Updating node ${node.id} config: label_font_scale = `, parseFloat(e.target.value));
+                              
+                              // Update the pipeline with the modified node
+                              setPipeline(prev => {
+                                // Deep copy the pipeline to avoid reference issues
+                                const newPipeline = JSON.parse(JSON.stringify(prev));
+                                const targetNode = newPipeline.nodes.find((n: any) => n.id === node.id);
+                                if (targetNode) {
+                                  targetNode.config = newConfig;
+                                }
+                                return newPipeline;
+                              });
+                            }}
+                          />
+                          <span>{(node.config?.label_font_scale ?? 0.5).toFixed(1)}</span>
+                        </div>
+                        
+                        {/* Text Color */}
+                        <div className="config-item">
+                          <label>Text Color:</label>
+                          <ColorPickerControl 
+                            value={node.config?.text_color ?? [255, 255, 255]} 
+                            onChange={(newColor) => {
+                              // Create a deep copy of the current config to avoid reference issues
+                              const newConfig = node.config ? JSON.parse(JSON.stringify(node.config)) : {};
+                              newConfig.text_color = [...newColor]; // Create a new array to avoid reference issues
+                              console.log(`Updating node ${node.id} config: text_color = `, newColor);
+
+                              // Update the pipeline with the modified node
+                              setPipeline(prev => {
+                                // Deep copy the pipeline to avoid reference issues
+                                const newPipeline = JSON.parse(JSON.stringify(prev));
+                                const targetNode = newPipeline.nodes.find((n: any) => n.id === node.id);
+                                if (targetNode) {
+                                  targetNode.config = newConfig;
+                                }
+                                return newPipeline;
+                              });
+                            }}
+                          />
+                        </div>
+                      </div>
+                      
+                      {/* Position Settings */}
+                      <div className="config-section">
+                        <h6>Position Settings</h6>
+                        
+                        {/* Title Position */}
+                        <div className="config-item">
+                          <label>Title Position:</label>
+                          <div className="position-inputs">
+                            <div>
+                              <label className="position-label">X:</label>
+                              <input 
+                                type="number" 
+                                min="0" 
+                                max="1920" 
+                                value={node.config?.title_position ? node.config.title_position[0] : 10}
+                                onChange={(e) => {
+                                  // Create a deep copy of the config to avoid reference issues
+                                  const newConfig = node.config ? JSON.parse(JSON.stringify(node.config)) : {};
+                                  if (!newConfig.title_position) {
+                                    newConfig.title_position = [10, 30];
+                                  }
+                                  newConfig.title_position[0] = parseInt(e.target.value);
+                                  console.log(`Updating node ${node.id} config: title_position[0] = `, parseInt(e.target.value));
+                                  
+                                  // Update the pipeline with the modified node
+                                  setPipeline(prev => {
+                                    // Deep copy the pipeline to avoid reference issues
+                                    const newPipeline = JSON.parse(JSON.stringify(prev));
+                                    const targetNode = newPipeline.nodes.find((n: any) => n.id === node.id);
+                                    if (targetNode) {
+                                      targetNode.config = newConfig;
+                                    }
+                                    return newPipeline;
+                                  });
+                                }}
+                                style={{ width: '60px', marginRight: '10px' }}
+                              />
+                            </div>
+                            <div>
+                              <label className="position-label">Y:</label>
+                              <input 
+                                type="number" 
+                                min="0" 
+                                max="1080" 
+                                value={node.config?.title_position ? node.config.title_position[1] : 30}
+                                onChange={(e) => {
+                                  // Create a deep copy of the config to avoid reference issues
+                                  const newConfig = node.config ? JSON.parse(JSON.stringify(node.config)) : {};
+                                  if (!newConfig.title_position) {
+                                    newConfig.title_position = [10, 30];
+                                  }
+                                  newConfig.title_position[1] = parseInt(e.target.value);
+                                  console.log(`Updating node ${node.id} config: title_position[1] = `, parseInt(e.target.value));
+                                  
+                                  // Update the pipeline with the modified node
+                                  setPipeline(prev => {
+                                    // Deep copy the pipeline to avoid reference issues
+                                    const newPipeline = JSON.parse(JSON.stringify(prev));
+                                    const targetNode = newPipeline.nodes.find((n: any) => n.id === node.id);
+                                    if (targetNode) {
+                                      targetNode.config = newConfig;
+                                    }
+                                    return newPipeline;
+                                  });
+                                }}
+                                style={{ width: '60px' }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Timestamp Position */}
+                        <div className="config-item">
+                          <label>Timestamp Position:</label>
+                          <div className="position-inputs">
+                            <div>
+                              <label className="position-label">X:</label>
+                              <input 
+                                type="number" 
+                                min="0" 
+                                max="1920" 
+                                value={node.config?.timestamp_position ? node.config.timestamp_position[0] : 10}
+                                onChange={(e) => {
+                                  // Create a deep copy of the config to avoid reference issues
+                                  const newConfig = node.config ? JSON.parse(JSON.stringify(node.config)) : {};
+                                  if (!newConfig.timestamp_position) {
+                                    newConfig.timestamp_position = [10, 60];
+                                  }
+                                  newConfig.timestamp_position[0] = parseInt(e.target.value);
+                                  console.log(`Updating node ${node.id} config: timestamp_position[0] = `, parseInt(e.target.value));
+                                  
+                                  // Update the pipeline with the modified node
+                                  setPipeline(prev => {
+                                    // Deep copy the pipeline to avoid reference issues
+                                    const newPipeline = JSON.parse(JSON.stringify(prev));
+                                    const targetNode = newPipeline.nodes.find((n: any) => n.id === node.id);
+                                    if (targetNode) {
+                                      targetNode.config = newConfig;
+                                    }
+                                    return newPipeline;
+                                  });
+                                }}
+                                style={{ width: '60px', marginRight: '10px' }}
+                              />
+                            </div>
+                            <div>
+                              <label className="position-label">Y:</label>
+                              <input 
+                                type="number" 
+                                min="0" 
+                                max="1080" 
+                                value={node.config?.timestamp_position ? node.config.timestamp_position[1] : 60}
+                                onChange={(e) => {
+                                  // Create a deep copy of the config to avoid reference issues
+                                  const newConfig = node.config ? JSON.parse(JSON.stringify(node.config)) : {};
+                                  if (!newConfig.timestamp_position) {
+                                    newConfig.timestamp_position = [10, 60];
+                                  }
+                                  newConfig.timestamp_position[1] = parseInt(e.target.value);
+                                  console.log(`Updating node ${node.id} config: timestamp_position[1] = `, parseInt(e.target.value));
+                                  
+                                  // Update the pipeline with the modified node
+                                  setPipeline(prev => {
+                                    // Deep copy the pipeline to avoid reference issues
+                                    const newPipeline = JSON.parse(JSON.stringify(prev));
+                                    const targetNode = newPipeline.nodes.find((n: any) => n.id === node.id);
+                                    if (targetNode) {
+                                      targetNode.config = newConfig;
+                                    }
+                                    return newPipeline;
+                                  });
+                                }}
+                                style={{ width: '60px' }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
               
               return (
                 <div>
