@@ -318,6 +318,7 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
   });
   
   const [activeComponent, setActiveComponent] = useState<VisionComponent | null>(null);
+  const [selectedComponent, setSelectedComponent] = useState<string | null>(null);
   const [draggingNode, setDraggingNode] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [showComponentList, setShowComponentList] = useState(true);
@@ -448,6 +449,7 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     }
     
     setActiveComponent(component);
+    setSelectedComponent(component.id);
     
     if (builderRef.current) {
       const rect = builderRef.current.getBoundingClientRect();
@@ -612,6 +614,7 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
       }));
       
       setActiveComponent(null);
+      setSelectedComponent(null);
     }
     
     // Finalize node dragging
@@ -1002,9 +1005,10 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
               {filteredComponents.map(component => (
                 <div 
                   key={component.id}
-                  className={`component-item ${!canAddComponent(component) ? 'disabled' : ''}`}
+                  className={`component-item ${selectedComponent === component.id ? 'selected' : ''} ${!canAddComponent(component) ? 'disabled' : ''}`}
                   draggable={canAddComponent(component)}
                   onMouseDown={(e) => handleDragStart(component, e)}
+                  onClick={() => canAddComponent(component) && setSelectedComponent(component.id)}
                 >
                   <div className="component-name">{component.name}</div>
                   <div className="component-description">{component.description}</div>
