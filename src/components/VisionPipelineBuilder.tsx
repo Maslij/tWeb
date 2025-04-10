@@ -296,11 +296,24 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
       return initialPipeline;
     }
     
-    // Otherwise create a new empty pipeline
+    // Otherwise create a new pipeline with a pre-populated source component
+    const sourceNode: PipelineNode = {
+      id: `camera_feed_${Date.now()}`,
+      componentId: 'camera_feed',
+      position: { x: 50, y: 50 }, // Position near top-left
+      connections: [],
+      config: {},
+      sourceDetails: {
+        name: streamName,
+        source: streamSource,
+        type: streamType
+      }
+    };
+
     return {
       id: `pipeline_${Date.now()}`,
       name: `${streamName || 'New'} Vision Pipeline`,
-      nodes: [],
+      nodes: [sourceNode],
     };
   });
   
@@ -318,6 +331,7 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [flashMessage, setFlashMessage] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [showDeletePipelineConfirmation, setShowDeletePipelineConfirmation] = useState(false);
   
   const builderRef = useRef<HTMLDivElement>(null);
 
@@ -900,6 +914,20 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
   const { debouncedCallback: handleSavePipelineDebounced, isDebouncing: isSavingPipeline } = 
     useDebounce(handleSavePipeline, 300);
 
+  // Add a debounced delete pipeline handler
+  const { debouncedCallback: handleDeletePipelineDebounced, isDebouncing: isDeletingPipeline } = 
+    useDebounce(() => {
+      setShowDeletePipelineConfirmation(false);
+      // Stop the stream if it's running
+      if (streamStatus === 'running' && onStopStream) {
+        onStopStream();
+      }
+      // Delete the stream
+      if (onDeleteStream) {
+        onDeleteStream();
+      }
+    }, 300);
+
   return (
     <div className="vision-pipeline-builder">
       {/* Flash message */}
@@ -936,6 +964,20 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
               </>
             ) : (
               <span className="button-text">Save Pipeline</span>
+            )}
+          </button>
+          <button 
+            onClick={() => setShowDeletePipelineConfirmation(true)}
+            className={`delete-button ${actionLoading || isDeletingPipeline ? 'loading' : ''}`}
+            disabled={actionLoading || isDeletingPipeline}
+          >
+            {actionLoading || isDeletingPipeline ? (
+              <>
+                <span className="spinner"></span>
+                <span className="button-text">Deleting...</span>
+              </>
+            ) : (
+              <span className="button-text">Delete Pipeline</span>
             )}
           </button>
         </div>
@@ -1865,6 +1907,20 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
           onCancel={() => setShowDeleteConfirmation(false)}
         />
       )}
+
+      {/* Delete Pipeline Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={showDeletePipelineConfirmation}
+        title="Delete Pipeline"
+        message="Are you sure you want to delete this pipeline? This action cannot be undone. If the pipeline is currently running, it will be stopped before deletion."
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={() => {
+          setShowDeletePipelineConfirmation(false);
+          handleDeletePipelineDebounced();
+        }}
+        onCancel={() => setShowDeletePipelineConfirmation(false)}
+      />
     </div>
   );
 };
