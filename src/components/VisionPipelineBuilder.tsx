@@ -45,6 +45,28 @@ const normalizeComponent = (component: any): VisionComponent => {
     };
   }
   
+  // Special handling for event alarm components
+  if (normalizedComponent.id === 'event_alarm') {
+    normalizedComponent.config = {
+      min_confidence: 0.6,
+      trigger_delay: 5,
+      cool_down_period: 30,
+      notify_on_alarm: true,
+      ...normalizedComponent.config // Keep any existing config values
+    };
+  }
+  
+  // Special handling for event logger components
+  if (normalizedComponent.id === 'event_logger') {
+    normalizedComponent.config = {
+      log_level: 'info',
+      include_images: true,
+      retention_days: 7,
+      max_events_per_day: 1000,
+      ...normalizedComponent.config // Keep any existing config values
+    };
+  }
+  
   return normalizedComponent;
 };
 
@@ -304,160 +326,7 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     // Get API components or use the built-in ones
     const components: VisionComponent[] = availableComponents 
       ? availableComponents.map(comp => normalizeComponent(comp as any))
-      : [
-        // Source components
-        {
-          id: 'camera_feed',
-          type: 'source',
-          name: 'Camera Feed',
-          category: 'source',
-          description: `Stream source: ${streamSource}`,
-          outputs: ['image'],
-        },
-        
-        // Detector components
-        {
-          id: 'object_detector',
-          type: 'detector',
-          name: 'Object Detector',
-          category: 'detector',
-          description: 'Detects objects in frames',
-          inputs: ['image'],
-          outputs: ['detections'],
-          config: { confidence: 0.5, classes: ['person', 'car', 'dog'] }
-        },
-        {
-          id: 'motion_detector',
-          type: 'detector',
-          name: 'Motion Detector',
-          category: 'detector',
-          description: 'Detects motion between frames',
-          inputs: ['image'],
-          outputs: ['motion_regions'],
-        },
-        {
-          id: 'face_detector',
-          type: 'detector',
-          name: 'Face Detector',
-          category: 'detector',
-          description: 'Detects faces in frames',
-          inputs: ['image'],
-          outputs: ['faces'],
-        },
-        
-        // Tracker components
-        {
-          id: 'object_tracker',
-          type: 'tracker',
-          name: 'Object Tracker',
-          category: 'tracker',
-          description: 'Tracks detected objects across frames',
-          inputs: ['image', 'detections'],
-          outputs: ['tracked_objects'],
-          requiresParent: ['object_detector'],
-        },
-        {
-          id: 'face_tracker',
-          type: 'tracker',
-          name: 'Face Tracker',
-          category: 'tracker',
-          description: 'Tracks detected faces across frames',
-          inputs: ['image', 'faces'],
-          outputs: ['tracked_faces'],
-          requiresParent: ['face_detector'],
-        },
-        
-        // Classifier components
-        {
-          id: 'object_classifier',
-          type: 'classifier',
-          name: 'Object Classifier',
-          category: 'classifier',
-          description: 'Classifies detected objects',
-          inputs: ['image', 'detections'],
-          outputs: ['classified_objects'],
-          requiresParent: ['object_detector'],
-        },
-        {
-          id: 'face_recognition',
-          type: 'classifier',
-          name: 'Face Recognition',
-          category: 'classifier',
-          description: 'Recognizes faces against a database',
-          inputs: ['image', 'faces'],
-          outputs: ['recognized_faces'],
-          requiresParent: ['face_detector'],
-        },
-
-        // Geometry components
-        {
-          id: 'polygon_drawer',
-          type: 'geometry',
-          name: 'Polygon Drawer',
-          category: 'geometry',
-          description: 'Draw polygons to define regions of interest',
-          inputs: ['image', 'detections', 'tracked_objects', 'classified_objects', 'faces', 'tracked_faces', 'recognized_faces'],
-          outputs: ['polygons'],
-        },
-        {
-          id: 'line_crossing',
-          type: 'geometry',
-          name: 'Line Crossing',
-          category: 'geometry',
-          description: 'Define lines for object crossing detection',
-          inputs: ['image', 'detections', 'tracked_objects', 'classified_objects', 'faces', 'tracked_faces', 'recognized_faces'],
-          outputs: ['crossing_events'],
-        },
-        
-        // Sink/output components
-        {
-          id: 'telemetry_sink',
-          type: 'sink',
-          name: 'Telemetry Output',
-          category: 'sink',
-          description: 'Outputs detection results as telemetry data',
-          inputs: ['detections', 'tracked_objects', 'classified_objects', 'faces', 'tracked_faces', 'recognized_faces', 'polygons', 'crossing_events'],
-        },
-        {
-          id: 'annotated_video_sink',
-          type: 'sink',
-          name: 'Annotated Video',
-          category: 'sink',
-          description: 'Outputs video with annotations',
-          inputs: ['image', 'detections', 'tracked_objects', 'classified_objects', 'faces', 'tracked_faces', 'recognized_faces', 'polygons'],
-          config: {
-            show_labels: true,
-            show_bounding_boxes: true,
-            show_tracks: true,         // Option to show/hide pipeline title
-            show_title: true,
-            show_timestamp: true,
-            label_font_scale: 0.5,
-            text_color: [255, 255, 255],  // RGB (white)
-            title_position: [10, 30],     // x, y position for title
-            timestamp_position: [10, 60]  // x, y position for timestamp
-          }
-        },
-        // Alternative name for annotated video sink
-        {
-          id: 'annotated_stream',
-          type: 'sink',
-          name: 'Annotated Stream',
-          category: 'sink',
-          description: 'Outputs stream with annotations',
-          inputs: ['image', 'detections', 'tracked_objects', 'classified_objects', 'faces', 'tracked_faces', 'recognized_faces', 'polygons'],
-          config: {
-            show_labels: true,
-            show_bounding_boxes: true,
-            show_tracks: true,
-            show_title: true,
-            show_timestamp: true,
-            label_font_scale: 0.5,
-            text_color: [255, 255, 255],
-            title_position: [10, 30],
-            timestamp_position: [10, 60]
-          }
-        },
-      ];
+      : [];
     
     // Check if we have any source component
     const hasSourceComponent = components.some(comp => comp.category === 'source');
@@ -631,6 +500,15 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
   const isValidConnection = (sourceComponent: any, targetComponent: any) => {
     // Only allow connection if source has outputs and target has inputs
     if (!sourceComponent.outputs || !targetComponent.inputs) {
+      // Special case for sink components - they might not have explicitly defined outputs
+      // but we still want to allow connecting them to other sinks
+      const isSourceSink = sourceComponent.category === 'sink';
+      const isTargetSink = targetComponent.category === 'sink';
+      
+      if (isSourceSink && isTargetSink) {
+        return true; // Allow sink-to-sink connections even without explicit outputs/inputs
+      }
+      
       return false;
     }
     
@@ -642,6 +520,10 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     // Special cases for geometry components
     const isSourceGeometry = sourceComponent.category === 'geometry';
     const isTargetGeometry = targetComponent.category === 'geometry';
+    
+    // Special cases for sink components
+    const isSourceSink = sourceComponent.category === 'sink';
+    const isTargetSink = targetComponent.category === 'sink';
     
     // Allow connections to geometry components from most types
     const allowGeometryConnection = 
@@ -655,8 +537,12 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
         sourceComponent.outputs.includes('recognized_faces')
       )) ||
       (isSourceGeometry && targetComponent.inputs.includes('polygons'));
+      
+    // Allow sink -> sink connections
+    // This will allow connecting annotated video to other sinks like event logger or alarms
+    const allowSinkConnection = isSourceSink && isTargetSink;
     
-    return hasMatchingIO || allowGeometryConnection;
+    return hasMatchingIO || allowGeometryConnection || allowSinkConnection;
   };
 
   // Get possible targets for a connection from a node
@@ -1575,6 +1461,142 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
                               />
                             </div>
                           </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              
+              // Special case handling for Event Alarm
+              if (component.id === 'event_alarm') {
+                return (
+                  <div>
+                    <h4>{component.name}</h4>
+                    <p>{component.description}</p>
+                    
+                    <div className="node-config">
+                      <h5>Configuration</h5>
+                      
+                      <div className="config-section">
+                        <h6>Alarm Settings</h6>
+                        
+                        {/* Minimum Confidence */}
+                        <div className="config-item">
+                          <label>Minimum Confidence:</label>
+                          <input 
+                            type="range" 
+                            min="0.1" 
+                            max="1.0" 
+                            step="0.05"
+                            value={node.config?.min_confidence ?? 0.6}
+                            onChange={(e) => updateNodeConfig(node.id, 'min_confidence', parseFloat(e.target.value))}
+                          />
+                          <span>{(node.config?.min_confidence ?? 0.6).toFixed(2)}</span>
+                        </div>
+                        
+                        {/* Trigger Delay */}
+                        <div className="config-item">
+                          <label>Trigger Delay (seconds):</label>
+                          <input 
+                            type="number" 
+                            min="0" 
+                            max="60" 
+                            value={node.config?.trigger_delay ?? 5}
+                            onChange={(e) => updateNodeConfig(node.id, 'trigger_delay', parseInt(e.target.value))}
+                            style={{ width: '60px' }}
+                          />
+                        </div>
+                        
+                        {/* Cool Down Period */}
+                        <div className="config-item">
+                          <label>Cool Down Period (seconds):</label>
+                          <input 
+                            type="number" 
+                            min="0" 
+                            max="300" 
+                            value={node.config?.cool_down_period ?? 30}
+                            onChange={(e) => updateNodeConfig(node.id, 'cool_down_period', parseInt(e.target.value))}
+                            style={{ width: '60px' }}
+                          />
+                        </div>
+                        
+                        {/* Notify on Alarm */}
+                        <div className="config-item">
+                          <label>Notify on Alarm:</label>
+                          <input 
+                            type="checkbox" 
+                            checked={node.config?.notify_on_alarm ?? true}
+                            onChange={(e) => updateNodeConfig(node.id, 'notify_on_alarm', e.target.checked)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              
+              // Special case handling for Event Logger
+              if (component.id === 'event_logger') {
+                return (
+                  <div>
+                    <h4>{component.name}</h4>
+                    <p>{component.description}</p>
+                    
+                    <div className="node-config">
+                      <h5>Configuration</h5>
+                      
+                      <div className="config-section">
+                        <h6>Logging Settings</h6>
+                        
+                        {/* Log Level */}
+                        <div className="config-item">
+                          <label>Log Level:</label>
+                          <select 
+                            value={node.config?.log_level ?? 'info'}
+                            onChange={(e) => updateNodeConfig(node.id, 'log_level', e.target.value)}
+                          >
+                            <option value="debug">Debug</option>
+                            <option value="info">Info</option>
+                            <option value="warn">Warning</option>
+                            <option value="error">Error</option>
+                          </select>
+                        </div>
+                        
+                        {/* Include Images */}
+                        <div className="config-item">
+                          <label>Include Images:</label>
+                          <input 
+                            type="checkbox" 
+                            checked={node.config?.include_images ?? true}
+                            onChange={(e) => updateNodeConfig(node.id, 'include_images', e.target.checked)}
+                          />
+                        </div>
+                        
+                        {/* Retention Days */}
+                        <div className="config-item">
+                          <label>Retention Period (days):</label>
+                          <input 
+                            type="number" 
+                            min="1" 
+                            max="365" 
+                            value={node.config?.retention_days ?? 7}
+                            onChange={(e) => updateNodeConfig(node.id, 'retention_days', parseInt(e.target.value))}
+                            style={{ width: '60px' }}
+                          />
+                        </div>
+                        
+                        {/* Max Events Per Day */}
+                        <div className="config-item">
+                          <label>Max Events Per Day:</label>
+                          <input 
+                            type="number" 
+                            min="1" 
+                            max="10000" 
+                            value={node.config?.max_events_per_day ?? 1000}
+                            onChange={(e) => updateNodeConfig(node.id, 'max_events_per_day', parseInt(e.target.value))}
+                            style={{ width: '80px' }}
+                          />
                         </div>
                       </div>
                     </div>
