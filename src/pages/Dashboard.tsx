@@ -26,11 +26,6 @@ const Dashboard = () => {
 
   useEffect(() => {
     fetchStreams();
-    
-    // Refresh streams every 10 seconds
-    const intervalId = setInterval(fetchStreams, 10000);
-    
-    return () => clearInterval(intervalId);
   }, []);
 
   // Safe rendering check for streams

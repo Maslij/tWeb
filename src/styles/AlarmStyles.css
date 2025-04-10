@@ -14,7 +14,7 @@
 
 .modal-content {
   background-color: #fff;
-  border-radius: 8px;
+  border-radius: 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
   width: 90%;
   max-width: 800px;
@@ -28,14 +28,16 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
+  padding: 20px 24px;
   border-bottom: 1px solid #eee;
+  background-color: #f8f9fa;
 }
 
 .modal-header h2 {
   margin: 0;
   font-size: 1.5rem;
-  color: #333;
+  color: #2c3e50;
+  font-weight: 600;
 }
 
 .close-button {
@@ -44,91 +46,198 @@
   font-size: 1.8rem;
   cursor: pointer;
   color: #666;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
 }
 
 .close-button:hover {
+  background-color: #e9ecef;
   color: #333;
 }
 
 .modal-body {
-  padding: 20px;
+  padding: 24px;
   overflow-y: auto;
   flex: 1;
+}
+
+/* Loading State */
+.loading {
+  text-align: center;
+  padding: 40px 0;
+  color: #666;
+}
+
+.loading-spinner {
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #3498db;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 16px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* No Alarms State */
+.no-alarms {
+  text-align: center;
+  padding: 40px 0;
+  color: #666;
+}
+
+.no-alarms-icon {
+  font-size: 2.5rem;
+  margin-bottom: 16px;
+  opacity: 0.5;
 }
 
 /* Alarm List Styles */
 .alarm-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 24px;
 }
 
 .alarm-item {
-  background-color: #f9f9f9;
-  border-radius: 6px;
-  padding: 16px;
+  background-color: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e9ecef;
+  transition: all 0.2s ease;
+}
+
+.alarm-item:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.alarm-item-person {
   border-left: 4px solid #e74c3c;
 }
 
-.alarm-header {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 8px;
+.alarm-item-object {
+  border-left: 4px solid #2ecc71;
 }
 
 .alarm-time {
-  font-size: 0.9rem;
   color: #666;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.alarm-class {
-  font-weight: 500;
-  color: #333;
-  background-color: #eee;
-  padding: 2px 8px;
-  border-radius: 4px;
+.alarm-content {
+  margin-top: 16px;
+}
+
+.alarm-message {
+  font-size: 1.1rem;
+  color: #2c3e50;
+  margin-bottom: 20px;
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.alarm-confidence {
-  font-size: 0.8rem;
-  color: #666;
-}
-
-.alarm-message {
-  margin-bottom: 12px;
-  font-size: 1.1rem;
-}
-
-.alarm-image {
-  display: flex;
-  justify-content: center;
-  margin-top: 10px;
-}
-
-.alarm-image img {
-  max-width: 100%;
-  max-height: 300px;
-  border-radius: 4px;
-}
-
-.loading, .error, .no-alarms {
-  text-align: center;
-  padding: 40px 0;
-  color: #666;
-}
-
-.error {
+.alarm-message i {
   color: #e74c3c;
 }
 
-/* Stream Card Alarm Indicator */
-.stream-card {
-  position: relative;
+.alarm-image-container {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
+.alarm-image-container img {
+  width: 100%;
+  height: auto;
+  max-height: 400px;
+  object-fit: contain;
+  display: block;
+}
+
+.alarm-detection-info {
+  padding: 16px;
+  background-color: #fff;
+  border-top: 1px solid #e9ecef;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.detection-label {
+  font-size: 1rem;
+  color: #2c3e50;
+  font-weight: 600;
+  padding: 4px 12px;
+  background-color: #e9ecef;
+  border-radius: 16px;
+}
+
+.detection-confidence {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+/* Error States */
+.error {
+  text-align: center;
+  padding: 20px;
+  color: #e74c3c;
+  background-color: #fdf3f2;
+  border-radius: 8px;
+  margin: 20px 0;
+}
+
+.image-error {
+  width: 100%;
+  height: 200px;
+  background-color: #fdf3f2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #e74c3c;
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 20px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .modal-content {
+    width: 95%;
+    max-height: 95vh;
+  }
+  
+  .alarm-image-container {
+    max-width: 100%;
+  }
+  
+  .alarm-detection-info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+
+/* Stream Card Alarm Indicator */
 .alarm-indicator {
   position: absolute;
   top: 10px;
