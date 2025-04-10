@@ -771,27 +771,59 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     }
   };
 
+  // Helper function to deep compare objects
+  const isEqual = (obj1: any, obj2: any): boolean => {
+    if (obj1 === obj2) return true;
+    if (obj1 === null || obj2 === null) return false;
+    if (typeof obj1 !== 'object' || typeof obj2 !== 'object') return false;
+    
+    // Handle arrays
+    if (Array.isArray(obj1) && Array.isArray(obj2)) {
+      if (obj1.length !== obj2.length) return false;
+      return obj1.every((item, index) => isEqual(item, obj2[index]));
+    }
+    
+    const keys1 = Object.keys(obj1);
+    const keys2 = Object.keys(obj2);
+    
+    if (keys1.length !== keys2.length) return false;
+    
+    return keys1.every(key => {
+      if (!obj2.hasOwnProperty(key)) return false;
+      if (typeof obj1[key] === 'object' && typeof obj2[key] === 'object') {
+        return isEqual(obj1[key], obj2[key]);
+      }
+      return obj1[key] === obj2[key];
+    });
+  };
+
   // Update the pipeline when initialPipeline prop changes
   useEffect(() => {
     if (initialPipeline) {
       console.log("Updating pipeline from props:", initialPipeline);
+      
+      // Create a deep copy of the initialPipeline to avoid reference issues
+      const newPipelineData = JSON.parse(JSON.stringify(initialPipeline));
+      
+      // Apply position from current state if available
       setPipeline(prev => {
-        // Keep node positions from the current pipeline when receiving updated pipeline data
-        const updatedPipeline = {
-          ...initialPipeline,
-          nodes: initialPipeline.nodes.map((newNode: any) => {
-            // Find matching node in current pipeline to preserve position
-            const currentNode = prev.nodes.find(n => n.id === newNode.id);
-            if (currentNode) {
-              return {
-                ...newNode,
-                position: currentNode.position,
-              };
-            }
-            return newNode;
-          })
+        const updatedNodes = newPipelineData.nodes.map((newNode: any) => {
+          // Find matching node in current pipeline to preserve position
+          const currentNode = prev.nodes.find(n => n.id === newNode.id);
+          if (currentNode) {
+            return {
+              ...newNode,
+              position: currentNode.position,
+            };
+          }
+          return newNode;
+        });
+        
+        // Return the updated pipeline with preserved positions
+        return {
+          ...newPipelineData,
+          nodes: updatedNodes
         };
-        return updatedPipeline;
       });
     }
   }, [initialPipeline]);
@@ -801,12 +833,12 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     // Set saving state
     setIsSaving(true);
     
-    // Prepare the pipeline for API
-    const apiPipeline = {
-      ...pipeline,
-      streamId,
-      active: true,  // Mark as active when saving
-    };
+    // Create a deep copy of the current pipeline for the API
+    const apiPipeline = JSON.parse(JSON.stringify(pipeline));
+    apiPipeline.streamId = streamId;
+    apiPipeline.active = true;  // Mark as active when saving
+    
+    console.log("Saving pipeline with config:", apiPipeline);
     
     try {
       // Call the onSave handler passed from parent
@@ -835,6 +867,24 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
   // Clear flash message
   const clearFlashMessage = () => {
     setFlashMessage(null);
+  };
+
+  // Update a node configuration property
+  const updateNodeConfig = (nodeId: string, key: string, value: any) => {
+    console.log(`Updating node ${nodeId} config: ${key} = `, value);
+    
+    setPipeline(prev => {
+      const node = prev.nodes.find(n => n.id === nodeId);
+      if (!node) return prev;
+      
+      // Deep copy the pipeline to avoid reference issues
+      const newPipeline = JSON.parse(JSON.stringify(prev));
+      const targetNode = newPipeline.nodes.find((n: any) => n.id === node.id);
+      if (targetNode) {
+        targetNode.config = { ...node.config, [key]: value };
+      }
+      return newPipeline;
+    });
   };
 
   return (
@@ -1158,20 +1208,21 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
                                 <ColorPickerControl 
                                   value={value as number[]} 
                                   onChange={(newColor) => {
-                                    setPipeline(prev => ({
-                                      ...prev,
-                                      nodes: prev.nodes.map(n => 
-                                        n.id === node.id 
-                                          ? { 
-                                              ...n, 
-                                              config: { 
-                                                ...n.config, 
-                                                [key]: newColor 
-                                              } 
-                                            } 
-                                          : n
-                                      )
-                                    }));
+                                    // Create a deep copy of the current config to avoid reference issues
+                                    const newConfig = node.config ? JSON.parse(JSON.stringify(node.config)) : {};
+                                    newConfig[key] = [...newColor]; // Create a new array to avoid reference issues
+                                    console.log(`Updating node ${node.id} config: ${key} = `, newColor);
+
+                                    // Update the pipeline with the modified node
+                                    setPipeline(prev => {
+                                      // Deep copy the pipeline to avoid reference issues
+                                      const newPipeline = JSON.parse(JSON.stringify(prev));
+                                      const targetNode = newPipeline.nodes.find((n: any) => n.id === node.id);
+                                      if (targetNode) {
+                                        targetNode.config = newConfig;
+                                      }
+                                      return newPipeline;
+                                    });
                                   }}
                                 />
                               </div>
@@ -1214,20 +1265,21 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
                                 type="checkbox" 
                                 checked={value}
                                 onChange={(e) => {
-                                  setPipeline(prev => ({
-                                    ...prev,
-                                    nodes: prev.nodes.map(n => 
-                                      n.id === node.id 
-                                        ? { 
-                                            ...n, 
-                                            config: { 
-                                              ...n.config, 
-                                              [key]: e.target.checked 
-                                            } 
-                                          } 
-                                        : n
-                                    )
-                                  }));
+                                  // Create a deep copy of the config to avoid reference issues
+                                  const newConfig = node.config ? JSON.parse(JSON.stringify(node.config)) : {};
+                                  newConfig[key] = e.target.checked;
+                                  console.log(`Updating node ${node.id} config: ${key} = `, e.target.checked);
+                                  
+                                  // Update the pipeline with the modified node
+                                  setPipeline(prev => {
+                                    // Deep copy the pipeline to avoid reference issues
+                                    const newPipeline = JSON.parse(JSON.stringify(prev));
+                                    const targetNode = newPipeline.nodes.find((n: any) => n.id === node.id);
+                                    if (targetNode) {
+                                      targetNode.config = newConfig;
+                                    }
+                                    return newPipeline;
+                                  });
                                 }}
                               />
                             </div>
@@ -1245,20 +1297,21 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
                                 step={key === 'label_font_scale' ? "0.1" : "0.1"}
                                 value={value}
                                 onChange={(e) => {
-                                  setPipeline(prev => ({
-                                    ...prev,
-                                    nodes: prev.nodes.map(n => 
-                                      n.id === node.id 
-                                        ? { 
-                                            ...n, 
-                                            config: { 
-                                              ...n.config, 
-                                              [key]: parseFloat(e.target.value) 
-                                            } 
-                                          } 
-                                        : n
-                                    )
-                                  }));
+                                  // Create a deep copy of the config to avoid reference issues
+                                  const newConfig = node.config ? JSON.parse(JSON.stringify(node.config)) : {};
+                                  newConfig[key] = parseFloat(e.target.value);
+                                  console.log(`Updating node ${node.id} config: ${key} = `, parseFloat(e.target.value));
+                                  
+                                  // Update the pipeline with the modified node
+                                  setPipeline(prev => {
+                                    // Deep copy the pipeline to avoid reference issues
+                                    const newPipeline = JSON.parse(JSON.stringify(prev));
+                                    const targetNode = newPipeline.nodes.find((n: any) => n.id === node.id);
+                                    if (targetNode) {
+                                      targetNode.config = newConfig;
+                                    }
+                                    return newPipeline;
+                                  });
                                 }}
                               />
                               <span>{typeof value === 'number' ? value.toFixed(1) : value}</span>

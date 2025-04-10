@@ -299,17 +299,25 @@ const StreamDetails = () => {
       
       console.log('Pipeline saved:', savedPipeline);
       
-      // Reload pipelines
-      await fetchPipelines();
-      
       // If the pipeline should be activated
       if (pipeline.active) {
         await activatePipeline(id, savedPipeline.id);
-        // Update active pipeline
-        await fetchPipelines();
       }
       
-      // The success message is now handled by the VisionPipelineBuilder component
+      // Explicitly force complete refresh of all pipeline data
+      // First fetching the list, then setting the active pipeline directly
+      const updatedPipelines = await getPipelinesForStream(id);
+      setPipelines(updatedPipelines);
+      
+      // If we successfully activated this pipeline, update the activePipeline state
+      // with the complete data from the API
+      if (pipeline.active) {
+        const matchingPipeline = updatedPipelines.find(p => p.id === savedPipeline.id);
+        if (matchingPipeline) {
+          console.log("Setting active pipeline after save:", matchingPipeline);
+          setActivePipeline(matchingPipeline);
+        }
+      }
       
     } catch (err) {
       console.error('Error saving pipeline:', err);
