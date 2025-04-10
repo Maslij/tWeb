@@ -309,12 +309,11 @@ const StreamDetails = () => {
         await fetchPipelines();
       }
       
-      // Show success message
-      alert('Pipeline saved successfully');
+      // The success message is now handled by the VisionPipelineBuilder component
       
     } catch (err) {
       console.error('Error saving pipeline:', err);
-      alert('Error saving pipeline: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      // The error message is now handled by the VisionPipelineBuilder component
     } finally {
       setActionLoading(false);
     }
