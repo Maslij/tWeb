@@ -90,6 +90,11 @@ const CreateStream = () => {
             margin: 0;
           }
           
+          .actions {
+            display: flex;
+            gap: 1rem;
+          }
+          
           .btn {
             padding: 0.75rem 1.5rem;
             border-radius: 980px;
@@ -125,51 +130,64 @@ const CreateStream = () => {
             box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
             margin-bottom: 2rem;
           }
-          
+
           .card h3 {
+            color: #1d1d1f;
             font-size: 1.5rem;
             font-weight: 600;
-            color: #1d1d1f;
             margin: 0 0 1rem 0;
           }
-          
+
           .card p {
             color: #86868b;
             margin: 0 0 1.5rem 0;
           }
-          
-          .template-buttons {
-            display: flex;
+
+          .template-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 1rem;
             margin-top: 1.5rem;
           }
-          
+
+          .template-card {
+            background: #f5f5f7;
+            border-radius: 12px;
+            padding: 1.5rem;
+            cursor: pointer;
+            transition: all 0.2s;
+          }
+
+          .template-card:hover {
+            background: #e5e5ea;
+          }
+
           .form-group {
             margin-bottom: 1.5rem;
           }
-          
+
           .form-group label {
             display: block;
             font-weight: 500;
             color: #1d1d1f;
             margin-bottom: 0.5rem;
           }
-          
+
           .form-control {
             width: 100%;
             padding: 0.75rem 1rem;
-            border: 1px solid rgba(0, 0, 0, 0.1);
+            border: 1px solid #d2d2d7;
             border-radius: 12px;
             font-size: 1rem;
             transition: all 0.2s;
           }
-          
+
           .form-control:focus {
             outline: none;
             border-color: #0071e3;
-            box-shadow: 0 0 0 2px rgba(0, 113, 227, 0.2);
+            box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.1);
           }
-          
+
           .error {
             background: #fff2f2;
             color: #ff3b30;
@@ -177,24 +195,24 @@ const CreateStream = () => {
             border-radius: 12px;
             margin-bottom: 1.5rem;
           }
-          
+
           .checkbox-group {
             display: flex;
             align-items: center;
             gap: 0.5rem;
           }
-          
+
           .checkbox-group input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
-            border-radius: 4px;
-            border: 1px solid rgba(0, 0, 0, 0.1);
+            width: 1.25rem;
+            height: 1.25rem;
+            border-radius: 6px;
+            border: 1px solid #d2d2d7;
             cursor: pointer;
           }
-          
-          .form-help {
-            font-size: 0.9rem;
+
+          .help-text {
             color: #86868b;
+            font-size: 0.9rem;
             margin-top: 0.5rem;
           }
         `}
@@ -202,48 +220,53 @@ const CreateStream = () => {
 
       <header className="header">
         <h1 className="title">Create New Stream</h1>
-        <button onClick={() => navigate('/')} className="btn btn-secondary">
-          Back to Dashboard
-        </button>
+        <div className="actions">
+          <button onClick={() => navigate('/')} className="btn btn-secondary">
+            Back to Dashboard
+          </button>
+        </div>
       </header>
 
       <div className="card">
         <h3>Stream Templates</h3>
-        <p>Quick start with a template:</p>
+        <p>Quick start with a template to create your vision stream</p>
         
-        <div className="template-buttons">
-          <button
-            className="btn btn-secondary"
+        <div className="template-grid">
+          <div 
+            className="template-card"
             onClick={() => handleSelectTemplate({
               name: 'Webcam',
               source: '0',
               type: 'camera'
             })}
           >
-            Webcam
-          </button>
+            <h4>Webcam</h4>
+            <p>Use your default camera as input</p>
+          </div>
           
-          <button
-            className="btn btn-secondary"
+          <div 
+            className="template-card"
             onClick={() => handleSelectTemplate({
               name: 'Big Buck Bunny',
               source: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
               type: 'file'
             })}
           >
-            Sample Video
-          </button>
+            <h4>Sample Video</h4>
+            <p>Start with a sample video file</p>
+          </div>
           
-          <button
-            className="btn btn-secondary"
+          <div 
+            className="template-card"
             onClick={() => handleSelectTemplate({
               name: 'RTSP Stream',
               source: 'rtsp://example.com/stream',
               type: 'rtsp'
             })}
           >
-            RTSP Stream
-          </button>
+            <h4>RTSP Stream</h4>
+            <p>Connect to an RTSP video stream</p>
+          </div>
         </div>
       </div>
 
@@ -262,7 +285,7 @@ const CreateStream = () => {
               className="form-control"
               value={formData.name}
               onChange={handleChange}
-              placeholder="My Stream"
+              placeholder="My Vision Stream"
             />
           </div>
           
@@ -277,9 +300,9 @@ const CreateStream = () => {
               onChange={handleChange}
               placeholder="Camera index, file path, or RTSP URL"
             />
-            <div className="form-help">
+            <p className="help-text">
               Use "0" for default webcam, a file path, or an RTSP URL
-            </div>
+            </p>
           </div>
           
           <div className="form-group">
@@ -312,8 +335,9 @@ const CreateStream = () => {
             type="submit"
             className="btn btn-primary"
             disabled={loading}
+            style={{ width: '100%' }}
           >
-            {loading ? 'Creating...' : 'Create Stream'}
+            {loading ? 'Creating Stream...' : 'Create Stream'}
           </button>
         </form>
       </div>
