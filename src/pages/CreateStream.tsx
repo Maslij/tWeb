@@ -67,21 +67,153 @@ const CreateStream = () => {
   };
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h1>Create New Stream</h1>
-        <button className="btn" onClick={() => navigate('/')}>
+    <div className="create-stream">
+      <style>
+        {`
+          .create-stream {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+          }
+          
+          .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+          }
+          
+          .title {
+            font-size: 2rem;
+            font-weight: 600;
+            color: #1d1d1f;
+            margin: 0;
+          }
+          
+          .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 980px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.2s;
+            border: none;
+            cursor: pointer;
+          }
+          
+          .btn-primary {
+            background: #0071e3;
+            color: white;
+          }
+          
+          .btn-primary:hover {
+            background: #0077ed;
+          }
+          
+          .btn-secondary {
+            background: rgba(0, 0, 0, 0.05);
+            color: #1d1d1f;
+          }
+          
+          .btn-secondary:hover {
+            background: rgba(0, 0, 0, 0.1);
+          }
+
+          .card {
+            background: white;
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+            margin-bottom: 2rem;
+          }
+          
+          .card h3 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #1d1d1f;
+            margin: 0 0 1rem 0;
+          }
+          
+          .card p {
+            color: #86868b;
+            margin: 0 0 1.5rem 0;
+          }
+          
+          .template-buttons {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+          }
+          
+          .form-group {
+            margin-bottom: 1.5rem;
+          }
+          
+          .form-group label {
+            display: block;
+            font-weight: 500;
+            color: #1d1d1f;
+            margin-bottom: 0.5rem;
+          }
+          
+          .form-control {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
+            font-size: 1rem;
+            transition: all 0.2s;
+          }
+          
+          .form-control:focus {
+            outline: none;
+            border-color: #0071e3;
+            box-shadow: 0 0 0 2px rgba(0, 113, 227, 0.2);
+          }
+          
+          .error {
+            background: #fff2f2;
+            color: #ff3b30;
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+          }
+          
+          .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+          }
+          
+          .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            border-radius: 4px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            cursor: pointer;
+          }
+          
+          .form-help {
+            font-size: 0.9rem;
+            color: #86868b;
+            margin-top: 0.5rem;
+          }
+        `}
+      </style>
+
+      <header className="header">
+        <h1 className="title">Create New Stream</h1>
+        <button onClick={() => navigate('/')} className="btn btn-secondary">
           Back to Dashboard
         </button>
-      </div>
+      </header>
 
       <div className="card">
         <h3>Stream Templates</h3>
         <p>Quick start with a template:</p>
         
-        <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
+        <div className="template-buttons">
           <button
-            className="btn"
+            className="btn btn-secondary"
             onClick={() => handleSelectTemplate({
               name: 'Webcam',
               source: '0',
@@ -92,7 +224,7 @@ const CreateStream = () => {
           </button>
           
           <button
-            className="btn"
+            className="btn btn-secondary"
             onClick={() => handleSelectTemplate({
               name: 'Big Buck Bunny',
               source: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
@@ -103,7 +235,7 @@ const CreateStream = () => {
           </button>
           
           <button
-            className="btn"
+            className="btn btn-secondary"
             onClick={() => handleSelectTemplate({
               name: 'RTSP Stream',
               source: 'rtsp://example.com/stream',
@@ -115,14 +247,14 @@ const CreateStream = () => {
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: '20px' }}>
+      <div className="card">
         <h3>Stream Details</h3>
         
         {error && <div className="error">{error}</div>}
         
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label htmlFor="name">Stream Name:</label>
+            <label htmlFor="name">Stream Name</label>
             <input
               type="text"
               id="name"
@@ -135,7 +267,7 @@ const CreateStream = () => {
           </div>
           
           <div className="form-group">
-            <label htmlFor="source">Source:</label>
+            <label htmlFor="source">Source</label>
             <input
               type="text"
               id="source"
@@ -145,13 +277,13 @@ const CreateStream = () => {
               onChange={handleChange}
               placeholder="Camera index, file path, or RTSP URL"
             />
-            <small style={{ display: 'block', marginTop: '5px', color: '#666' }}>
+            <div className="form-help">
               Use "0" for default webcam, a file path, or an RTSP URL
-            </small>
+            </div>
           </div>
           
           <div className="form-group">
-            <label htmlFor="type">Type:</label>
+            <label htmlFor="type">Type</label>
             <select
               id="type"
               name="type"
@@ -165,27 +297,24 @@ const CreateStream = () => {
             </select>
           </div>
           
-          <div className="form-group" style={{ display: 'flex', alignItems: 'center' }}>
+          <div className="form-group checkbox-group">
             <input
               type="checkbox"
               id="autoStart"
               name="autoStart"
               checked={formData.autoStart}
               onChange={handleChange}
-              style={{ marginRight: '8px' }}
             />
             <label htmlFor="autoStart">Auto-start stream after creation</label>
           </div>
           
-          <div style={{ marginTop: '20px' }}>
-            <button
-              type="submit"
-              className="btn"
-              disabled={loading}
-            >
-              {loading ? 'Creating...' : 'Create Stream'}
-            </button>
-          </div>
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={loading}
+          >
+            {loading ? 'Creating...' : 'Create Stream'}
+          </button>
         </form>
       </div>
     </div>
