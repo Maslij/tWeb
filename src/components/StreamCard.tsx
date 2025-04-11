@@ -164,102 +164,173 @@ const StreamCard = ({ stream }: StreamCardProps) => {
 
   return (
     <>
-      <div className="card stream-card" onClick={handleClick}>
+      <style>
+        {`
+          .stream-card {
+            background: white;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            cursor: pointer;
+            position: relative;
+          }
+
+          .stream-card:hover {
+            transform: scale(1.02);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+          }
+
+          .stream-preview {
+            position: relative;
+            aspect-ratio: 16/9;
+            background: #f5f5f7;
+            overflow: hidden;
+          }
+
+          .stream-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+          }
+
+          .stream-placeholder {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #86868b;
+            font-weight: 500;
+            font-size: 1.1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+          }
+
+          .stream-info {
+            padding: 1.5rem;
+          }
+
+          .stream-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #1d1d1f;
+            margin: 0 0 0.5rem 0;
+          }
+
+          .stream-meta {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            font-size: 0.9rem;
+            color: #86868b;
+          }
+
+          .stream-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+          }
+
+          .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+          }
+
+          .status-running {
+            background: #30d158;
+          }
+
+          .status-stopped {
+            background: #ff453a;
+          }
+
+          .status-error {
+            background: #ff453a;
+          }
+
+          .status-created {
+            background: #ffd60a;
+          }
+
+          .alarm-badge {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: #ff453a;
+            color: white;
+            border-radius: 20px;
+            padding: 0.25rem 0.75rem;
+            font-size: 0.8rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            z-index: 10;
+          }
+
+          .alarm-badge.pulse {
+            animation: pulse 2s infinite;
+          }
+
+          @keyframes pulse {
+            0% {
+              transform: scale(1);
+            }
+            50% {
+              transform: scale(1.05);
+            }
+            100% {
+              transform: scale(1);
+            }
+          }
+        `}
+      </style>
+
+      <div className="stream-card" onClick={handleClick}>
         {hasAlarmComponent && hasAlarms && (
-          <div 
-            className={`alarm-indicator ${alarmCount > 0 ? 'alarm-pulse' : ''}`}
-            onClick={handleAlarmClick}
-          >
+          <div className={`alarm-badge ${alarmCount > 0 ? 'pulse' : ''}`}>
+            <span>⚠️</span>
             {alarmCount > 99 ? '99+' : alarmCount}
           </div>
         )}
         
-        {status === 'running' ? (
-          <div className="stream-img-container" style={{ position: 'relative' }}>
-            {imageUrl ? (
-              <>
-                <img 
-                  src={imageUrl} 
-                  alt={stream.name || 'Unnamed Stream'} 
-                  className="stream-img"
-                  onError={() => setImageUrl('/placeholder-error.jpg')}
-                />
-                <button 
-                  className="fullscreen-button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowStreamModal(true);
-                  }}
-                >
-                  <span>⤢</span>
-                </button>
-              </>
-            ) : (
-              <div 
-                className="stream-img" 
-                style={{ 
-                  backgroundColor: '#eee',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#999',
-                  fontWeight: 'bold',
-                  fontSize: '1.2rem'
-                }}
-              >
-                LOADING...
-              </div>
-            )}
-          </div>
-        ) : (
-          <div 
-            className="stream-img" 
-            style={{ 
-              backgroundColor: '#eee',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#999',
-              fontWeight: 'bold',
-              fontSize: '1.2rem'
-            }}
-          >
-            {status.toUpperCase()}
-          </div>
-        )}
-        
-        <h3>{stream.name || 'Unnamed Stream'}</h3>
-        
-        <div style={{ marginTop: '5px', display: 'flex', alignItems: 'center' }}>
-          <div 
-            style={{
-              width: '10px',
-              height: '10px',
-              borderRadius: '50%',
-              backgroundColor: getStatusColor(status),
-              marginRight: '8px'
-            }}
-          />
-          <span>{status}</span>
-        </div>
-        
-        <div style={{ marginTop: '5px', fontSize: '0.9em', color: '#666' }}>
-          <span>Type: {stream.type || 'unknown'}</span>
-          {stream.width && stream.height && (
-            <span style={{ marginLeft: '10px' }}>
-              {stream.width}x{stream.height}
-            </span>
+        <div className="stream-preview">
+          {status === 'running' && imageUrl ? (
+            <img 
+              src={imageUrl} 
+              alt={stream.name || 'Stream preview'} 
+              className="stream-image"
+              onError={() => setImageUrl('')}
+            />
+          ) : (
+            <div className="stream-placeholder">
+              {status}
+            </div>
           )}
         </div>
+        
+        <div className="stream-info">
+          <h3 className="stream-name">{stream.name || 'Unnamed Stream'}</h3>
+          <div className="stream-meta">
+            <div className="stream-status">
+              <div className={`status-indicator status-${status}`} />
+              <span>{status}</span>
+            </div>
+            <span>{stream.type || 'unknown'}</span>
+            {stream.width && stream.height && (
+              <span>{stream.width}x{stream.height}</span>
+            )}
+          </div>
+        </div>
       </div>
-      
-      {showAlarmModal && (
-        <AlarmModal
-          streamId={stream.id}
-          isOpen={showAlarmModal}
-          onClose={() => setShowAlarmModal(false)}
-        />
-      )}
+
+      <AlarmModal
+        streamId={stream.id}
+        isOpen={showAlarmModal}
+        onClose={() => setShowAlarmModal(false)}
+      />
 
       {/* Modal for enlarged stream view */}
       <Modal 
