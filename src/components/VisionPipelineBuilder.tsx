@@ -625,6 +625,12 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
       .map(node => node.id);
   };
 
+  // Handle selecting a node
+  const handleNodeSelect = (nodeId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedNode(nodeId);
+  };
+
   // Handle mouse up for dropping components and nodes
   const handleMouseUp = (e: React.MouseEvent) => {
     if (!builderRef.current) return;
@@ -664,6 +670,8 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     // Finalize node dragging
     if (draggingNode) {
       setDraggingNode(null);
+      // Keep the node selected after dragging
+      setSelectedNode(draggingNode);
     }
     
     // Handle connecting nodes
@@ -728,12 +736,6 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     // Highlight possible targets
     const possibleTargets = getPossibleConnectionTargets(nodeId);
     setPossibleConnectionTargets(possibleTargets);
-  };
-
-  // Handle selecting a node
-  const handleNodeSelect = (nodeId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSelectedNode(nodeId === selectedNode ? null : nodeId);
   };
 
   // Handle deleting a node
@@ -1097,16 +1099,16 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
               const component = componentsList.find(c => c.id === selectedComponent);
               if (component && canAddComponent(component)) {
                 const rect = builderRef.current.getBoundingClientRect();
-                const x = e.clientX - rect.left;
-                const y = e.clientY - rect.top;
+                const x = e.clientX - rect.left + builderRef.current.scrollLeft;
+                const y = e.clientY - rect.top + builderRef.current.scrollTop;
                 
                 // Add new component to pipeline
                 const newNode: PipelineNode = {
                   id: `${component.id}_${Date.now()}`,
                   componentId: component.id,
                   position: { 
-                    x: x - 90, // Center the component horizontally (half of typical width)
-                    y: y - 40  // Center the component vertically (half of typical height)
+                    x: x - 90, // Center the component horizontally
+                    y: y - 40  // Center the component vertically
                   },
                   connections: [],
                   config: component.config ? { ...component.config } : undefined
@@ -1129,6 +1131,9 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
                 setActiveComponent(null);
                 setSelectedComponent(null);
               }
+            } else {
+              // If no component is selected and we clicked on empty space, unselect the current node
+              setSelectedNode(null);
             }
           }}
         >
@@ -1141,119 +1146,121 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
             </div>
           )}
           
-          {/* Draw connections between nodes */}
-          <svg className="connections-layer">
-            {pipeline.nodes.map(node => 
-              node.connections.map(targetId => {
-                const targetNode = pipeline.nodes.find(n => n.id === targetId);
-                if (!targetNode) return null;
-                
-                const sourceX = node.position.x + 180; // Right side of source node
-                const sourceY = node.position.y + 40; // Middle of source node
-                const targetX = targetNode.position.x; // Left side of target node
-                const targetY = targetNode.position.y + 40; // Middle of target node
-                
-                // Control points for curved line
-                const cp1x = sourceX + Math.min(100, (targetX - sourceX) / 2);
-                const cp1y = sourceY;
-                const cp2x = targetX - Math.min(100, (targetX - sourceX) / 2);
-                const cp2y = targetY;
-                
-                return (
-                  <path 
-                    key={`${node.id}-${targetId}`}
-                    d={`M ${sourceX} ${sourceY} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${targetX} ${targetY}`}
-                    fill="none"
-                    stroke="#666"
-                    strokeWidth="2"
-                    strokeDasharray="5,5"
-                  />
-                );
-              })
-            )}
+          <div className="nodes-container">
+            {/* Draw connections between nodes */}
+            <svg className="connections-layer">
+              {pipeline.nodes.map(node => 
+                node.connections.map(targetId => {
+                  const targetNode = pipeline.nodes.find(n => n.id === targetId);
+                  if (!targetNode) return null;
+                  
+                  const sourceX = node.position.x + 180; // Right side of source node
+                  const sourceY = node.position.y + 40; // Middle of source node
+                  const targetX = targetNode.position.x; // Left side of target node
+                  const targetY = targetNode.position.y + 40; // Middle of target node
+                  
+                  // Control points for curved line
+                  const cp1x = sourceX + Math.min(100, (targetX - sourceX) / 2);
+                  const cp1y = sourceY;
+                  const cp2x = targetX - Math.min(100, (targetX - sourceX) / 2);
+                  const cp2y = targetY;
+                  
+                  return (
+                    <path 
+                      key={`${node.id}-${targetId}`}
+                      d={`M ${sourceX} ${sourceY} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${targetX} ${targetY}`}
+                      fill="none"
+                      stroke="#666"
+                      strokeWidth="2"
+                      strokeDasharray="5,5"
+                    />
+                  );
+                })
+              )}
+              
+              {/* Drawing connection line */}
+              {isDrawingConnection && connectionStart && connectionEnd && (
+                <path 
+                  d={`M ${connectionStart.x} ${connectionStart.y} L ${connectionEnd.x} ${connectionEnd.y}`}
+                  fill="none"
+                  stroke="#666"
+                  strokeWidth="2"
+                  strokeDasharray="5,5"
+                />
+              )}
+            </svg>
             
-            {/* Drawing connection line */}
-            {isDrawingConnection && connectionStart && connectionEnd && (
-              <path 
-                d={`M ${connectionStart.x} ${connectionStart.y} L ${connectionEnd.x} ${connectionEnd.y}`}
-                fill="none"
-                stroke="#666"
-                strokeWidth="2"
-                strokeDasharray="5,5"
-              />
-            )}
-          </svg>
-          
-          {/* Render nodes */}
-          {pipeline.nodes.map(node => {
-            const component = componentsList.find(c => c.id === node.componentId);
-            if (!component) return null;
-            
-            const isPossibleTarget = possibleConnectionTargets.includes(node.id);
-            
-            return (
-              <div 
-                key={node.id}
-                className={`pipeline-node ${component.category} ${selectedNode === node.id ? 'selected' : ''} ${isPossibleTarget ? 'possible-target' : ''} ${isDrawingConnection ? 'during-connection' : ''}`}
-                style={{ 
-                  left: `${node.position.x}px`, 
-                  top: `${node.position.y}px`,
-                }}
-                onClick={(e) => handleNodeSelect(node.id, e)}
-                onMouseDown={(e) => handleNodeDragStart(node.id, e)}
-              >
-                <div className="node-header">
-                  <div className="node-name">{component.name}</div>
-                  <div className="node-controls">
-                    <button 
-                      className="start-connection-btn"
-                      onClick={(e) => handleStartConnection(node.id, e)}
-                      title="Connect to another node"
-                    >
-                      →
-                    </button>
-                    <button 
-                      className="delete-node-btn"
-                      onClick={() => handleDeleteNode(node.id)}
-                      title="Delete node"
-                    >
-                      ×
-                    </button>
+            {/* Render nodes */}
+            {pipeline.nodes.map(node => {
+              const component = componentsList.find(c => c.id === node.componentId);
+              if (!component) return null;
+              
+              const isPossibleTarget = possibleConnectionTargets.includes(node.id);
+              
+              return (
+                <div 
+                  key={node.id}
+                  className={`pipeline-node ${component.category} ${selectedNode === node.id ? 'selected' : ''} ${isPossibleTarget ? 'possible-target' : ''} ${isDrawingConnection ? 'during-connection' : ''}`}
+                  style={{ 
+                    left: `${node.position.x}px`, 
+                    top: `${node.position.y}px`,
+                  }}
+                  onClick={(e) => handleNodeSelect(node.id, e)}
+                  onMouseDown={(e) => handleNodeDragStart(node.id, e)}
+                >
+                  <div className="node-header">
+                    <div className="node-name">{component.name}</div>
+                    <div className="node-controls">
+                      <button 
+                        className="start-connection-btn"
+                        onClick={(e) => handleStartConnection(node.id, e)}
+                        title="Connect to another node"
+                      >
+                        →
+                      </button>
+                      <button 
+                        className="delete-node-btn"
+                        onClick={() => handleDeleteNode(node.id)}
+                        title="Delete node"
+                      >
+                        ×
+                      </button>
+                    </div>
                   </div>
-                </div>
-                <div className="node-body">
-                  <div className="node-type">{component.type}</div>
+                  <div className="node-body">
+                    <div className="node-type">{component.type}</div>
+                    
+                    {/* Show stream details for source nodes */}
+                    {component.category === 'source' && node.sourceDetails && (
+                      <div className="node-source-details">
+                        <div className="source-detail"><strong>Stream:</strong> {node.sourceDetails.name}</div>
+                        <div className="source-detail"><strong>Status:</strong> <span className={`status-indicator ${streamStatus}`}>{streamStatus}</span></div>
+                      </div>
+                    )}
+                    
+                    {component.inputs && component.inputs.length > 0 && (
+                      <div className="node-info">
+                        <small>Inputs: {component.inputs.join(', ')}</small>
+                      </div>
+                    )}
+                    {component.outputs && component.outputs.length > 0 && (
+                      <div className="node-info">
+                        <small>Outputs: {component.outputs.join(', ')}</small>
+                      </div>
+                    )}
+                  </div>
                   
-                  {/* Show stream details for source nodes */}
-                  {component.category === 'source' && node.sourceDetails && (
-                    <div className="node-source-details">
-                      <div className="source-detail"><strong>Stream:</strong> {node.sourceDetails.name}</div>
-                      <div className="source-detail"><strong>Status:</strong> <span className={`status-indicator ${streamStatus}`}>{streamStatus}</span></div>
-                    </div>
-                  )}
-                  
+                  {/* Connection points */}
                   {component.inputs && component.inputs.length > 0 && (
-                    <div className="node-info">
-                      <small>Inputs: {component.inputs.join(', ')}</small>
-                    </div>
+                    <div className="connection-point input-point" title="Input"></div>
                   )}
                   {component.outputs && component.outputs.length > 0 && (
-                    <div className="node-info">
-                      <small>Outputs: {component.outputs.join(', ')}</small>
-                    </div>
+                    <div className="connection-point output-point" title="Output"></div>
                   )}
                 </div>
-                
-                {/* Connection points */}
-                {component.inputs && component.inputs.length > 0 && (
-                  <div className="connection-point input-point" title="Input"></div>
-                )}
-                {component.outputs && component.outputs.length > 0 && (
-                  <div className="connection-point output-point" title="Output"></div>
-                )}
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
         
         {selectedNode && (
