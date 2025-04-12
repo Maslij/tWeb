@@ -213,6 +213,8 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
       componentType === 'face_detector' || 
       componentType === 'image_classifier')) {
     
+    console.log(`Handling model dropdown for ${nodeId}, component ${componentType}`);
+    
     // Check if this component has available_models property
     const nodeConfig = document.getElementById(`node-config-${nodeId}`);
     let availableModels: any[] = [];
@@ -222,9 +224,42 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
       if (configData) {
         try {
           const config = JSON.parse(configData);
-          if (config.available_models && Array.isArray(config.available_models)) {
-            availableModels = config.available_models;
+          console.log("Config for model dropdown:", config);
+          
+          // Handle available_models
+          if (config.available_models) {
+            if (typeof config.available_models === 'string') {
+              try {
+                availableModels = JSON.parse(config.available_models);
+              } catch (e) {
+                console.error("Failed to parse available_models string:", e);
+              }
+            } else if (Array.isArray(config.available_models)) {
+              availableModels = config.available_models;
+            }
           }
+          
+          // If no models found directly, try extracting them from model_classes
+          if (availableModels.length === 0 && config.model_classes) {
+            let modelClasses = config.model_classes;
+            if (typeof modelClasses === 'string') {
+              try {
+                modelClasses = JSON.parse(modelClasses);
+              } catch (e) {
+                console.error("Failed to parse model_classes:", e);
+              }
+            }
+            
+            if (typeof modelClasses === 'object' && !Array.isArray(modelClasses)) {
+              // Extract model IDs from the model_classes object
+              availableModels = Object.keys(modelClasses).map(id => ({ 
+                id, 
+                name: id.toUpperCase() // Uppercase for better display
+              }));
+            }
+          }
+          
+          console.log("Available models:", availableModels);
         } catch (e) {
           console.error("Failed to parse config data:", e);
         }
@@ -270,6 +305,8 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
       componentType === 'object_detector' || 
       componentType === 'image_classifier')) {
     
+    console.log(`Handling classes for ${nodeId}, component ${componentType}`);
+    
     // Check if this component has model_classes property
     const nodeConfig = document.getElementById(`node-config-${nodeId}`);
     let modelClassesMap: Record<string, string[]> = {};
@@ -280,6 +317,8 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
       if (configData) {
         try {
           const config = JSON.parse(configData);
+          console.log("Config for class selection:", config);
+          
           if (config.model && typeof config.model === 'string') {
             currentModel = config.model;
           }
@@ -296,6 +335,9 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
               modelClassesMap = config.model_classes;
             }
           }
+          
+          console.log("Current model:", currentModel);
+          console.log("Model classes map:", modelClassesMap);
         } catch (e) {
           console.error("Failed to parse config data:", e);
         }
@@ -308,23 +350,55 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
       availableClasses = modelClassesMap[currentModel];
     }
     
+    console.log("Available classes for model:", availableClasses);
+    
     // No classes available, show a message
     if (availableClasses.length === 0) {
       return (
         <div className="config-item">
           <label>{formatPropName(propKey)}:</label>
-          <div className="classes-empty">No classes available for this model</div>
+          <div className="classes-empty">
+            {currentModel ? 
+              `No classes available for model "${currentModel}"` : 
+              "No classes available for this model"}
+          </div>
         </div>
       );
     }
     
-    // Selected classes (from propValue)
-    const [selectedClasses, setSelectedClasses] = useState<string[]>(
-      // Parse propValue if it's a string
-      typeof propValue === 'string' && propValue.startsWith('[') ? 
-        JSON.parse(propValue) : 
-        (propValue || [])
-    );
+    // Support both string JSON and array for propValue
+    let initialSelectedClasses: string[] = [];
+    if (typeof propValue === 'string') {
+      try {
+        // Try to parse if it's a JSON string
+        if (propValue.trim().startsWith('[')) {
+          initialSelectedClasses = JSON.parse(propValue);
+        } else {
+          // Single class as string
+          initialSelectedClasses = [propValue];
+        }
+      } catch (e) {
+        console.error("Error parsing class selection:", e);
+        initialSelectedClasses = [];
+      }
+    } else if (Array.isArray(propValue)) {
+      initialSelectedClasses = propValue;
+    }
+    
+    // Use state to track selected classes
+    const [selectedClasses, setSelectedClasses] = useState<string[]>(initialSelectedClasses);
+    
+    // Effect to update selected classes when the model changes
+    useEffect(() => {
+      // Filter selected classes to only include those available in the current model
+      const validClasses = selectedClasses.filter(cls => availableClasses.includes(cls));
+      
+      // Update if there's a difference
+      if (validClasses.length !== selectedClasses.length) {
+        setSelectedClasses(validClasses);
+        onConfigUpdate(nodeId, propKey, validClasses);
+      }
+    }, [JSON.stringify(availableClasses), currentModel]);
     
     // Update handler - this will be called when checkboxes are toggled
     const handleClassToggle = (className: string) => {
@@ -361,6 +435,7 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
     return (
       <div className="config-item classes-selection">
         <label>{formatPropName(propKey)}:</label>
+        <div className="model-info">Current model: <strong>{currentModel || "None"}</strong></div>
         <div className="classes-controls">
           <button 
             className="select-all-btn" 
@@ -578,6 +653,15 @@ const groupNodeProperties = (config: Record<string, any>): { [category: string]:
   const loggerProperties = ['log_level', 'include_images', 'retention_days', 'max_events_per_day'];
   const modelProperties = ['model', 'classes', 'confidence'];
   
+  // Properties that should be hidden from the UI
+  const hiddenProperties = [
+    'all_classes', 
+    'available_models', 
+    'model_classes',
+    '_internal',
+    '_metadata'
+  ];
+  
   const groups: { [category: string]: [string, any][] } = {
     'Model Settings': [],
     'Display Options': [],
@@ -589,11 +673,8 @@ const groupNodeProperties = (config: Record<string, any>): { [category: string]:
   };
   
   Object.entries(config).forEach(([key, value]) => {
-    // Skip internal properties and debug fields
-    if (key.startsWith('_') || 
-        key === 'all_classes' || 
-        key === 'available_models' || 
-        key === 'model_classes') {
+    // Skip hidden properties
+    if (hiddenProperties.includes(key) || key.startsWith('_')) {
       return;
     }
     

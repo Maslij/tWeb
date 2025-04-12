@@ -1172,4 +1172,14 @@
   font-size: 0.85em;
   color: #666;
   text-align: right;
+}
+
+.model-info {
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: #555;
+  background-color: #f5f5f5;
+  padding: 5px 8px;
+  border-radius: 4px;
+  border-left: 3px solid #007bff;
 } 
