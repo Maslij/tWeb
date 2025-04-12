@@ -378,7 +378,20 @@ export const getActivePipeline = async (streamId: string): Promise<any> => {
       throw new Error(`Failed to fetch active pipeline: ${response.status}`);
     }
     
-    return await response.json();
+    const result = await response.json();
+    
+    // The backend API returns active:true with a nested 'pipeline' object containing all details
+    // Our frontend code expects the pipelineId, so let's normalize the response format
+    if (result.active && result.pipeline) {
+      // Return a format that matches what the frontend expects
+      return {
+        active: true,
+        pipelineId: result.pipeline.id,
+        pipeline: result.pipeline
+      };
+    }
+    
+    return result;
   } catch (error) {
     // Only log actual errors, not expected 404s
     if (!(error instanceof Error && error.message.includes("404"))) {
@@ -413,7 +426,7 @@ export const hasPipelineComponent = async (streamId: string, componentType: stri
     }
 
     const components = await getPipelineComponents(streamId, activePipeline.pipelineId);
-    return components.some(node => node.componentType === componentType);
+    return components.some(node => node.componentType === componentType || node.componentId === componentType);
   } catch (error) {
     // Gracefully handle the error - don't show errors in console for expected cases
     if (componentType === 'EventAlarm') {
