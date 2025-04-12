@@ -205,6 +205,197 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
   const positionProperties = ['title_position', 'timestamp_position'];
   const alarmProperties = ['min_confidence', 'trigger_delay', 'cool_down_period', 'notify_on_alarm'];
   const loggerProperties = ['log_level', 'include_images', 'retention_days', 'max_events_per_day'];
+  const modelProperties = ['model', 'classes', 'confidence'];
+  
+  // Special handling for model selection dropdown
+  if (propKey === 'model' && componentType && (
+      componentType === 'object_detector' || 
+      componentType === 'face_detector' || 
+      componentType === 'image_classifier')) {
+    
+    // Check if this component has available_models property
+    const nodeConfig = document.getElementById(`node-config-${nodeId}`);
+    let availableModels: any[] = [];
+    
+    if (nodeConfig) {
+      const configData = (nodeConfig as any).dataset?.config;
+      if (configData) {
+        try {
+          const config = JSON.parse(configData);
+          if (config.available_models && Array.isArray(config.available_models)) {
+            availableModels = config.available_models;
+          }
+        } catch (e) {
+          console.error("Failed to parse config data:", e);
+        }
+      }
+    }
+    
+    // If we don't have available_models, create a default option
+    if (availableModels.length === 0) {
+      availableModels = [{ id: propValue, name: propValue }];
+    }
+    
+    return (
+      <div className="config-item model-select">
+        <label>{formatPropName(propKey)}:</label>
+        <select 
+          value={propValue}
+          onChange={(e) => {
+            onConfigUpdate(nodeId, propKey, e.target.value);
+            
+            // Re-render component to update the class list based on the selected model
+            // This is a hack, but it works for immediate updates
+            setTimeout(() => {
+              const element = document.getElementById(`node-config-${nodeId}`);
+              if (element) {
+                const event = new Event('change', { bubbles: true });
+                element.dispatchEvent(event);
+              }
+            }, 50);
+          }}
+        >
+          {availableModels.map((model) => (
+            <option key={model.id} value={model.id}>
+              {model.name}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
+  }
+  
+  // Special handling for model-specific classes
+  if (propKey === 'classes' && componentType && (
+      componentType === 'object_detector' || 
+      componentType === 'image_classifier')) {
+    
+    // Check if this component has model_classes property
+    const nodeConfig = document.getElementById(`node-config-${nodeId}`);
+    let modelClassesMap: Record<string, string[]> = {};
+    let currentModel = "";
+    
+    if (nodeConfig) {
+      const configData = (nodeConfig as any).dataset?.config;
+      if (configData) {
+        try {
+          const config = JSON.parse(configData);
+          if (config.model && typeof config.model === 'string') {
+            currentModel = config.model;
+          }
+          
+          if (config.model_classes) {
+            // Handle both object and stringified JSON
+            if (typeof config.model_classes === 'string') {
+              try {
+                modelClassesMap = JSON.parse(config.model_classes);
+              } catch (e) {
+                console.error("Failed to parse model_classes string:", e);
+              }
+            } else if (typeof config.model_classes === 'object') {
+              modelClassesMap = config.model_classes;
+            }
+          }
+        } catch (e) {
+          console.error("Failed to parse config data:", e);
+        }
+      }
+    }
+    
+    // Get classes for the current model
+    let availableClasses: string[] = [];
+    if (currentModel && modelClassesMap[currentModel]) {
+      availableClasses = modelClassesMap[currentModel];
+    }
+    
+    // No classes available, show a message
+    if (availableClasses.length === 0) {
+      return (
+        <div className="config-item">
+          <label>{formatPropName(propKey)}:</label>
+          <div className="classes-empty">No classes available for this model</div>
+        </div>
+      );
+    }
+    
+    // Selected classes (from propValue)
+    const [selectedClasses, setSelectedClasses] = useState<string[]>(
+      // Parse propValue if it's a string
+      typeof propValue === 'string' && propValue.startsWith('[') ? 
+        JSON.parse(propValue) : 
+        (propValue || [])
+    );
+    
+    // Update handler - this will be called when checkboxes are toggled
+    const handleClassToggle = (className: string) => {
+      const newSelectedClasses = [...selectedClasses];
+      if (newSelectedClasses.includes(className)) {
+        // Remove class
+        const index = newSelectedClasses.indexOf(className);
+        newSelectedClasses.splice(index, 1);
+      } else {
+        // Add class
+        newSelectedClasses.push(className);
+      }
+      
+      // Sort classes alphabetically for better organization
+      newSelectedClasses.sort();
+      
+      // Update state and notify parent
+      setSelectedClasses(newSelectedClasses);
+      onConfigUpdate(nodeId, propKey, newSelectedClasses);
+    };
+    
+    // Select/deselect all handler
+    const handleSelectAll = (selectAll: boolean) => {
+      if (selectAll) {
+        const sortedClasses = [...availableClasses].sort();
+        setSelectedClasses(sortedClasses);
+        onConfigUpdate(nodeId, propKey, sortedClasses);
+      } else {
+        setSelectedClasses([]);
+        onConfigUpdate(nodeId, propKey, []);
+      }
+    };
+    
+    return (
+      <div className="config-item classes-selection">
+        <label>{formatPropName(propKey)}:</label>
+        <div className="classes-controls">
+          <button 
+            className="select-all-btn" 
+            onClick={() => handleSelectAll(true)}
+            disabled={selectedClasses.length === availableClasses.length}
+          >
+            Select All
+          </button>
+          <button 
+            className="deselect-all-btn" 
+            onClick={() => handleSelectAll(false)}
+            disabled={selectedClasses.length === 0}
+          >
+            Deselect All
+          </button>
+        </div>
+        <div className="classes-list">
+          {availableClasses.sort().map((className) => (
+            <div key={className} className="class-item">
+              <input
+                type="checkbox"
+                id={`class-${nodeId}-${className}`}
+                checked={selectedClasses.includes(className)}
+                onChange={() => handleClassToggle(className)}
+              />
+              <label htmlFor={`class-${nodeId}-${className}`}>{className}</label>
+            </div>
+          ))}
+        </div>
+        <div className="selected-count">
+          {selectedClasses.length} of {availableClasses.length} classes selected
+        </div>
+      </div>
+    );
+  }
   
   // Determine property type
   if (Array.isArray(propValue)) {
@@ -385,8 +576,10 @@ const groupNodeProperties = (config: Record<string, any>): { [category: string]:
   const positionProperties = ['title_position', 'timestamp_position'];
   const alarmProperties = ['min_confidence', 'trigger_delay', 'cool_down_period', 'notify_on_alarm'];
   const loggerProperties = ['log_level', 'include_images', 'retention_days', 'max_events_per_day'];
+  const modelProperties = ['model', 'classes', 'confidence'];
   
   const groups: { [category: string]: [string, any][] } = {
+    'Model Settings': [],
     'Display Options': [],
     'Style Settings': [],
     'Position Settings': [],
@@ -396,7 +589,17 @@ const groupNodeProperties = (config: Record<string, any>): { [category: string]:
   };
   
   Object.entries(config).forEach(([key, value]) => {
-    if (displayProperties.includes(key)) {
+    // Skip internal properties and debug fields
+    if (key.startsWith('_') || 
+        key === 'all_classes' || 
+        key === 'available_models' || 
+        key === 'model_classes') {
+      return;
+    }
+    
+    if (modelProperties.includes(key)) {
+      groups['Model Settings'].push([key, value]);
+    } else if (displayProperties.includes(key)) {
       groups['Display Options'].push([key, value]);
     } else if (styleProperties.includes(key)) {
       groups['Style Settings'].push([key, value]);
@@ -1246,11 +1449,32 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
 
     // Group properties by category
     const groupedProperties = groupNodeProperties(node.config);
+
+    // Clean up the configuration data for the UI by removing duplicate information
+    const configForUI = { ...node.config };
+    
+    // For detector nodes, ensure we don't pass raw JSON strings
+    if (component.category === 'detector' && configForUI.model_classes) {
+      // If model_classes is a string, parse it
+      if (typeof configForUI.model_classes === 'string') {
+        try {
+          configForUI.model_classes = JSON.parse(configForUI.model_classes);
+        } catch (e) {
+          console.error("Failed to parse model_classes:", e);
+        }
+      }
+    }
+    
+    // Store the configuration data in a hidden element to be used by UI components
+    const configJson = JSON.stringify(configForUI);
     
     return (
       <div>
         <h4>{component.name}</h4>
         <p>{component.description}</p>
+        
+        {/* Hidden element to store configuration data */}
+        <div id={`node-config-${node.id}`} data-config={configJson} style={{ display: 'none' }}></div>
         
         <div className="node-config">
           <h5>Configuration</h5>
