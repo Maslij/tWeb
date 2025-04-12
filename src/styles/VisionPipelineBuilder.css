@@ -243,7 +243,7 @@
 }
 
 .component-item.disabled .component-name {
-  text-decoration: line-through;
+  /* removed line-through text decoration */
 }
 
 .component-disabled-reason {
