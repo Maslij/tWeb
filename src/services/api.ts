@@ -368,7 +368,7 @@ export const deactivatePipeline = async (streamId: string, pipelineId: string): 
 export const getActivePipeline = async (streamId: string): Promise<any> => {
   try {
     const response = await fetch(getFullUrl(`/api/streams/${streamId}/pipelines/active`));
-    
+
     // If the response is 404, it means there's no active pipeline - this is not an error
     if (response.status === 404) {
       return { active: false };
@@ -411,7 +411,7 @@ export const hasPipelineComponent = async (streamId: string, componentType: stri
     if (!activePipeline || !activePipeline.active || !activePipeline.pipelineId) {
       return false;
     }
-    
+
     const components = await getPipelineComponents(streamId, activePipeline.pipelineId);
     return components.some(node => node.componentType === componentType);
   } catch (error) {
