@@ -53,6 +53,7 @@ const normalizeComponent = (component: any): VisionComponent => {
       trigger_delay: 5,
       cool_down_period: 30,
       notify_on_alarm: true,
+      allowed_classes: [],  // Add empty array for allowed classes by default
       ...normalizedComponent.config // Keep any existing config values
     };
   }
@@ -203,7 +204,7 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
   const displayProperties = ['show_labels', 'show_bounding_boxes', 'show_tracks', 'show_title', 'show_timestamp', 'show_performance_metrics'];
   const styleProperties = ['label_font_scale', 'text_color'];
   const positionProperties = ['title_position', 'timestamp_position'];
-  const alarmProperties = ['min_confidence', 'trigger_delay', 'cool_down_period', 'notify_on_alarm'];
+  const alarmProperties = ['min_confidence', 'trigger_delay', 'cool_down_period', 'notify_on_alarm', 'allowed_classes'];
   const loggerProperties = ['log_level', 'include_images', 'retention_days', 'max_events_per_day'];
   const modelProperties = ['model', 'classes', 'confidence'];
   
@@ -519,6 +520,240 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
     );
   }
   
+  // Special handling for classes in alarm components
+  if (propKey === 'allowed_classes' && componentType === 'event_alarm') {
+    console.log(`Handling allowed_classes for ${nodeId}, component ${componentType}`);
+    
+    // State to track available classes and allowed classes
+    const [availableClasses, setAvailableClasses] = useState<string[]>([]);
+    const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
+    
+    // Function to load detector classes
+    const loadClassData = useCallback(() => {
+      console.log("🔍 Loading class data for event_alarm:", nodeId);
+      
+      // Try to get classes from global pipeline data
+      const pipelineData = (window as any).__PIPELINE_DATA__;
+      let detectorClasses: string[] = [];
+      
+      if (pipelineData && pipelineData.nodes) {
+        // Find all detector nodes
+        const detectorNodes = pipelineData.nodes.filter((n: any) => 
+          n.componentId && (n.componentId.includes('detector') || n.componentId === 'object_detector')
+        );
+        
+        // Collect classes from all detectors
+        detectorNodes.forEach((detector: any) => {
+          if (detector.config && detector.config.classes && 
+              Array.isArray(detector.config.classes) && detector.config.classes.length > 0) {
+            detectorClasses = [...detectorClasses, ...detector.config.classes];
+          }
+        });
+      }
+      
+      // If we didn't find classes through pipeline data, try DOM scanning
+      if (detectorClasses.length === 0) {
+        // Scan node configs for detector classes
+        document.querySelectorAll('[id^="node-config-"]').forEach((el: any) => {
+          if (!el || !el.getAttribute) return;
+          
+          try {
+            const configData = el.getAttribute('data-config');
+            if (configData) {
+              const config = JSON.parse(configData);
+              const nodeIdParts = el.id.split('node-config-');
+              const configNodeId = nodeIdParts.length > 1 ? nodeIdParts[1] : '';
+              
+              if (configNodeId) {
+                const nodeElement = document.querySelector(`[data-node-id="${configNodeId}"]`);
+                const componentId = nodeElement?.getAttribute('data-component-id');
+                
+                if (componentId && (componentId.includes('detector') || componentId === 'object_detector') &&
+                    config.classes && Array.isArray(config.classes) && config.classes.length > 0) {
+                  detectorClasses = [...detectorClasses, ...config.classes];
+                }
+              }
+            }
+          } catch (error) {
+            console.error("Error parsing node config:", error);
+          }
+        });
+      }
+      
+      // Remove duplicates
+      detectorClasses = Array.from(new Set(detectorClasses));
+      
+      if (detectorClasses.length > 0) {
+        setAvailableClasses(detectorClasses);
+      }
+    }, [nodeId]);
+    
+    // Effect to set up listeners and load initial data
+    useEffect(() => {
+      // Load classes immediately
+      loadClassData();
+      
+      // Set up mutation observer for DOM changes
+      const observer = new MutationObserver(() => {
+        loadClassData();
+      });
+      
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['data-config', 'data-component-id', 'data-connection']
+      });
+      
+      // Set up listeners for custom events
+      const handlePipelineDataUpdate = () => loadClassData();
+      const handleDetectorClassesUpdate = (event: any) => {
+        if (event.detail && event.detail.classes && 
+            Array.isArray(event.detail.classes) && event.detail.classes.length > 0) {
+          setAvailableClasses(Array.from(new Set(event.detail.classes)));
+        }
+      };
+      
+      document.addEventListener('pipeline-data-updated', handlePipelineDataUpdate);
+      document.addEventListener('detector-classes-updated', handleDetectorClassesUpdate);
+      
+      // Clean up
+      return () => {
+        observer.disconnect();
+        document.removeEventListener('pipeline-data-updated', handlePipelineDataUpdate);
+        document.removeEventListener('detector-classes-updated', handleDetectorClassesUpdate);
+      };
+    }, [loadClassData]);
+    
+    // Effect to initialize selected classes
+    useEffect(() => {
+      // Support both string JSON and array for propValue
+      let initialSelectedClasses: string[] = [];
+      
+      if (typeof propValue === 'string') {
+        try {
+          // Try to parse if it's a JSON string
+          if (propValue.trim().startsWith('[')) {
+            initialSelectedClasses = JSON.parse(propValue);
+          } else if (propValue) {
+            // Single class as string
+            initialSelectedClasses = [propValue];
+          }
+        } catch (e) {
+          console.error("Error parsing class selection for alarm:", e);
+          initialSelectedClasses = [];
+        }
+      } else if (Array.isArray(propValue)) {
+        initialSelectedClasses = propValue;
+      }
+      
+      // If no classes are selected, default to all available classes
+      if (initialSelectedClasses.length === 0 && availableClasses.length > 0) {
+        initialSelectedClasses = [...availableClasses];
+        // And update the configuration
+        onConfigUpdate(nodeId, propKey, availableClasses);
+      }
+      
+      // Filter selected classes to only include those available
+      const validClasses = initialSelectedClasses.filter(cls => 
+        availableClasses.includes(cls)
+      );
+      
+      // Update selected classes state
+      setSelectedClasses(validClasses);
+    }, [JSON.stringify(availableClasses), propValue, nodeId, propKey, onConfigUpdate]);
+    
+    // No detector with classes connected
+    if (availableClasses.length === 0) {
+      return (
+        <div className="config-item">
+          <label>Allowed Classes:</label>
+          <div className="classes-empty">
+            No classes available for filtering. Make sure you have:
+            <ol>
+              <li>Added an object detector to the pipeline</li>
+              <li>Selected classes in the detector's properties</li>
+              <li>Connected the detector to this alarm component (directly or through other components)</li>
+            </ol>
+          </div>
+        </div>
+      );
+    }
+    
+    // Update handler - this will be called when checkboxes are toggled
+    const handleClassToggle = (className: string) => {
+      const newSelectedClasses = [...selectedClasses];
+      if (newSelectedClasses.includes(className)) {
+        // Remove class
+        const index = newSelectedClasses.indexOf(className);
+        newSelectedClasses.splice(index, 1);
+      } else {
+        // Add class
+        newSelectedClasses.push(className);
+      }
+      
+      // Sort classes alphabetically for better organization
+      newSelectedClasses.sort();
+      
+      // Update state and notify parent
+      setSelectedClasses(newSelectedClasses);
+      onConfigUpdate(nodeId, propKey, newSelectedClasses);
+    };
+    
+    // Select/deselect all handler
+    const handleSelectAll = (selectAll: boolean) => {
+      if (selectAll) {
+        const sortedClasses = [...availableClasses].sort();
+        setSelectedClasses(sortedClasses);
+        onConfigUpdate(nodeId, propKey, sortedClasses);
+      } else {
+        setSelectedClasses([]);
+        onConfigUpdate(nodeId, propKey, []);
+      }
+    };
+    
+    return (
+      <div className="config-item classes-selection">
+        <label>Allowed Classes:</label>
+        <div className="classes-desc">
+          Select which object classes should trigger alarms. Only detections or events for these classes will create alerts.
+        </div>
+        <div className="classes-controls">
+          <button 
+            className="select-all-btn" 
+            onClick={() => handleSelectAll(true)}
+            disabled={selectedClasses.length === availableClasses.length}
+          >
+            Select All
+          </button>
+          <button 
+            className="deselect-all-btn" 
+            onClick={() => handleSelectAll(false)}
+            disabled={selectedClasses.length === 0}
+          >
+            Deselect All
+          </button>
+        </div>
+        <div className="classes-list">
+          {availableClasses.sort().map((className) => (
+            <div key={className} className="class-item">
+              <input
+                type="checkbox"
+                id={`alarm-class-${nodeId}-${className}`}
+                checked={selectedClasses.includes(className)}
+                onChange={() => handleClassToggle(className)}
+              />
+              <label htmlFor={`alarm-class-${nodeId}-${className}`}>{className}</label>
+            </div>
+          ))}
+        </div>
+        <div className="selected-count">
+          {selectedClasses.length} of {availableClasses.length} classes selected for alerting
+        </div>
+      </div>
+    );
+  }
+  
   // Determine property type
   if (Array.isArray(propValue)) {
     // Special handling for text_color - RGB array
@@ -696,7 +931,7 @@ const groupNodeProperties = (config: Record<string, any>): { [category: string]:
   const displayProperties = ['show_labels', 'show_bounding_boxes', 'show_tracks', 'show_title', 'show_timestamp', 'show_performance_metrics'];
   const styleProperties = ['label_font_scale', 'text_color'];
   const positionProperties = ['title_position', 'timestamp_position'];
-  const alarmProperties = ['min_confidence', 'trigger_delay', 'cool_down_period', 'notify_on_alarm'];
+  const alarmProperties = ['min_confidence', 'trigger_delay', 'cool_down_period', 'notify_on_alarm', 'allowed_classes'];
   const loggerProperties = ['log_level', 'include_images', 'retention_days', 'max_events_per_day'];
   const modelProperties = ['model', 'classes', 'confidence'];
   
@@ -939,6 +1174,52 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     return components;
   }, [availableComponents, streamSource]);
 
+  // Store pipeline data in window object for component access and
+  // trigger immediate events when pipeline changes
+  useEffect(() => {
+    // Make pipeline data accessible to components via window
+    (window as any).__PIPELINE_DATA__ = pipeline;
+    
+    // Trigger immediate class updates by dispatching custom event
+    const event = new CustomEvent('pipeline-data-updated', { 
+      detail: { pipeline }
+    });
+    document.dispatchEvent(event);
+    
+    // If this is a pipeline initialization with pre-populated detectors, 
+    // trigger immediate detector class events for any alarm components
+    const detectorNodes = pipeline.nodes.filter(node => {
+      const component = componentsList.find(c => c.id === node.componentId);
+      return component?.category === 'detector' && 
+             node.config?.classes && 
+             Array.isArray(node.config.classes) &&
+             node.config.classes.length > 0;
+    });
+    
+    if (detectorNodes.length > 0) {
+      // Combine all detected classes
+      let allClasses: string[] = [];
+      detectorNodes.forEach(node => {
+        if (node.config?.classes) {
+          allClasses = [...allClasses, ...node.config.classes];
+        }
+      });
+      
+      // Remove duplicates
+      const uniqueClasses = Array.from(new Set(allClasses));
+      
+      if (uniqueClasses.length > 0) {
+        // Trigger detector class update event
+        const classEvent = new CustomEvent('detector-classes-updated', {
+          detail: { classes: uniqueClasses }
+        });
+        setTimeout(() => {
+          document.dispatchEvent(classEvent);
+        }, 50);
+      }
+    }
+  }, [pipeline, componentsList]);
+
   // Update available categories based on the pipeline state
   useEffect(() => {
     let newCategories = ['source', 'sink'];  // Make sink always available
@@ -1088,6 +1369,39 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
         source: streamSource,
         type: streamType
       };
+    }
+    
+    // If it's an event_alarm component, check for available detector classes
+    if (activeComponent.id === 'event_alarm') {
+      const detectorNodes = pipeline.nodes.filter(node => {
+        const component = componentsList.find(c => c.id === node.componentId);
+        return component?.category === 'detector' && 
+               node.config?.classes && 
+               Array.isArray(node.config.classes) &&
+               node.config.classes.length > 0;
+      });
+      
+      if (detectorNodes.length > 0) {
+        // Collect all detector classes
+        let allClasses: string[] = [];
+        detectorNodes.forEach(detector => {
+          if (detector.config?.classes) {
+            allClasses = [...allClasses, ...detector.config.classes];
+          }
+        });
+        
+        // Remove duplicates
+        const uniqueClasses = Array.from(new Set(allClasses));
+        
+        // Initialize with all available classes
+        if (!newNode.config) {
+          newNode.config = {};
+        }
+        
+        if (uniqueClasses.length > 0) {
+          newNode.config.allowed_classes = uniqueClasses;
+        }
+      }
     }
     
     setPipeline(prev => ({
@@ -1284,6 +1598,18 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
                 : node
             )
           }));
+          
+          // Trigger an immediate update for any component that needs to read classes from detectors
+          if ((sourceComponent.category === 'detector' && targetComponent.id === 'event_alarm') ||
+              (targetComponent.category === 'detector' && sourceComponent.id === 'event_alarm')) {
+            // Force an immediate class update by triggering our custom event
+            setTimeout(() => {
+              const event = new CustomEvent('pipeline-data-updated', { 
+                detail: { sourceId: sourceNode?.id, targetId: targetNode.id }
+              });
+              document.dispatchEvent(event);
+            }, 50);
+          }
         }
       }
       
@@ -1473,6 +1799,52 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     
     console.log("Saving pipeline with config:", apiPipeline);
     
+    // Special handling for event_alarm components to ensure they have the classes from detectors
+    if (apiPipeline.nodes) {
+      // Find all detector nodes with classes
+      const detectorNodes = apiPipeline.nodes.filter((node: any) => 
+        node.componentId && (node.componentId.includes('detector') || node.componentId === 'object_detector') &&
+        node.config && node.config.classes && Array.isArray(node.config.classes) && node.config.classes.length > 0
+      );
+      
+      // Find all alarm nodes
+      const alarmNodes = apiPipeline.nodes.filter((node: any) => 
+        node.componentId === 'event_alarm'
+      );
+      
+      if (detectorNodes.length > 0 && alarmNodes.length > 0) {
+        console.log("Found detector nodes with classes:", detectorNodes);
+        console.log("Found alarm nodes:", alarmNodes);
+        
+        // Collect all detector classes
+        const allDetectorClasses: string[] = [];
+        detectorNodes.forEach((detector: any) => {
+          if (detector.config && detector.config.classes) {
+            allDetectorClasses.push(...detector.config.classes);
+          }
+        });
+        
+        // Remove duplicates
+        const uniqueClasses = Array.from(new Set(allDetectorClasses));
+        
+        if (uniqueClasses.length > 0) {
+          // Apply classes to all alarm nodes
+          alarmNodes.forEach((alarm: any) => {
+            if (!alarm.config) {
+              alarm.config = {};
+            }
+            
+            // Only set if not already set
+            if (!alarm.config.allowed_classes || !Array.isArray(alarm.config.allowed_classes) || 
+                alarm.config.allowed_classes.length === 0) {
+              alarm.config.allowed_classes = uniqueClasses;
+              console.log(`Set allowed_classes for alarm ${alarm.id} to:`, uniqueClasses);
+            }
+          });
+        }
+      }
+    }
+    
     try {
       // Call the onSave handler passed from parent
       onSave(apiPipeline);
@@ -1515,6 +1887,18 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
       const targetNode = newPipeline.nodes.find((n: any) => n.id === node.id);
       if (targetNode) {
         targetNode.config = { ...node.config, [key]: value };
+        
+        // Check if we're updating classes in a detector component
+        const isDetector = targetNode.componentId?.includes('detector') || targetNode.componentId === 'object_detector';
+        if (isDetector && key === 'classes') {
+          // When classes change in a detector, we should notify other components that might use these classes
+          setTimeout(() => {
+            const event = new CustomEvent('detector-classes-updated', {
+              detail: { nodeId, classes: value }
+            });
+            document.dispatchEvent(event);
+          }, 50);
+        }
       }
       return newPipeline;
     });
@@ -1841,6 +2225,7 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
                       stroke="#666"
                       strokeWidth="2"
                       strokeDasharray="5,5"
+                      data-connection={`${node.id}-${targetId}`}
                     />
                   );
                 })
@@ -1873,6 +2258,9 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
                     left: `${node.position.x}px`, 
                     top: `${node.position.y}px`,
                   }}
+                  id={node.id}
+                  data-node-id={node.id}
+                  data-component-id={component.id}
                   onClick={(e) => handleNodeSelect(node.id, e)}
                   onMouseDown={(e) => handleNodeDragStart(node.id, e)}
                 >
@@ -2104,4 +2492,4 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
   );
 };
 
-export default VisionPipelineBuilder; 
+export default VisionPipelineBuilder;
