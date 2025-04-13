@@ -215,61 +215,84 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
     
     console.log(`Handling model dropdown for ${nodeId}, component ${componentType}`);
     
-    // Check if this component has available_models property
-    const nodeConfig = document.getElementById(`node-config-${nodeId}`);
-    let availableModels: any[] = [];
+    // Use state to ensure component re-renders when models are loaded
+    const [availableModels, setAvailableModels] = useState<any[]>([]);
     
-    if (nodeConfig) {
-      const configData = (nodeConfig as any).dataset?.config;
-      if (configData) {
-        try {
-          const config = JSON.parse(configData);
-          console.log("Config for model dropdown:", config);
-          
-          // Handle available_models
-          if (config.available_models) {
-            if (typeof config.available_models === 'string') {
-              try {
-                availableModels = JSON.parse(config.available_models);
-              } catch (e) {
-                console.error("Failed to parse available_models string:", e);
+    // Effect to load available models when component mounts or changes
+    useEffect(() => {
+      const loadModelData = () => {
+        // Check if this component has available_models property
+        const nodeConfig = document.getElementById(`node-config-${nodeId}`);
+        let modelList: any[] = [];
+        
+        if (nodeConfig) {
+          const configData = (nodeConfig as any).dataset?.config;
+          if (configData) {
+            try {
+              const config = JSON.parse(configData);
+              console.log("Config for model dropdown:", config);
+              
+              // Handle available_models
+              if (config.available_models) {
+                if (typeof config.available_models === 'string') {
+                  try {
+                    modelList = JSON.parse(config.available_models);
+                  } catch (e) {
+                    console.error("Failed to parse available_models string:", e);
+                  }
+                } else if (Array.isArray(config.available_models)) {
+                  modelList = config.available_models;
+                }
               }
-            } else if (Array.isArray(config.available_models)) {
-              availableModels = config.available_models;
+              
+              // If no models found directly, try extracting them from model_classes
+              if (modelList.length === 0 && config.model_classes) {
+                let modelClasses = config.model_classes;
+                if (typeof modelClasses === 'string') {
+                  try {
+                    modelClasses = JSON.parse(modelClasses);
+                  } catch (e) {
+                    console.error("Failed to parse model_classes:", e);
+                  }
+                }
+                
+                if (typeof modelClasses === 'object' && !Array.isArray(modelClasses)) {
+                  // Extract model IDs from the model_classes object
+                  modelList = Object.keys(modelClasses).map(id => ({ 
+                    id, 
+                    name: id.toUpperCase() // Uppercase for better display
+                  }));
+                }
+              }
+              
+              console.log("Available models found:", modelList);
+            } catch (e) {
+              console.error("Failed to parse config data:", e);
             }
           }
-          
-          // If no models found directly, try extracting them from model_classes
-          if (availableModels.length === 0 && config.model_classes) {
-            let modelClasses = config.model_classes;
-            if (typeof modelClasses === 'string') {
-              try {
-                modelClasses = JSON.parse(modelClasses);
-              } catch (e) {
-                console.error("Failed to parse model_classes:", e);
-              }
-            }
-            
-            if (typeof modelClasses === 'object' && !Array.isArray(modelClasses)) {
-              // Extract model IDs from the model_classes object
-              availableModels = Object.keys(modelClasses).map(id => ({ 
-                id, 
-                name: id.toUpperCase() // Uppercase for better display
-              }));
-            }
-          }
-          
-          console.log("Available models:", availableModels);
-        } catch (e) {
-          console.error("Failed to parse config data:", e);
         }
+        
+        // If we don't have available_models, create a default option
+        if (modelList.length === 0) {
+          modelList = [{ id: propValue, name: propValue }];
+        }
+        
+        // Update state with the found models
+        setAvailableModels(modelList);
+      };
+      
+      // Load model data initially
+      loadModelData();
+      
+      // Set up an observer to detect when the config data might change
+      const observer = new MutationObserver(loadModelData);
+      const nodeConfig = document.getElementById(`node-config-${nodeId}`);
+      if (nodeConfig) {
+        observer.observe(nodeConfig, { attributes: true, attributeFilter: ['data-config'] });
       }
-    }
-    
-    // If we don't have available_models, create a default option
-    if (availableModels.length === 0) {
-      availableModels = [{ id: propValue, name: propValue }];
-    }
+      
+      return () => observer.disconnect();
+    }, [nodeId, componentType, propValue]);
     
     return (
       <div className="config-item model-select">
@@ -307,50 +330,108 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
     
     console.log(`Handling classes for ${nodeId}, component ${componentType}`);
     
-    // Check if this component has model_classes property
-    const nodeConfig = document.getElementById(`node-config-${nodeId}`);
-    let modelClassesMap: Record<string, string[]> = {};
-    let currentModel = "";
+    // State to track available classes and current model
+    const [availableClasses, setAvailableClasses] = useState<string[]>([]);
+    const [currentModel, setCurrentModel] = useState<string>("");
     
-    if (nodeConfig) {
-      const configData = (nodeConfig as any).dataset?.config;
-      if (configData) {
-        try {
-          const config = JSON.parse(configData);
-          console.log("Config for class selection:", config);
-          
-          if (config.model && typeof config.model === 'string') {
-            currentModel = config.model;
-          }
-          
-          if (config.model_classes) {
-            // Handle both object and stringified JSON
-            if (typeof config.model_classes === 'string') {
-              try {
-                modelClassesMap = JSON.parse(config.model_classes);
-              } catch (e) {
-                console.error("Failed to parse model_classes string:", e);
+    // Use state to track selected classes
+    const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
+    
+    // Effect to load available classes for the current model
+    useEffect(() => {
+      const loadClassData = () => {
+        // Check if this component has model_classes property
+        const nodeConfig = document.getElementById(`node-config-${nodeId}`);
+        let modelClassesMap: Record<string, string[]> = {};
+        let model = "";
+        
+        if (nodeConfig) {
+          const configData = (nodeConfig as any).dataset?.config;
+          if (configData) {
+            try {
+              const config = JSON.parse(configData);
+              console.log("Config for class selection:", config);
+              
+              if (config.model && typeof config.model === 'string') {
+                model = config.model;
               }
-            } else if (typeof config.model_classes === 'object') {
-              modelClassesMap = config.model_classes;
+              
+              if (config.model_classes) {
+                // Handle both object and stringified JSON
+                if (typeof config.model_classes === 'string') {
+                  try {
+                    modelClassesMap = JSON.parse(config.model_classes);
+                  } catch (e) {
+                    console.error("Failed to parse model_classes string:", e);
+                  }
+                } else if (typeof config.model_classes === 'object') {
+                  modelClassesMap = config.model_classes;
+                }
+              }
+              
+              console.log("Current model:", model);
+              console.log("Model classes map:", modelClassesMap);
+            } catch (e) {
+              console.error("Failed to parse config data:", e);
             }
           }
-          
-          console.log("Current model:", currentModel);
-          console.log("Model classes map:", modelClassesMap);
-        } catch (e) {
-          console.error("Failed to parse config data:", e);
         }
+        
+        // Get classes for the current model
+        let classes: string[] = [];
+        if (model && modelClassesMap[model]) {
+          classes = modelClassesMap[model];
+        }
+        
+        console.log("Available classes for model:", classes);
+        
+        // Update state with found data
+        setCurrentModel(model);
+        setAvailableClasses(classes);
+      };
+      
+      // Load class data initially
+      loadClassData();
+      
+      // Set up an observer to detect when the config data might change
+      const observer = new MutationObserver(loadClassData);
+      const nodeConfig = document.getElementById(`node-config-${nodeId}`);
+      if (nodeConfig) {
+        observer.observe(nodeConfig, { attributes: true, attributeFilter: ['data-config'] });
       }
-    }
+      
+      return () => observer.disconnect();
+    }, [nodeId, componentType]);
     
-    // Get classes for the current model
-    let availableClasses: string[] = [];
-    if (currentModel && modelClassesMap[currentModel]) {
-      availableClasses = modelClassesMap[currentModel];
-    }
-    
-    console.log("Available classes for model:", availableClasses);
+    // Initialize selected classes when component mounts or when availableClasses changes
+    useEffect(() => {
+      // Support both string JSON and array for propValue
+      let initialSelectedClasses: string[] = [];
+      if (typeof propValue === 'string') {
+        try {
+          // Try to parse if it's a JSON string
+          if (propValue.trim().startsWith('[')) {
+            initialSelectedClasses = JSON.parse(propValue);
+          } else {
+            // Single class as string
+            initialSelectedClasses = [propValue];
+          }
+        } catch (e) {
+          console.error("Error parsing class selection:", e);
+          initialSelectedClasses = [];
+        }
+      } else if (Array.isArray(propValue)) {
+        initialSelectedClasses = propValue;
+      }
+      
+      // Filter selected classes to only include those available in the current model
+      const validClasses = initialSelectedClasses.filter(cls => 
+        availableClasses.includes(cls)
+      );
+      
+      // Update selected classes state
+      setSelectedClasses(validClasses);
+    }, [JSON.stringify(availableClasses), propValue]);
     
     // No classes available, show a message
     if (availableClasses.length === 0) {
@@ -365,40 +446,6 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
         </div>
       );
     }
-    
-    // Support both string JSON and array for propValue
-    let initialSelectedClasses: string[] = [];
-    if (typeof propValue === 'string') {
-      try {
-        // Try to parse if it's a JSON string
-        if (propValue.trim().startsWith('[')) {
-          initialSelectedClasses = JSON.parse(propValue);
-        } else {
-          // Single class as string
-          initialSelectedClasses = [propValue];
-        }
-      } catch (e) {
-        console.error("Error parsing class selection:", e);
-        initialSelectedClasses = [];
-      }
-    } else if (Array.isArray(propValue)) {
-      initialSelectedClasses = propValue;
-    }
-    
-    // Use state to track selected classes
-    const [selectedClasses, setSelectedClasses] = useState<string[]>(initialSelectedClasses);
-    
-    // Effect to update selected classes when the model changes
-    useEffect(() => {
-      // Filter selected classes to only include those available in the current model
-      const validClasses = selectedClasses.filter(cls => availableClasses.includes(cls));
-      
-      // Update if there's a difference
-      if (validClasses.length !== selectedClasses.length) {
-        setSelectedClasses(validClasses);
-        onConfigUpdate(nodeId, propKey, validClasses);
-      }
-    }, [JSON.stringify(availableClasses), currentModel]);
     
     // Update handler - this will be called when checkboxes are toggled
     const handleClassToggle = (className: string) => {
@@ -1513,6 +1560,23 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
   }
 
   const NodePropertiesPanel: React.FC<NodePropertiesPanelProps> = ({ node, component, onConfigUpdate }) => {
+    // Use effect to ensure model configuration data is loaded when node is selected
+    useEffect(() => {
+      // For detector nodes, ensure we refresh the configuration on mount
+      if (component.category === 'detector' || 
+          component.id === 'object_detector' || 
+          component.id === 'face_detector' || 
+          component.id === 'image_classifier') {
+        
+        // This will force the component's configuration to be accessed by the UI
+        const element = document.getElementById(`node-config-${node.id}`);
+        if (element) {
+          const event = new Event('change', { bubbles: true });
+          element.dispatchEvent(event);
+        }
+      }
+    }, [node.id, component.id, component.category]);
+    
     // If no config exists or is empty, show a simple message
     if (!node.config || Object.keys(node.config).length === 0) {
       return (
