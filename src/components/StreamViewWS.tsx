@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import apiService, { getStreamAlarms, hasPipelineComponent } from '../services/api';
 import AlarmModal from './AlarmModal';
 
@@ -37,11 +37,14 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
   const [reconnectCount, setReconnectCount] = useState<number>(0);
   const wsRef = useRef<WebSocket | null>(null);
   const disconnectedRef = useRef<boolean>(false);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [hasAlarms, setHasAlarms] = useState<boolean>(false);
   const [alarmCount, setAlarmCount] = useState<number>(0);
   const [hasAlarmComponent, setHasAlarmComponent] = useState<boolean>(false);
   const [showAlarmModal, setShowAlarmModal] = useState<boolean>(false);
+  const alarmCheckRef = useRef<number | null>(null);
+  const disconnectTimeoutRef = useRef<number | null>(null);
+  const pingIntervalRef = useRef<number | null>(null);
 
   // Log component initialization
   useEffect(() => {
@@ -314,7 +317,7 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
     cleanupWebSocketConnection();
     
     // Define WebSocket connection setup
-    const startWebSocketConnection = (wsUrl: string) => {
+    const startWebSocketConnection = (wsUrl: string, isRtspStream: boolean) => {
       try {
         const ws = new WebSocket(wsUrl) as WebSocketWithLogging;
         wsRef.current = ws;
@@ -353,40 +356,120 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
           console.error('[WS] WebSocket error:', event);
         };
         
-        ws.onmessage = (event) => {
+        ws.onmessage = (event: MessageEvent) => {
+          // Skip logging for high frequency messages
+          const now = Date.now();
+          const shouldLog = !ws.lastLogTime || now - ws.lastLogTime > 2000;
+          
+          if (shouldLog) {
+            console.log('[WS] Received message');
+            ws.lastLogTime = now;
+          }
+          
           try {
-            // If we're disconnected or disconnecting, ignore all messages
-            if (!ws || ws.readyState !== WebSocket.OPEN) {
-              // Only log every 5 seconds to prevent spam
-              const now = Date.now();
-              if (!ws.lastLogTime || now - ws.lastLogTime >= 5000) {
-                console.log('[WS] Ignoring messages - connection not open');
-                ws.lastLogTime = now;
+            // For RTSP debugging, log the raw data occasionally to see the message structure
+            if (isRtspStream && shouldLog) {
+              try {
+                const debugData = JSON.parse(event.data);
+                console.log('[WS RTSP Debug] Message structure:', JSON.stringify(debugData, null, 2));
+                console.log('[WS RTSP Debug] Message type:', debugData.type);
+                if (debugData.frame) {
+                  console.log('[WS RTSP Debug] Has frame data of length:', debugData.frame?.length || 0);
+                } else {
+                  console.log('[WS RTSP Debug] No frame data found in message');
+                  // Check if data might be in a different property
+                  const keys = Object.keys(debugData);
+                  console.log('[WS RTSP Debug] Available keys:', keys);
+                }
+              } catch (e) {
+                console.log('[WS RTSP Debug] Raw data (not JSON):', typeof event.data, event.data.length);
+              }
+            }
+            
+            const message = JSON.parse(event.data);
+            
+            if (message.type === 'ping') {
+              // Respond to ping with pong to keep connection alive
+              if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                try {
+                  wsRef.current.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+                  if (shouldLog) {
+                    console.log('[WS] Sent pong response');
+                  }
+                } catch (err) {
+                  console.error('[WS] Error sending pong:', err);
+                }
               }
               return;
             }
             
-            // Process the message
-            if (typeof event.data === 'string') {
-              try {
-                const data = JSON.parse(event.data);
-                if (data.type === 'frame' && (data.data || data.frame)) {
-                  const frameContent = data.data || data.frame;
-                  if (typeof frameContent === 'string') {
-                    setFrameData(frameContent);
-                  }
-                }
-              } catch (err) {
-                // If it's not JSON, check if it's raw base64 image data
-                if (event.data.startsWith('/9j/') || event.data.startsWith('iVBOR')) {
-                  setFrameData(event.data);
-                }
+            if (message.type === 'frame') {
+              // Add RTSP debugging
+              if (isRtspStream && shouldLog) {
+                console.log('[WS RTSP Debug] Processing frame message:', 
+                           'has frame property:', !!message.frame,
+                           'frame length:', message.frame?.length || 0);
               }
+              
+              // Make sure we're using the correct property for the frame data
+              if (message.frame) {
+                setFrameData(message.frame);
+              } else if (message.data) {
+                // Some implementations might use 'data' instead of 'frame'
+                console.log('[WS] Using message.data instead of message.frame');
+                setFrameData(message.data);
+              } else {
+                console.error('[WS] Frame message missing both frame and data properties:', message);
+              }
+              
+              // For RTSP streams, if we're seeing frames, ensure we're showing as connected
+              // This helps with temporary frame drops not triggering disconnection UI
+              if (isRtspStream && !connected) {
+                setConnected(true);
+              }
+              
+              // Reset disconnect delay timer for RTSP streams since we got a good frame
+              if (isRtspStream && disconnectTimeoutRef.current) {
+                clearTimeout(disconnectTimeoutRef.current);
+                disconnectTimeoutRef.current = null;
+              }
+              
+              return;
             }
+            
+            if (message.type === 'error') {
+              console.error('[WS] Error from server:', message.message);
+              // For RTSP streams, don't immediately disconnect on errors
+              if (!isRtspStream) {
+                setError(message.message || 'Error from server');
+              }
+              return;
+            }
+            
+            console.log('[WS] Unknown message type:', message.type);
           } catch (err) {
-            console.error('[WS] Error processing WebSocket message:', err);
+            console.error('[WS] Error parsing message:', err);
           }
         };
+        
+        // Special handling for RTSP streams
+        if (isRtspStream) {
+          console.log('[WS] Setting up RTSP-specific WebSocket handling');
+          
+          // Add more aggressive ping interval for RTSP streams to keep connection alive
+          const pingInterval = setInterval(() => {
+            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+              try {
+                wsRef.current.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
+              } catch (err) {
+                console.error('[WS] Error sending ping:', err);
+              }
+            }
+          }, 15000); // Send ping every 15 seconds
+          
+          // Store the interval for cleanup
+          pingIntervalRef.current = pingInterval;
+        }
       } catch (err) {
         console.error('[WS] Error setting up WebSocket:', err);
         setError('Failed to setup WebSocket connection');
@@ -401,7 +484,22 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
         const wsUrl = `${protocol}//${wsHost}/api/streams/${streamId}/ws?fps=${fps}`;
         
         console.log(`[WS] Connecting to WebSocket: ${wsUrl}`);
-        startWebSocketConnection(wsUrl);
+        
+        // For RTSP streams, we may need additional connection parameters
+        // Check if this is an RTSP stream to set appropriate timeouts and retry logic
+        apiService.getStreamById(streamId)
+          .then((streamData: any) => {
+            const isRtspStream = streamData?.type === 'rtsp';
+            console.log(`[WS] Stream type: ${streamData?.type}, applying ${isRtspStream ? 'RTSP-specific' : 'standard'} handling`);
+            
+            // Start WebSocket connection with stream-type specific settings
+            startWebSocketConnection(wsUrl, isRtspStream);
+          })
+          .catch((err: Error) => {
+            console.error(`[WS] Error getting stream info: ${err}, using default connection settings`);
+            // If we can't determine stream type, proceed with default settings
+            startWebSocketConnection(wsUrl, false);
+          });
       } catch (err) {
         console.error('[WS] Error creating WebSocket:', err);
         setError('Failed to connect to stream');
@@ -415,6 +513,22 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
     return () => {
       console.log('[StreamViewWS] WebSocket effect cleanup - ensuring connection is closed');
       cleanupWebSocketConnection();
+      
+      // Clear any pending timeouts and intervals
+      if (disconnectTimeoutRef.current) {
+        clearTimeout(disconnectTimeoutRef.current);
+        disconnectTimeoutRef.current = null;
+      }
+      
+      if (pingIntervalRef.current) {
+        clearInterval(pingIntervalRef.current);
+        pingIntervalRef.current = null;
+      }
+      
+      if (alarmCheckRef.current) {
+        clearInterval(alarmCheckRef.current);
+        alarmCheckRef.current = null;
+      }
       
       // Force cleanup any lingering connection
       if (wsRef.current) {
@@ -450,12 +564,27 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
       return;
     }
     
-    console.log('[Canvas] Starting to process frame data, length:', frameData.length);
+    // Log the first 50 chars of frame data to help with debugging
+    const framePreview = frameData.substring(0, 50) + '...';
+    console.log(`[Canvas] Processing frame data, length: ${frameData.length}, preview: ${framePreview}`);
+    
+    if (frameData.length < 100) {
+      console.error('[Canvas] Frame data too short to be valid:', frameData);
+      return;
+    }
     
     // Create a new image from the frame data
     const img = new Image();
+    
+    // Add detailed error handling and debugging for image loading
     img.onload = () => {
       console.log('[Canvas] Image loaded successfully, dimensions:', img.width, 'x', img.height);
+      
+      if (img.width === 0 || img.height === 0) {
+        console.error('[Canvas] Image has invalid dimensions:', img.width, 'x', img.height);
+        return;
+      }
+      
       // Set canvas dimensions to match the image
       canvas.width = img.width;
       canvas.height = img.height;
@@ -464,13 +593,25 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       
       // Draw the image on the canvas
-      ctx.drawImage(img, 0, 0);
-      console.log('[Canvas] Image drawn on canvas');
+      try {
+        ctx.drawImage(img, 0, 0);
+        console.log('[Canvas] Image drawn on canvas successfully');
+      } catch (err) {
+        console.error('[Canvas] Error drawing image on canvas:', err);
+      }
     };
     
     // Handle any errors loading the image
     img.onerror = (e) => {
       console.error('[Canvas] Error loading frame image:', e);
+      
+      // Log detailed information about the frame data
+      console.error(
+        '[Canvas] Frame data debug info:',
+        'Length:', frameData.length,
+        'Valid base64?', /^[A-Za-z0-9+/=]+$/.test(frameData),
+        'First chars:', frameData.substring(0, 50)
+      );
       
       // Draw error message on canvas
       ctx.fillStyle = '#333';
@@ -481,17 +622,34 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
       ctx.fillStyle = 'white';
       ctx.font = '14px Arial';
       ctx.fillText('Error loading image', 10, 30);
-      
-      // Log the first 100 characters of the frame data to help debug
-      console.error('[Canvas] Frame data preview:', 
-        frameData.substring(0, 100) + '...',
-        'Total length:', frameData.length);
+      ctx.fillText('Data length: ' + frameData.length, 10, 50);
     };
     
     try {
       // Set the source to load the image
       img.src = `data:image/jpeg;base64,${frameData}`;
       console.log('[Canvas] Set image source with base64 data');
+      
+      // Set a timeout to detect if the image fails to load but doesn't trigger onerror
+      const loadTimeout = setTimeout(() => {
+        if (!img.complete || img.naturalWidth === 0) {
+          console.error('[Canvas] Image load timeout - failed to load within 5 seconds');
+          
+          // Draw error message on canvas
+          ctx.fillStyle = '#333';
+          canvas.width = 400;
+          canvas.height = 300;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          
+          ctx.fillStyle = 'white';
+          ctx.font = '14px Arial';
+          ctx.fillText('Image load timeout', 10, 30);
+          ctx.fillText('Data length: ' + frameData.length, 10, 50);
+        }
+      }, 5000);
+      
+      // Clean up the timeout when the component unmounts or the frameData changes
+      return () => clearTimeout(loadTimeout);
     } catch (err) {
       console.error('[Canvas] Error processing frame data:', err);
       
@@ -504,6 +662,7 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
       ctx.fillStyle = 'white';
       ctx.font = '14px Arial';
       ctx.fillText('Error processing frame data', 10, 30);
+      ctx.fillText(err instanceof Error ? err.message : 'Unknown error', 10, 50);
     }
   }, [frameData]);
 
