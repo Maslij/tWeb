@@ -106,16 +106,17 @@ const AlarmModal = ({ streamId, isOpen, onClose }: AlarmModalProps) => {
                           )}
                         </div>
                       )}
+                      {alarm.message && <div className="alarm-message">{alarm.message}</div>}
                     </div>
                     <div className="alarm-col image">
-                      {alarm.objectImageBase64 && (
+                      {alarm.image_data && (
                         <div 
                           className="thumbnail-container"
-                          onMouseEnter={() => setEnlargedImage(`data:image/jpeg;base64,${alarm.objectImageBase64}`)}
+                          onMouseEnter={() => setEnlargedImage(`data:image/jpeg;base64,${alarm.image_data}`)}
                           onMouseLeave={() => setEnlargedImage(null)}
                         >
                           <img 
-                            src={`data:image/jpeg;base64,${alarm.objectImageBase64}`} 
+                            src={`data:image/jpeg;base64,${alarm.image_data}`} 
                             alt={`Object: ${alarm.objectClass || 'unknown'}`}
                             className="thumbnail"
                             onError={(e) => {

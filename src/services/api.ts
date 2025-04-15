@@ -57,7 +57,7 @@ export interface AlarmEvent {
   confidence?: number;
   timestamp: number;
   boundingBox?: { x: number, y: number, width: number, height: number };
-  objectImageBase64?: string;
+  image_data?: string;
 }
 
 // Helper function to ensure response is an array

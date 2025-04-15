@@ -115,7 +115,7 @@ const StreamCard = ({ stream }: StreamCardProps) => {
     if (!isValidStream) return;
     
     // Don't navigate if clicking on the alarm indicator or fullscreen button
-    if ((e.target as HTMLElement).closest('.alarm-indicator') || 
+    if ((e.target as HTMLElement).closest('.alarm-badge') || 
         (e.target as HTMLElement).closest('.fullscreen-button')) {
       e.stopPropagation();
       return;
@@ -268,6 +268,18 @@ const StreamCard = ({ stream }: StreamCardProps) => {
             align-items: center;
             gap: 0.25rem;
             z-index: 10;
+            /* Add button reset styles */
+            border: none;
+            cursor: pointer;
+            font-family: inherit; /* Ensure font is inherited */
+            text-align: left; /* Reset text alignment */
+            appearance: none; /* Reset browser default styles */
+            -webkit-appearance: none;
+            -moz-appearance: none;
+          }
+
+          .alarm-badge:hover {
+            filter: brightness(0.9);
           }
 
           .alarm-badge.pulse {
@@ -290,10 +302,14 @@ const StreamCard = ({ stream }: StreamCardProps) => {
 
       <div className="stream-card" onClick={handleClick}>
         {hasAlarmComponent && hasAlarms && (
-          <div className={`alarm-badge ${alarmCount > 0 ? 'pulse' : ''}`}>
+          <button 
+            onClick={handleAlarmClick} 
+            className={`alarm-badge ${alarmCount > 0 ? 'pulse' : ''}`}
+            aria-label={`View ${alarmCount} alarms`}
+          >
             <span>⚠️</span>
             {alarmCount > 99 ? '99+' : alarmCount}
-          </div>
+          </button>
         )}
         
         <div className="stream-preview">
