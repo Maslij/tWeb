@@ -11,7 +11,7 @@ const AlarmModal = ({ streamId, isOpen, onClose }: AlarmModalProps) => {
   const [alarms, setAlarms] = useState<AlarmEvent[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [enlargedImage, setEnlargedImage] = useState<string | null>(null);
+  const [enlargedImage, setEnlargedImage] = useState<{src: string; position: {x: number; y: number}} | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -112,7 +112,16 @@ const AlarmModal = ({ streamId, isOpen, onClose }: AlarmModalProps) => {
                       {alarm.image_data && (
                         <div 
                           className="thumbnail-container"
-                          onMouseEnter={() => setEnlargedImage(`data:image/jpeg;base64,${alarm.image_data}`)}
+                          onMouseMove={(e) => {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            setEnlargedImage({
+                              src: `data:image/jpeg;base64,${alarm.image_data}`,
+                              position: {
+                                x: rect.left + rect.width,
+                                y: rect.top
+                              }
+                            });
+                          }}
                           onMouseLeave={() => setEnlargedImage(null)}
                         >
                           <img 
@@ -137,8 +146,31 @@ const AlarmModal = ({ streamId, isOpen, onClose }: AlarmModalProps) => {
         </div>
       </div>
       {enlargedImage && (
-        <div className="enlarged-image-container">
-          <img src={enlargedImage} alt="Enlarged view" />
+        <div 
+          className="enlarged-image-container"
+          style={{
+            position: 'fixed',
+            left: `${enlargedImage.position.x}px`,
+            top: `${enlargedImage.position.y}px`,
+            zIndex: 1000,
+            pointerEvents: 'none',
+            transform: 'translate(20px, 0)',
+            transition: 'opacity 0.2s ease-in-out',
+          }}
+        >
+          <img 
+            src={enlargedImage.src} 
+            alt="Enlarged view"
+            style={{
+              maxHeight: '300px',
+              maxWidth: '400px',
+              objectFit: 'contain',
+              border: '2px solid #ccc',
+              borderRadius: '4px',
+              backgroundColor: 'white',
+              boxShadow: '0 2px 10px rgba(0,0,0,0.2)'
+            }}
+          />
         </div>
       )}
     </div>
