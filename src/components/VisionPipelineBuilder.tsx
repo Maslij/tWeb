@@ -53,9 +53,36 @@ const normalizeComponent = (component: any): VisionComponent => {
       trigger_delay: 5,
       cool_down_period: 30,
       notify_on_alarm: true,
-      allowed_classes: [],  // Add empty array for allowed classes by default
+      allowed_classes: ["person"],  // Initialize with "person" by default instead of empty array
       ...normalizedComponent.config // Keep any existing config values
     };
+    
+    // Extra validation to ensure allowed_classes is always an array
+    if (normalizedComponent.config && normalizedComponent.config.allowed_classes) {
+      if (typeof normalizedComponent.config.allowed_classes === 'string') {
+        // If it's the string "allowed_classes", convert to array with "person"
+        if (normalizedComponent.config.allowed_classes === "allowed_classes") {
+          normalizedComponent.config.allowed_classes = ["person"];
+        } else {
+          // Try to parse it as JSON if it looks like an array
+          try {
+            const parsed = JSON.parse(normalizedComponent.config.allowed_classes);
+            if (Array.isArray(parsed)) {
+              normalizedComponent.config.allowed_classes = parsed;
+            } else {
+              // If it's a string but not a JSON array, treat as single class name
+              normalizedComponent.config.allowed_classes = [normalizedComponent.config.allowed_classes];
+            }
+          } catch (e) {
+            // If parsing fails, use it as a single class name
+            normalizedComponent.config.allowed_classes = [normalizedComponent.config.allowed_classes];
+          }
+        }
+      } else if (!Array.isArray(normalizedComponent.config.allowed_classes)) {
+        // If it's not a string or array, initialize with default
+        normalizedComponent.config.allowed_classes = ["person"];
+      }
+    }
   }
   
   // Special handling for event logger components
@@ -583,9 +610,18 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
       // Remove duplicates
       detectorClasses = Array.from(new Set(detectorClasses));
       
-      if (detectorClasses.length > 0) {
-        setAvailableClasses(detectorClasses);
+      // If no detector classes found, don't leave it empty - set a default of "person"
+      if (detectorClasses.length === 0) {
+        detectorClasses = ["person"];
+        console.log("No detector classes found, using default 'person' class");
       }
+      
+      // Always ensure we have at least "person" class available
+      if (!detectorClasses.includes("person")) {
+        detectorClasses.push("person");
+      }
+      
+      setAvailableClasses(detectorClasses);
     }, [nodeId]);
     
     // Effect to set up listeners and load initial data
@@ -1834,15 +1870,70 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
               alarm.config = {};
             }
             
-            // Only set if not already set
-            if (!alarm.config.allowed_classes || !Array.isArray(alarm.config.allowed_classes) || 
-                alarm.config.allowed_classes.length === 0) {
-              alarm.config.allowed_classes = uniqueClasses;
-              console.log(`Set allowed_classes for alarm ${alarm.id} to:`, uniqueClasses);
+            // ALWAYS set the classes from detectors to ensure consistency
+            alarm.config.allowed_classes = uniqueClasses;
+            
+            console.log(`Set allowed_classes for alarm ${alarm.id} to:`, alarm.config.allowed_classes);
+          });
+        } else {
+          // If no detector classes found, set to ["person"] as default
+          alarmNodes.forEach((alarm: any) => {
+            if (!alarm.config) {
+              alarm.config = {};
             }
+            alarm.config.allowed_classes = ["person"];
+            console.log(`No detector classes found, set allowed_classes for alarm ${alarm.id} to default:`, alarm.config.allowed_classes);
           });
         }
       }
+      
+      // Final validation pass - ensure ALL event_alarm components have valid allowed_classes
+      apiPipeline.nodes.forEach((node: any) => {
+        if (node.componentId === 'event_alarm') {
+          if (!node.config) {
+            node.config = {};
+          }
+          
+          // If allowed_classes is missing, undefined, null, or empty, set default
+          if (!node.config.allowed_classes || 
+              (Array.isArray(node.config.allowed_classes) && node.config.allowed_classes.length === 0)) {
+            node.config.allowed_classes = ["person"];
+          }
+          
+          // If allowed_classes is a string, convert to array
+          if (typeof node.config.allowed_classes === 'string') {
+            if (node.config.allowed_classes === "allowed_classes") {
+              // If it's literally "allowed_classes", use default
+              node.config.allowed_classes = ["person"];
+            } else {
+              // Try to parse as JSON if it looks like an array
+              try {
+                if (node.config.allowed_classes.trim().startsWith('[')) {
+                  const parsed = JSON.parse(node.config.allowed_classes);
+                  if (Array.isArray(parsed)) {
+                    node.config.allowed_classes = parsed;
+                  } else {
+                    node.config.allowed_classes = ["person"];
+                  }
+                } else {
+                  // Use the string as a single class name
+                  node.config.allowed_classes = [node.config.allowed_classes];
+                }
+              } catch (e) {
+                // If parsing fails, use as single class
+                node.config.allowed_classes = [node.config.allowed_classes];
+              }
+            }
+          }
+          
+          // Final check - if by any means we don't have an array, fix it
+          if (!Array.isArray(node.config.allowed_classes)) {
+            node.config.allowed_classes = ["person"];
+          }
+          
+          console.log(`Final check: allowed_classes for ${node.id} =`, node.config.allowed_classes);
+        }
+      });
     }
     
     try {
