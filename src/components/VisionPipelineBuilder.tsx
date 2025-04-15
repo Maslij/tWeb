@@ -1418,25 +1418,38 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
       });
       
       if (detectorNodes.length > 0) {
-        // Collect all detector classes
-        let allClasses: string[] = [];
+        // Collect only the SELECTED classes from detectors (not all available classes)
+        let selectedClasses: string[] = [];
         detectorNodes.forEach(detector => {
           if (detector.config?.classes) {
-            allClasses = [...allClasses, ...detector.config.classes];
+            // Add only the classes that were explicitly selected in the detector
+            selectedClasses = [...selectedClasses, ...detector.config.classes];
           }
         });
         
         // Remove duplicates
-        const uniqueClasses = Array.from(new Set(allClasses));
+        const uniqueSelectedClasses = Array.from(new Set(selectedClasses));
         
-        // Initialize with all available classes
+        // Initialize with only the selected classes from detectors
         if (!newNode.config) {
           newNode.config = {};
         }
         
-        if (uniqueClasses.length > 0) {
-          newNode.config.allowed_classes = uniqueClasses;
+        if (uniqueSelectedClasses.length > 0) {
+          newNode.config.allowed_classes = uniqueSelectedClasses;
+          console.log(`Initialized event_alarm with classes selected in detectors:`, uniqueSelectedClasses);
+        } else {
+          // Default to "person" if no classes were selected in detectors
+          newNode.config.allowed_classes = ["person"];
+          console.log(`No classes selected in detectors, defaulting to ["person"]`);
         }
+      } else {
+        // No detectors with classes found, default to "person"
+        if (!newNode.config) {
+          newNode.config = {};
+        }
+        newNode.config.allowed_classes = ["person"];
+        console.log(`No detectors found, defaulting to ["person"]`);
       }
     }
     
@@ -1644,6 +1657,28 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
                 detail: { sourceId: sourceNode?.id, targetId: targetNode.id }
               });
               document.dispatchEvent(event);
+              
+              // If connecting a detector to an alarm, update the alarm's allowed_classes
+              if (sourceComponent.category === 'detector' && targetComponent.id === 'event_alarm') {
+                // Get the detector's selected classes
+                const detectorClasses = sourceNode?.config?.classes || [];
+                if (detectorClasses.length > 0) {
+                  console.log(`Updating event_alarm ${targetNode.id} allowed_classes to match detector's selected classes:`, detectorClasses);
+                  
+                  // Update the alarm node with the detector's selected classes
+                  setPipeline(prev => {
+                    const newPipeline = JSON.parse(JSON.stringify(prev));
+                    const alarmNode = newPipeline.nodes.find((n: any) => n.id === targetNode.id);
+                    if (alarmNode) {
+                      if (!alarmNode.config) {
+                        alarmNode.config = {};
+                      }
+                      alarmNode.config.allowed_classes = [...detectorClasses];
+                    }
+                    return newPipeline;
+                  });
+                }
+              }
             }, 50);
           }
         }
@@ -1835,106 +1870,27 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     
     console.log("Saving pipeline with config:", apiPipeline);
     
-    // Special handling for event_alarm components to ensure they have the classes from detectors
-    if (apiPipeline.nodes) {
-      // Find all detector nodes with classes
-      const detectorNodes = apiPipeline.nodes.filter((node: any) => 
-        node.componentId && (node.componentId.includes('detector') || node.componentId === 'object_detector') &&
-        node.config && node.config.classes && Array.isArray(node.config.classes) && node.config.classes.length > 0
-      );
+    // Special handling for event_alarm components: Removed logic that overwrites user-set allowed_classes
+    // The block that gathered all detector classes and applied them to all alarms has been deleted.
       
-      // Find all alarm nodes
-      const alarmNodes = apiPipeline.nodes.filter((node: any) => 
-        node.componentId === 'event_alarm'
-      );
-      
-      if (detectorNodes.length > 0 && alarmNodes.length > 0) {
-        console.log("Found detector nodes with classes:", detectorNodes);
-        console.log("Found alarm nodes:", alarmNodes);
-        
-        // Collect all detector classes
-        const allDetectorClasses: string[] = [];
-        detectorNodes.forEach((detector: any) => {
-          if (detector.config && detector.config.classes) {
-            allDetectorClasses.push(...detector.config.classes);
-          }
-        });
-        
-        // Remove duplicates
-        const uniqueClasses = Array.from(new Set(allDetectorClasses));
-        
-        if (uniqueClasses.length > 0) {
-          // Apply classes to all alarm nodes
-          alarmNodes.forEach((alarm: any) => {
-            if (!alarm.config) {
-              alarm.config = {};
-            }
-            
-            // ALWAYS set the classes from detectors to ensure consistency
-            alarm.config.allowed_classes = uniqueClasses;
-            
-            console.log(`Set allowed_classes for alarm ${alarm.id} to:`, alarm.config.allowed_classes);
-          });
-        } else {
-          // If no detector classes found, set to ["person"] as default
-          alarmNodes.forEach((alarm: any) => {
-            if (!alarm.config) {
-              alarm.config = {};
-            }
-            alarm.config.allowed_classes = ["person"];
-            console.log(`No detector classes found, set allowed_classes for alarm ${alarm.id} to default:`, alarm.config.allowed_classes);
-          });
+    // Final validation pass - ensure ALL event_alarm components have valid allowed_classes
+    // Keep this validation logic
+    apiPipeline.nodes.forEach((node: any) => {
+      if (node.componentId === 'event_alarm') {
+        if (!node.config || !node.config.allowed_classes) {
+          console.error(`Event alarm ${node.id} is missing allowed_classes`);
+        }
+        if (!Array.isArray(node.config.allowed_classes)) {
+          console.error(`Event alarm ${node.id} allowed_classes is not an array`);
+        }
+        if (node.config.allowed_classes.length === 0) {
+          console.error(`Event alarm ${node.id} allowed_classes is empty`);
+        }
+        if (!node.config.allowed_classes.includes("person")) {
+          console.error(`Event alarm ${node.id} allowed_classes does not include "person"`);
         }
       }
-      
-      // Final validation pass - ensure ALL event_alarm components have valid allowed_classes
-      apiPipeline.nodes.forEach((node: any) => {
-        if (node.componentId === 'event_alarm') {
-          if (!node.config) {
-            node.config = {};
-          }
-          
-          // If allowed_classes is missing, undefined, null, or empty, set default
-          if (!node.config.allowed_classes || 
-              (Array.isArray(node.config.allowed_classes) && node.config.allowed_classes.length === 0)) {
-            node.config.allowed_classes = ["person"];
-          }
-          
-          // If allowed_classes is a string, convert to array
-          if (typeof node.config.allowed_classes === 'string') {
-            if (node.config.allowed_classes === "allowed_classes") {
-              // If it's literally "allowed_classes", use default
-              node.config.allowed_classes = ["person"];
-            } else {
-              // Try to parse as JSON if it looks like an array
-              try {
-                if (node.config.allowed_classes.trim().startsWith('[')) {
-                  const parsed = JSON.parse(node.config.allowed_classes);
-                  if (Array.isArray(parsed)) {
-                    node.config.allowed_classes = parsed;
-                  } else {
-                    node.config.allowed_classes = ["person"];
-                  }
-                } else {
-                  // Use the string as a single class name
-                  node.config.allowed_classes = [node.config.allowed_classes];
-                }
-              } catch (e) {
-                // If parsing fails, use as single class
-                node.config.allowed_classes = [node.config.allowed_classes];
-              }
-            }
-          }
-          
-          // Final check - if by any means we don't have an array, fix it
-          if (!Array.isArray(node.config.allowed_classes)) {
-            node.config.allowed_classes = ["person"];
-          }
-          
-          console.log(`Final check: allowed_classes for ${node.id} =`, node.config.allowed_classes);
-        }
-      });
-    }
+    });
     
     try {
       // Call the onSave handler passed from parent
