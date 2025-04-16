@@ -109,7 +109,7 @@ const Dashboard = () => {
             top: 0;
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
-            background-color: rgba(255, 255, 255, 0.85);
+            background-color: var(--nav-bg, rgba(255, 255, 255, 0.85));
             z-index: 100;
             padding: 11px;
           }
@@ -149,7 +149,7 @@ const Dashboard = () => {
           }
           
           .view-btn.active {
-            background: white;
+            background: var(--background-primary, white);
             color: var(--text-primary, #1d1d1f);
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
           }
@@ -315,9 +315,9 @@ const Dashboard = () => {
           }
           
           .error-state {
-            background: var(--background-secondary, #fff2f2);
+            background: var(--background-secondary, #f9f9f9);
             border: 1px solid rgba(255, 59, 48, 0.2);
-            color: var(--text-primary, #ff3b30);
+            color: var(--text-primary);
             padding: 2rem;
             border-radius: 16px;
             margin-top: 2rem;
@@ -351,7 +351,7 @@ const Dashboard = () => {
           .loading-spinner {
             width: 32px;
             height: 32px;
-            border: 3px solid rgba(0, 0, 0, 0.1);
+            border: 3px solid var(--border-color, rgba(0, 0, 0, 0.1));
             border-top-color: var(--accent-color, #0071e3);
             border-radius: 50%;
             animation: spin 1s linear infinite;

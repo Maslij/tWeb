@@ -167,7 +167,7 @@ const StreamCard = ({ stream }: StreamCardProps) => {
       <style>
         {`
           .stream-card {
-            background: white;
+            background: var(--background-primary, white);
             border-radius: 20px;
             overflow: hidden;
             box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
@@ -184,7 +184,7 @@ const StreamCard = ({ stream }: StreamCardProps) => {
           .stream-preview {
             position: relative;
             aspect-ratio: 16/9;
-            background: #f5f5f7;
+            background: var(--background-secondary, #f5f5f7);
             overflow: hidden;
           }
 
@@ -200,7 +200,7 @@ const StreamCard = ({ stream }: StreamCardProps) => {
             display: flex;
             align-items: center;
             justify-content: center;
-            color: #86868b;
+            color: var(--text-secondary, #86868b);
             font-weight: 500;
             font-size: 1.1rem;
             text-transform: uppercase;
@@ -214,7 +214,7 @@ const StreamCard = ({ stream }: StreamCardProps) => {
           .stream-name {
             font-size: 1.1rem;
             font-weight: 600;
-            color: #1d1d1f;
+            color: var(--text-primary, #1d1d1f);
             margin: 0 0 0.5rem 0;
           }
 
@@ -223,7 +223,7 @@ const StreamCard = ({ stream }: StreamCardProps) => {
             align-items: center;
             gap: 1rem;
             font-size: 0.9rem;
-            color: #86868b;
+            color: var(--text-secondary, #86868b);
           }
 
           .stream-status {
@@ -305,7 +305,7 @@ const StreamCard = ({ stream }: StreamCardProps) => {
             gap: 0.5rem;
             margin-top: 1rem;
             padding-top: 0.75rem;
-            border-top: 1px solid rgba(0, 0, 0, 0.05);
+            border-top: 1px solid var(--border-color, rgba(0, 0, 0, 0.05));
           }
 
           .component-pill {

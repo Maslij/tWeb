@@ -165,9 +165,9 @@ const AlarmModal = ({ streamId, isOpen, onClose }: AlarmModalProps) => {
               maxHeight: '300px',
               maxWidth: '400px',
               objectFit: 'contain',
-              border: '2px solid #ccc',
+              border: `2px solid var(--border-color, #ccc)`,
               borderRadius: '4px',
-              backgroundColor: 'white',
+              backgroundColor: 'var(--background-primary, white)',
               boxShadow: '0 2px 10px rgba(0,0,0,0.2)'
             }}
           />
