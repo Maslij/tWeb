@@ -111,7 +111,7 @@ const Dashboard = () => {
             -webkit-backdrop-filter: blur(10px);
             background-color: rgba(255, 255, 255, 0.85);
             z-index: 100;
-            padding: 1rem 0;
+            padding: 11px;
           }
           
           .title {

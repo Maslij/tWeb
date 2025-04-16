@@ -46,43 +46,11 @@ const Navbar = () => {
             letter-spacing: -0.5px;
           }
 
-          .nav-links {
-            display: flex;
-            gap: 2rem;
-            align-items: center;
-          }
-
-          .nav-link {
-            color: var(--text-primary, #1d1d1f);
-            text-decoration: none;
-            font-size: 0.9rem;
-            font-weight: 500;
-            padding: 0.5rem 0;
-            position: relative;
-          }
-
-          .nav-link::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 2px;
-            background: var(--accent-color, #0071e3);
-            transform: scaleX(0);
-            transition: transform 0.2s ease;
-          }
-
-          .nav-link:hover::after {
-            transform: scaleX(1);
-          }
-
           .theme-toggle {
             background: none;
             border: none;
             cursor: pointer;
             padding: 0.5rem;
-            margin-left: 1rem;
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -106,21 +74,13 @@ const Navbar = () => {
         <Link to="/" className="logo">
           Vision
         </Link>
-        <div className="nav-links">
-          <Link to="/" className="nav-link">
-            Streams
-          </Link>
-          <Link to="/create" className="nav-link">
-            Create
-          </Link>
-          <button 
-            className="theme-toggle" 
-            onClick={toggleTheme} 
-            title={`Current theme: ${theme}. Click to cycle themes.`}
-          >
-            <ThemeToggleIcon />
-          </button>
-        </div>
+        <button 
+          className="theme-toggle" 
+          onClick={toggleTheme} 
+          title={`Current theme: ${theme}. Click to cycle themes.`}
+        >
+          <ThemeToggleIcon />
+        </button>
       </div>
     </nav>
   );
