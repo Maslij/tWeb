@@ -1372,7 +1372,17 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     });
     
     if (hasDetector) {
-      newCategories.push('tracker', 'classifier', 'geometry');
+      newCategories.push('tracker', 'classifier');
+    }
+    
+    // Rule 4: Geometry is only enabled after a tracker has been added
+    const hasTracker = pipeline.nodes.some(node => {
+      const component = componentsList.find(c => c.id === node.componentId);
+      return component?.category === 'tracker';
+    });
+    
+    if (hasTracker) {
+      newCategories.push('geometry');
     }
     
     // Only set state if categories have actually changed
@@ -1555,57 +1565,46 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
 
   // Function to check if a connection is valid
   const isValidConnection = (sourceComponent: any, targetComponent: any) => {
-    // Only allow connection if source has outputs and target has inputs
-    if (!sourceComponent.outputs || !targetComponent.inputs) {
-      // Special case for sink components - they might not have explicitly defined outputs
-      // but we still want to allow connecting them to other sinks
-      const isSourceSink = sourceComponent.category === 'sink';
-      const isTargetSink = targetComponent.category === 'sink';
-      
-      if (isSourceSink && isTargetSink) {
-        return true; // Allow sink-to-sink connections even without explicit outputs/inputs
-      }
-      
-      return false;
+    // Rule 1: Camera MUST connect to detector ONLY
+    if (sourceComponent.category === 'source') {
+      return targetComponent.category === 'detector';
     }
     
-    // Check if any output of source matches any input of target
-    const hasMatchingIO = sourceComponent.outputs.some((output: string) => 
-      targetComponent.inputs?.includes(output)
-    );
+    // Rule 2: Object detector can connect to tracker, classifier or sink
+    if (sourceComponent.category === 'detector') {
+      return ['tracker', 'classifier', 'sink'].includes(targetComponent.category);
+    }
     
-    // Special cases for geometry components
-    const isSourceGeometry = sourceComponent.category === 'geometry';
-    const isTargetGeometry = targetComponent.category === 'geometry';
+    // Rule 3: Object tracker can ONLY be connected from a detector (enforced above)
+    // and can connect to geometry and sinks
+    if (sourceComponent.category === 'tracker') {
+      return ['geometry', 'sink'].includes(targetComponent.category);
+    }
     
-    // Special cases for sink components
-    const isSourceSink = sourceComponent.category === 'sink';
-    const isTargetSink = targetComponent.category === 'sink';
+    // Geometry can connect to sinks
+    if (sourceComponent.category === 'geometry') {
+      return targetComponent.category === 'sink';
+    }
     
-    // Allow connections to geometry components from most types
-    const allowGeometryConnection = 
-      (isTargetGeometry && sourceComponent.outputs.includes('image')) || 
-      (isTargetGeometry && (
-        sourceComponent.outputs.includes('detections') || 
-        sourceComponent.outputs.includes('tracked_objects') || 
-        sourceComponent.outputs.includes('classified_objects') || 
-        sourceComponent.outputs.includes('faces') || 
-        sourceComponent.outputs.includes('tracked_faces') || 
-        sourceComponent.outputs.includes('recognized_faces')
-      )) ||
-      (isSourceGeometry && targetComponent.inputs.includes('polygons'));
-      
-    // Allow sink -> sink connections
-    // This will allow connecting annotated video to other sinks like event logger or alarms
-    const allowSinkConnection = isSourceSink && isTargetSink;
+    // Classifiers can connect to sinks
+    if (sourceComponent.category === 'classifier') {
+      return targetComponent.category === 'sink';
+    }
     
-    return hasMatchingIO || allowGeometryConnection || allowSinkConnection;
+    // By default, connections are not allowed
+    return false;
   };
 
   // Get possible targets for a connection from a node
   const getPossibleConnectionTargets = (nodeId: string): string[] => {
     const sourceNode = pipeline.nodes.find(n => n.id === nodeId);
     if (!sourceNode) return [];
+    
+    // Rule 5: Each node can only make one connection
+    // If the node already has a connection, no further connections are allowed
+    if (sourceNode.connections && sourceNode.connections.length > 0) {
+      return [];
+    }
     
     const sourceComponent = componentsList.find(c => c.id === sourceNode.componentId);
     if (!sourceComponent) return [];
@@ -1841,6 +1840,19 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     e.stopPropagation();
     
     if (!builderRef.current) return;
+    
+    // Get the node
+    const node = pipeline.nodes.find(n => n.id === nodeId);
+    
+    // Rule 5: Check if node already has a connection
+    if (node && node.connections.length > 0) {
+      // Show a flash message that the node already has a connection
+      setFlashMessage({
+        message: 'This node already has a connection. Remove existing connection first.',
+        type: 'error'
+      });
+      return;
+    }
     
     const rect = builderRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
