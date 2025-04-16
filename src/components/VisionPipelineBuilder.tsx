@@ -37,7 +37,7 @@ const normalizeComponent = (component: any): VisionComponent => {
       show_tracks: true,
       show_title: true,
       show_timestamp: true,
-      show_performance_metrics: false,
+      show_performance_metrics: false,  // This is the correct format
       label_font_scale: 0.5,
       text_color: [255, 255, 255],
       title_position: [10, 30],
