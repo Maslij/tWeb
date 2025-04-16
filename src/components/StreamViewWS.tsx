@@ -770,12 +770,13 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
                   left: 0,
                   width: '100%',
                   height: '100%',
-                  backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                  color: 'white',
+                  backgroundColor: 'var(--background-secondary)',
+                  color: 'var(--text-primary)',
                   display: 'flex',
                   justifyContent: 'center',
                   alignItems: 'center',
-                  zIndex: 10
+                  zIndex: 10,
+                  opacity: 0.9
                 }}
               >
                 Connecting...
