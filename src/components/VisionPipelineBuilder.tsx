@@ -1868,12 +1868,16 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     const node = pipeline.nodes.find(n => n.id === nodeId);
     if (!node) return;
     
-    // Rule 5: Check if node already has a connection
+    // If node already has a connection, remove it
     if (node.connections.length > 0) {
-      setFlashMessage({
-        message: 'This node already has a connection. Remove existing connection first.',
-        type: 'error'
-      });
+      setPipeline(prev => ({
+        ...prev,
+        nodes: prev.nodes.map(n => 
+          n.id === nodeId 
+            ? { ...n, connections: [] } 
+            : n
+        )
+      }));
       return;
     }
     
