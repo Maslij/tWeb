@@ -1229,7 +1229,7 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
   availableComponents, 
   initialPipeline, 
   renderCameraFeedPreview 
-}) => {
+}): React.ReactElement => {
   const [pipeline, setPipeline] = useState<Pipeline>(() => {
     // If initialPipeline is provided, use it
     if (initialPipeline) {
@@ -1420,19 +1420,27 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
 
   // Check if adding a component is allowed
   const canAddComponent = (component: VisionComponent): boolean => {
-    // If the component requires a parent, check if a compatible parent exists
-    if (component.requiresParent && component.requiresParent.length > 0) {
-      return pipeline.nodes.some(node => {
-        const nodeComponent = componentsList.find(c => c.id === node.componentId);
-        return nodeComponent && component.requiresParent?.includes(nodeComponent.id);
-      });
-    }
-    
     // For source components, only allow one
     if (component.category === 'source') {
       return !pipeline.nodes.some(node => {
         const nodeComponent = componentsList.find(c => c.id === node.componentId);
         return nodeComponent?.category === 'source';
+      });
+    }
+
+    // For tracker components, only allow one
+    if (component.category === 'tracker') {
+      return !pipeline.nodes.some(node => {
+        const nodeComponent = componentsList.find(c => c.id === node.componentId);
+        return nodeComponent?.category === 'tracker';
+      });
+    }
+
+    // If the component requires a parent, check if a compatible parent exists
+    if (component.requiresParent && component.requiresParent.length > 0) {
+      return pipeline.nodes.some(node => {
+        const nodeComponent = componentsList.find(c => c.id === node.componentId);
+        return nodeComponent && component.requiresParent?.includes(nodeComponent.id);
       });
     }
 
@@ -2331,6 +2339,8 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
                     <div className="component-disabled-reason">
                       {component.category === 'source' ? 
                         'Only one source allowed' : 
+                        component.category === 'tracker' ?
+                        'Only one tracker allowed' :
                         pipeline.nodes.some(node => node.componentId === component.id) ?
                         'Component already in use' :
                         'Requires compatible parent component'}
