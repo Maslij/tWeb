@@ -2433,62 +2433,62 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
             </div>
           )}
           
-          <div className="nodes-container">
-            {/* Draw connections between nodes */}
-            <svg className="connections-layer">
-              {pipeline.nodes.map(node => 
-                node.connections.map(targetId => {
-                  const targetNode = pipeline.nodes.find(n => n.id === targetId);
-                  if (!targetNode) return null;
-                  
-                  // Get the DOM elements for source and target nodes
-                  const sourceElement = document.getElementById(node.id);
-                  const targetElement = document.getElementById(targetId);
-                  if (!sourceElement || !targetElement) return null;
+          {/* Draw connections between nodes */}
+          <svg className="connections-layer" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 1 }}>
+            {pipeline.nodes.map(node => 
+              node.connections.map(targetId => {
+                const targetNode = pipeline.nodes.find(n => n.id === targetId);
+                if (!targetNode) return null;
+                
+                // Get the DOM elements for source and target nodes
+                const sourceElement = document.getElementById(node.id);
+                const targetElement = document.getElementById(targetId);
+                if (!sourceElement || !targetElement) return null;
 
-                  // Get connection point positions
-                  const sourcePos = getConnectionPointPosition(sourceElement, false); // output point
-                  const targetPos = getConnectionPointPosition(targetElement, true);  // input point
-                  if (!sourcePos || !targetPos) return null;
+                // Get connection point positions
+                const sourcePos = getConnectionPointPosition(sourceElement, false); // output point
+                const targetPos = getConnectionPointPosition(targetElement, true);  // input point
+                if (!sourcePos || !targetPos) return null;
 
-                  // Calculate absolute positions
-                  const sourceX = node.position.x + sourcePos.x;
-                  const sourceY = node.position.y + sourcePos.y;
-                  const targetX = targetNode.position.x + targetPos.x;
-                  const targetY = targetNode.position.y + targetPos.y;
-                  
-                  // Control points for curved line
-                  const cp1x = sourceX + Math.min(100, (targetX - sourceX) / 2);
-                  const cp1y = sourceY;
-                  const cp2x = targetX - Math.min(100, (targetX - sourceX) / 2);
-                  const cp2y = targetY;
-                  
-                  return (
-                    <path 
-                      key={`${node.id}-${targetId}`}
-                      d={`M ${sourceX} ${sourceY} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${targetX} ${targetY}`}
-                      fill="none"
-                      stroke="#666"
-                      strokeWidth="2"
-                      strokeDasharray="5,5"
-                      data-connection={`${node.id}-${targetId}`}
-                    />
-                  );
-                })
-              )}
-              
-              {/* Drawing connection line */}
-              {isDrawingConnection && connectionStart && connectionEnd && (
-                <path 
-                  d={`M ${connectionStart.x} ${connectionStart.y} L ${connectionEnd.x} ${connectionEnd.y}`}
-                  fill="none"
-                  stroke="#666"
-                  strokeWidth="2"
-                  strokeDasharray="5,5"
-                />
-              )}
-            </svg>
+                // Calculate absolute positions
+                const sourceX = node.position.x + sourcePos.x;
+                const sourceY = node.position.y + sourcePos.y;
+                const targetX = targetNode.position.x + targetPos.x;
+                const targetY = targetNode.position.y + targetPos.y;
+                
+                // Control points for curved line
+                const cp1x = sourceX + Math.min(100, (targetX - sourceX) / 2);
+                const cp1y = sourceY;
+                const cp2x = targetX - Math.min(100, (targetX - sourceX) / 2);
+                const cp2y = targetY;
+                
+                return (
+                  <path 
+                    key={`${node.id}-${targetId}`}
+                    d={`M ${sourceX} ${sourceY} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${targetX} ${targetY}`}
+                    fill="none"
+                    stroke="#666"
+                    strokeWidth="2"
+                    strokeDasharray="5,5"
+                    data-connection={`${node.id}-${targetId}`}
+                  />
+                );
+              })
+            )}
             
+            {/* Drawing connection line */}
+            {isDrawingConnection && connectionStart && connectionEnd && (
+              <path 
+                d={`M ${connectionStart.x} ${connectionStart.y} L ${connectionEnd.x} ${connectionEnd.y}`}
+                fill="none"
+                stroke="#666"
+                strokeWidth="2"
+                strokeDasharray="5,5"
+              />
+            )}
+          </svg>
+          
+          <div className="nodes-container" style={{ position: 'relative', zIndex: 2 }}>
             {/* Render nodes */}
             {pipeline.nodes.map(node => {
               const component = componentsList.find(c => c.id === node.componentId);
