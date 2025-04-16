@@ -554,74 +554,150 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
     // State to track available classes and allowed classes
     const [availableClasses, setAvailableClasses] = useState<string[]>([]);
     const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
+    const [isConnectedToDetector, setIsConnectedToDetector] = useState<boolean>(false);
     
     // Function to load detector classes
     const loadClassData = useCallback(() => {
       console.log("🔍 Loading class data for event_alarm:", nodeId);
       
-      // Try to get classes from global pipeline data
+      // Check if this alarm node is connected to any detectors (directly or indirectly)
       const pipelineData = (window as any).__PIPELINE_DATA__;
       let detectorClasses: string[] = [];
+      let detectorFound = false;
       
       if (pipelineData && pipelineData.nodes) {
-        // Find all detector nodes
-        const detectorNodes = pipelineData.nodes.filter((n: any) => 
-          n.componentId && (n.componentId.includes('detector') || n.componentId === 'object_detector')
-        );
+        const alarmNode = pipelineData.nodes.find((n: any) => n.id === nodeId);
+        if (!alarmNode) {
+          console.log("Alarm node not found in pipeline data");
+          setIsConnectedToDetector(false);
+          return;
+        }
         
-        // Collect classes from all detectors
-        detectorNodes.forEach((detector: any) => {
-          if (detector.config && detector.config.classes && 
-              Array.isArray(detector.config.classes) && detector.config.classes.length > 0) {
-            detectorClasses = [...detectorClasses, ...detector.config.classes];
-          }
-        });
-      }
-      
-      // If we didn't find classes through pipeline data, try DOM scanning
-      if (detectorClasses.length === 0) {
-        // Scan node configs for detector classes
-        document.querySelectorAll('[id^="node-config-"]').forEach((el: any) => {
-          if (!el || !el.getAttribute) return;
+        // Find all nodes that connect to this alarm node
+        const findConnectedDetectors = (targetId: string, visited = new Set<string>()): boolean => {
+          if (visited.has(targetId)) return false;
+          visited.add(targetId);
           
-          try {
-            const configData = el.getAttribute('data-config');
-            if (configData) {
-              const config = JSON.parse(configData);
-              const nodeIdParts = el.id.split('node-config-');
-              const configNodeId = nodeIdParts.length > 1 ? nodeIdParts[1] : '';
+          // Check each node in the pipeline
+          for (const node of pipelineData.nodes) {
+            // If this node connects to our target
+            if (node.connections && node.connections.includes(targetId)) {
+              // Check if it's a detector
+              const isDetector = node.componentId && 
+                (node.componentId.includes('detector') || node.componentId === 'object_detector');
               
-              if (configNodeId) {
-                const nodeElement = document.querySelector(`[data-node-id="${configNodeId}"]`);
-                const componentId = nodeElement?.getAttribute('data-component-id');
-                
-                if (componentId && (componentId.includes('detector') || componentId === 'object_detector') &&
-                    config.classes && Array.isArray(config.classes) && config.classes.length > 0) {
-                  detectorClasses = [...detectorClasses, ...config.classes];
+              if (isDetector) {
+                // Found a detector directly connected to our alarm
+                if (node.config && node.config.classes && Array.isArray(node.config.classes)) {
+                  detectorClasses = [...detectorClasses, ...node.config.classes];
                 }
+                detectorFound = true;
+                return true;
+              }
+              
+              // If not a detector, check if it's connected to a detector (recursive)
+              if (findConnectedDetectors(node.id, visited)) {
+                detectorFound = true;
+                return true;
               }
             }
-          } catch (error) {
-            console.error("Error parsing node config:", error);
           }
-        });
+          
+          return false;
+        };
+        
+        // Start the search from the alarm node
+        findConnectedDetectors(nodeId);
+        
+        // If we didn't find detector connections, check through DOM scanning
+        if (!detectorFound) {
+          // Scan node configs for detector classes
+          document.querySelectorAll('[id^="node-config-"]').forEach((el: any) => {
+            if (!el || !el.getAttribute) return;
+            
+            try {
+              const configData = el.getAttribute('data-config');
+              if (configData) {
+                const config = JSON.parse(configData);
+                const nodeIdParts = el.id.split('node-config-');
+                const configNodeId = nodeIdParts.length > 1 ? nodeIdParts[1] : '';
+                
+                if (configNodeId) {
+                  const nodeElement = document.querySelector(`[data-node-id="${configNodeId}"]`);
+                  const componentId = nodeElement?.getAttribute('data-component-id');
+                  
+                  if (componentId && (componentId.includes('detector') || componentId === 'object_detector') &&
+                      config.classes && Array.isArray(config.classes) && config.classes.length > 0) {
+                    
+                    // Now check if this detector is connected to our alarm
+                    const detector = pipelineData.nodes.find((n: any) => n.id === configNodeId);
+                    if (detector && detector.connections) {
+                      let isConnectedToAlarm = false;
+                      
+                      // Direct connection check
+                      if (detector.connections.includes(nodeId)) {
+                        isConnectedToAlarm = true;
+                      }
+                      
+                      // Indirect connection check through a simple traversal
+                      const checkConnection = (sourceId: string, targetId: string, visited = new Set<string>()): boolean => {
+                        if (visited.has(sourceId)) return false;
+                        visited.add(sourceId);
+                        
+                        const node = pipelineData.nodes.find((n: any) => n.id === sourceId);
+                        if (!node || !node.connections) return false;
+                        
+                        if (node.connections.includes(targetId)) return true;
+                        
+                        for (const connId of node.connections) {
+                          if (checkConnection(connId, targetId, visited)) return true;
+                        }
+                        
+                        return false;
+                      };
+                      
+                      if (!isConnectedToAlarm) {
+                        for (const connId of detector.connections) {
+                          if (checkConnection(connId, nodeId)) {
+                            isConnectedToAlarm = true;
+                            break;
+                          }
+                        }
+                      }
+                      
+                      if (isConnectedToAlarm) {
+                        detectorClasses = [...detectorClasses, ...config.classes];
+                        detectorFound = true;
+                      }
+                    }
+                  }
+                }
+              }
+            } catch (error) {
+              console.error("Error parsing node config:", error);
+            }
+          });
+        }
       }
+      
+      // Update state based on detector connections status
+      setIsConnectedToDetector(detectorFound);
       
       // Remove duplicates
       detectorClasses = Array.from(new Set(detectorClasses));
       
-      // If no detector classes found, don't leave it empty - set a default of "person"
-      if (detectorClasses.length === 0) {
+      // If detector is connected but no classes were found, provide "person" as default
+      if (detectorFound && detectorClasses.length === 0) {
         detectorClasses = ["person"];
-        console.log("No detector classes found, using default 'person' class");
+        console.log("Detector connected but no classes found, using default 'person' class");
       }
       
-      // Always ensure we have at least "person" class available
-      if (!detectorClasses.includes("person")) {
+      // Always ensure we have at least "person" class available if connected
+      if (detectorFound && !detectorClasses.includes("person")) {
         detectorClasses.push("person");
       }
       
-      setAvailableClasses(detectorClasses);
+      setAvailableClasses(detectorFound ? detectorClasses : []);
     }, [nodeId]);
     
     // Effect to set up listeners and load initial data
@@ -647,6 +723,7 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
         if (event.detail && event.detail.classes && 
             Array.isArray(event.detail.classes) && event.detail.classes.length > 0) {
           setAvailableClasses(Array.from(new Set(event.detail.classes)));
+          setIsConnectedToDetector(true);
         }
       };
       
@@ -683,8 +760,8 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
         initialSelectedClasses = propValue;
       }
       
-      // If no classes are selected, default to all available classes
-      if (initialSelectedClasses.length === 0 && availableClasses.length > 0) {
+      // If no classes are selected but we have available classes, default to all available classes
+      if (initialSelectedClasses.length === 0 && availableClasses.length > 0 && isConnectedToDetector) {
         initialSelectedClasses = [...availableClasses];
         // And update the configuration
         onConfigUpdate(nodeId, propKey, availableClasses);
@@ -697,7 +774,25 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
       
       // Update selected classes state
       setSelectedClasses(validClasses);
-    }, [JSON.stringify(availableClasses), propValue, nodeId, propKey, onConfigUpdate]);
+    }, [JSON.stringify(availableClasses), propValue, nodeId, propKey, onConfigUpdate, isConnectedToDetector]);
+    
+    // No detector connected yet - show message
+    if (!isConnectedToDetector) {
+      return (
+        <div className="config-item">
+          <label>Allowed Classes:</label>
+          <div className="classes-empty message-connect-detector">
+            <p>This alarm component needs to be connected to an object detector.</p>
+            <ol>
+              <li>Add an object detector to the pipeline</li>
+              <li>Connect the detector to this alarm (directly or through other components)</li>
+              <li>Select classes in the detector's properties</li>
+            </ol>
+            <div className="connect-tip">Object classes will appear here after connection.</div>
+          </div>
+        </div>
+      );
+    }
     
     // No detector with classes connected
     if (availableClasses.length === 0) {
@@ -1407,50 +1502,14 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
       };
     }
     
-    // If it's an event_alarm component, check for available detector classes
+    // If it's an event_alarm component, initialize with just "person" as default
     if (activeComponent.id === 'event_alarm') {
-      const detectorNodes = pipeline.nodes.filter(node => {
-        const component = componentsList.find(c => c.id === node.componentId);
-        return component?.category === 'detector' && 
-               node.config?.classes && 
-               Array.isArray(node.config.classes) &&
-               node.config.classes.length > 0;
-      });
-      
-      if (detectorNodes.length > 0) {
-        // Collect only the SELECTED classes from detectors (not all available classes)
-        let selectedClasses: string[] = [];
-        detectorNodes.forEach(detector => {
-          if (detector.config?.classes) {
-            // Add only the classes that were explicitly selected in the detector
-            selectedClasses = [...selectedClasses, ...detector.config.classes];
-          }
-        });
-        
-        // Remove duplicates
-        const uniqueSelectedClasses = Array.from(new Set(selectedClasses));
-        
-        // Initialize with only the selected classes from detectors
-        if (!newNode.config) {
-          newNode.config = {};
-        }
-        
-        if (uniqueSelectedClasses.length > 0) {
-          newNode.config.allowed_classes = uniqueSelectedClasses;
-          console.log(`Initialized event_alarm with classes selected in detectors:`, uniqueSelectedClasses);
-        } else {
-          // Default to "person" if no classes were selected in detectors
-          newNode.config.allowed_classes = ["person"];
-          console.log(`No classes selected in detectors, defaulting to ["person"]`);
-        }
-      } else {
-        // No detectors with classes found, default to "person"
-        if (!newNode.config) {
-          newNode.config = {};
-        }
-        newNode.config.allowed_classes = ["person"];
-        console.log(`No detectors found, defaulting to ["person"]`);
+      if (!newNode.config) {
+        newNode.config = {};
       }
+      // Always initialize with "person" by default - we'll update when connected
+      newNode.config.allowed_classes = ["person"];
+      console.log(`Initialized event_alarm with default ["person"] class. Will update when connected to detector.`);
     }
     
     setPipeline(prev => ({
@@ -1648,22 +1707,27 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
             )
           }));
           
-          // Trigger an immediate update for any component that needs to read classes from detectors
-          if ((sourceComponent.category === 'detector' && targetComponent.id === 'event_alarm') ||
-              (targetComponent.category === 'detector' && sourceComponent.id === 'event_alarm')) {
-            // Force an immediate class update by triggering our custom event
+          // Check if we're connecting a detector to an event_alarm
+          const isDetectorToAlarm = 
+            (sourceComponent.category === 'detector' && targetComponent.id === 'event_alarm');
+          
+          // Check if we're connecting something that might be connected to a detector to an alarm
+          const isPotentialDetectorPath = 
+            (targetComponent.id === 'event_alarm' && sourceNode && 
+             (sourceComponent.category === 'tracker' || 
+              sourceComponent.category === 'classifier' || 
+              sourceComponent.category === 'geometry' || 
+              sourceComponent.category === 'sink'));
+
+          // If connecting directly or indirectly to an alarm, update the alarm's allowed_classes
+          if (isDetectorToAlarm || isPotentialDetectorPath) {
+            // Use setTimeout to ensure the pipeline state is updated first
             setTimeout(() => {
-              const event = new CustomEvent('pipeline-data-updated', { 
-                detail: { sourceId: sourceNode?.id, targetId: targetNode.id }
-              });
-              document.dispatchEvent(event);
-              
-              // If connecting a detector to an alarm, update the alarm's allowed_classes
-              if (sourceComponent.category === 'detector' && targetComponent.id === 'event_alarm') {
-                // Get the detector's selected classes
-                const detectorClasses = sourceNode?.config?.classes || [];
-                if (detectorClasses.length > 0) {
-                  console.log(`Updating event_alarm ${targetNode.id} allowed_classes to match detector's selected classes:`, detectorClasses);
+              // For direct detector-to-alarm connections
+              if (isDetectorToAlarm && sourceNode?.config?.classes) {
+                const detectorClasses = sourceNode.config.classes;
+                if (Array.isArray(detectorClasses) && detectorClasses.length > 0) {
+                  console.log(`Updating event_alarm ${targetNode.id} allowed_classes with detector's classes:`, detectorClasses);
                   
                   // Update the alarm node with the detector's selected classes
                   setPipeline(prev => {
@@ -1679,7 +1743,88 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
                   });
                 }
               }
-            }, 50);
+              
+              // For indirect connections (through trackers, geometry, etc.)
+              if (isPotentialDetectorPath) {
+                // Find all detector nodes that connect to this source node
+                const findAllDetectors = (nodeId: string, visited = new Set<string>()): string[] => {
+                  if (visited.has(nodeId)) return [];
+                  visited.add(nodeId);
+                  
+                  const node = pipeline.nodes.find(n => n.id === nodeId);
+                  if (!node) return [];
+                  
+                  const nodeComponent = componentsList.find(c => c.id === node.componentId);
+                  if (nodeComponent?.category === 'detector') {
+                    return [nodeId];
+                  }
+                  
+                  // Find all nodes that connect to this node
+                  return pipeline.nodes
+                    .filter(n => n.connections.includes(nodeId))
+                    .flatMap(n => findAllDetectors(n.id, visited));
+                };
+                
+                const detectorNodeIds = findAllDetectors(sourceNode.id);
+                const detectorNodes = pipeline.nodes.filter(n => detectorNodeIds.includes(n.id));
+                
+                // Collect classes from all connected detectors
+                let allClasses: string[] = [];
+                detectorNodes.forEach(detector => {
+                  if (detector.config?.classes && Array.isArray(detector.config.classes)) {
+                    allClasses = [...allClasses, ...detector.config.classes];
+                  }
+                });
+                
+                // Remove duplicates
+                const uniqueClasses = Array.from(new Set(allClasses));
+                
+                if (uniqueClasses.length > 0) {
+                  console.log(`Updating event_alarm ${targetNode.id} with classes from path-connected detectors:`, uniqueClasses);
+                  
+                  // Update the alarm node with the collected classes
+                  setPipeline(prev => {
+                    const newPipeline = JSON.parse(JSON.stringify(prev));
+                    const alarmNode = newPipeline.nodes.find((n: any) => n.id === targetNode.id);
+                    if (alarmNode) {
+                      if (!alarmNode.config) {
+                        alarmNode.config = {};
+                      }
+                      alarmNode.config.allowed_classes = [...uniqueClasses];
+                    }
+                    return newPipeline;
+                  });
+                }
+              }
+              
+              // Trigger custom events to update UI
+              const event = new CustomEvent('pipeline-data-updated', { 
+                detail: { sourceId: sourceNode?.id, targetId: targetNode.id }
+              });
+              console.log(`🔄 Dispatching pipeline-data-updated event for connection ${sourceNode?.id} → ${targetNode.id}`);
+              document.dispatchEvent(event);
+              
+              // Also fire a specific event for detector classes if we're dealing with a detector connection
+              if (isDetectorToAlarm || isPotentialDetectorPath) {
+                let classesToPropagate: string[] = ["person"];
+                
+                if (isDetectorToAlarm && sourceNode?.config?.classes && Array.isArray(sourceNode.config.classes)) {
+                  // For direct detector connections, use its classes
+                  classesToPropagate = [...sourceNode.config.classes];
+                } 
+                // We don't need to handle indirect connections here since the class update already happened
+                
+                const detectorClassesEvent = new CustomEvent('detector-classes-updated', {
+                  detail: { 
+                    nodeId: targetNode.id,
+                    classes: classesToPropagate
+                  }
+                });
+                
+                console.log(`🎯 Dispatching detector-classes-updated event for alarm ${targetNode.id}:`, classesToPropagate);
+                document.dispatchEvent(detectorClassesEvent);
+              }
+            }, 100);
           }
         }
       }
