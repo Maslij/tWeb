@@ -7,13 +7,30 @@ const API_URL = '';
 // Stream type definitions
 export interface Stream {
   id: string;
-  name: string;
+  name?: string;
   source: string;
-  type: 'camera' | 'file' | 'rtsp';
+  type?: string;
   status: 'created' | 'running' | 'stopped' | 'error';
   width?: number;
   height?: number;
   fps?: number;
+  pipeline?: {
+    id: string;
+    name: string;
+    nodes: Array<{
+      id: string;
+      componentId: string;
+      name?: string;
+      position: { x: number; y: number };
+      connections: string[];
+      config?: Record<string, any>;
+      sourceDetails?: {
+        name: string;
+        source: string;
+        type: string;
+      };
+    }>;
+  };
 }
 
 export interface CreateStreamPayload {
