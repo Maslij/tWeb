@@ -421,6 +421,8 @@
   align-items: center;
   justify-content: center;
   font-size: 1rem;
+  padding: 0;
+  line-height: 1;
 }
 
 .node-controls button:hover {
@@ -429,6 +431,11 @@
 
 .start-connection-btn {
   color: #4CAF50;
+}
+
+.start-connection-btn.is-connected {
+  color: #e53935;
+  font-size: 1.1rem;
 }
 
 .delete-node-btn {

@@ -2518,11 +2518,11 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
                     <div className="node-name">{component.name}</div>
                     <div className="node-controls">
                       <button 
-                        className="start-connection-btn"
+                        className={`start-connection-btn ${node.connections.length > 0 ? 'is-connected' : ''}`}
                         onClick={(e) => handleStartConnection(node.id, e)}
-                        title="Connect to another node"
+                        title={node.connections.length > 0 ? "Disconnect node" : "Connect to another node"}
                       >
-                        →
+                        {node.connections.length > 0 ? '⊖' : '→'}
                       </button>
                       <button 
                         className="delete-node-btn"
