@@ -1213,6 +1213,21 @@ const useDebounce = (callback: Function, delay: number) => {
   return { debouncedCallback, isDebouncing };
 };
 
+// Add this helper function before the VisionPipelineBuilder component
+const getConnectionPointPosition = (nodeElement: HTMLElement, isInput: boolean): { x: number, y: number } | null => {
+  const connectionPoint = nodeElement.querySelector(isInput ? '.input-point' : '.output-point');
+  if (!connectionPoint) return null;
+
+  const rect = connectionPoint.getBoundingClientRect();
+  const nodeRect = nodeElement.getBoundingClientRect();
+  
+  // Get the center of the connection point relative to the node
+  return {
+    x: isInput ? 0 : nodeRect.width,  // Input point is at left edge (0), output is at right edge
+    y: (rect.top - nodeRect.top) + (rect.height / 2)  // Get exact vertical center of the connection point relative to node
+  };
+};
+
 const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({ 
   streamId, 
   streamName, 
@@ -1851,10 +1866,10 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     
     // Get the node
     const node = pipeline.nodes.find(n => n.id === nodeId);
+    if (!node) return;
     
     // Rule 5: Check if node already has a connection
-    if (node && node.connections.length > 0) {
-      // Show a flash message that the node already has a connection
+    if (node.connections.length > 0) {
       setFlashMessage({
         message: 'This node already has a connection. Remove existing connection first.',
         type: 'error'
@@ -1862,13 +1877,19 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
       return;
     }
     
+    const sourceElement = document.getElementById(nodeId);
+    if (!sourceElement) return;
+
+    const sourcePos = getConnectionPointPosition(sourceElement, false); // get output point position
+    if (!sourcePos) return;
+
     const rect = builderRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const absoluteX = node.position.x + sourcePos.x;
+    const absoluteY = node.position.y + sourcePos.y;
     
     setIsDrawingConnection(true);
-    setConnectionStart({ nodeId, x, y });
-    setConnectionEnd({ x, y });
+    setConnectionStart({ nodeId, x: absoluteX, y: absoluteY });
+    setConnectionEnd({ x: absoluteX, y: absoluteY });
     
     // Highlight possible targets
     const possibleTargets = getPossibleConnectionTargets(nodeId);
@@ -2420,10 +2441,21 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
                   const targetNode = pipeline.nodes.find(n => n.id === targetId);
                   if (!targetNode) return null;
                   
-                  const sourceX = node.position.x + 180; // Right side of source node
-                  const sourceY = node.position.y + 40; // Middle of source node
-                  const targetX = targetNode.position.x; // Left side of target node
-                  const targetY = targetNode.position.y + 40; // Middle of target node
+                  // Get the DOM elements for source and target nodes
+                  const sourceElement = document.getElementById(node.id);
+                  const targetElement = document.getElementById(targetId);
+                  if (!sourceElement || !targetElement) return null;
+
+                  // Get connection point positions
+                  const sourcePos = getConnectionPointPosition(sourceElement, false); // output point
+                  const targetPos = getConnectionPointPosition(targetElement, true);  // input point
+                  if (!sourcePos || !targetPos) return null;
+
+                  // Calculate absolute positions
+                  const sourceX = node.position.x + sourcePos.x;
+                  const sourceY = node.position.y + sourcePos.y;
+                  const targetX = targetNode.position.x + targetPos.x;
+                  const targetY = targetNode.position.y + targetPos.y;
                   
                   // Control points for curved line
                   const cp1x = sourceX + Math.min(100, (targetX - sourceX) / 2);
