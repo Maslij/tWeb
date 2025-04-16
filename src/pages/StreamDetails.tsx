@@ -452,21 +452,6 @@ const StreamDetails = () => {
                 />
                 Use WebSocket (Experimental)
               </label>
-              
-              {useWebSocket && (
-                <div style={{ display: 'flex', alignItems: 'center', marginLeft: '20px' }}>
-                  <label htmlFor="fps-slider" style={{ marginRight: '10px' }}>FPS: {fps}</label>
-                  <input 
-                    id="fps-slider"
-                    type="range" 
-                    min="1" 
-                    max="30" 
-                    value={fps} 
-                    onChange={(e) => setFps(parseInt(e.target.value))}
-                    style={{ width: '150px' }}
-                  />
-                </div>
-              )}
             </div>
           </div>
           
