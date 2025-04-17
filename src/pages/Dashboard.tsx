@@ -10,15 +10,11 @@ const Dashboard = () => {
   const [currentView, setCurrentView] = useState<'grid' | 'list'>('grid');
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
-  const fetchStreams = useCallback(async (showRefreshing = true) => {
+  const fetchStreams = useCallback(async () => {
     let timeoutId = 0;
     
     try {
-      if (showRefreshing) {
-        setIsRefreshing(true);
-      } else {
-        setLoading(true);
-      }
+      setLoading(true);
       setError(null);
 
       // Create a timeout promise to detect API outages
@@ -59,16 +55,7 @@ const Dashboard = () => {
   }, []);
 
   useEffect(() => {
-    fetchStreams(false);
-    
-    // Refresh streams periodically
-    const refreshInterval = window.setInterval(() => {
-      fetchStreams(true);
-    }, 30000); // Refresh every 30 seconds
-    
-    return () => {
-      window.clearInterval(refreshInterval);
-    };
+    fetchStreams();
   }, [fetchStreams]);
 
   const handleCreateDemoStream = async () => {
@@ -81,7 +68,7 @@ const Dashboard = () => {
         autoStart: true
       };
       await apiService.createStream(payload);
-      fetchStreams(true);
+      fetchStreams();
     } catch (err) {
       console.error('Error creating demo stream:', err);
       setError('Failed to create demo stream');
@@ -316,7 +303,6 @@ const Dashboard = () => {
           
           .error-state {
             background: var(--background-secondary, #f9f9f9);
-            border: 1px solid rgba(255, 59, 48, 0.2);
             color: var(--text-primary);
             padding: 2rem;
             border-radius: 16px;
@@ -405,7 +391,7 @@ const Dashboard = () => {
             </button>
           </div>
           <div className="action-buttons">
-            <button onClick={() => fetchStreams(true)} className="btn btn-secondary" aria-label="Refresh">
+            <button onClick={() => fetchStreams()} className="btn btn-secondary" aria-label="Refresh">
               <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M1 4V10H7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 <path d="M23 20V14H17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -455,7 +441,7 @@ const Dashboard = () => {
           </svg>
           <h2>Connection Error</h2>
           <p>{error}</p>
-          <button onClick={() => fetchStreams(false)} className="btn btn-primary">
+          <button onClick={() => fetchStreams()} className="btn btn-primary">
             Try Again
           </button>
         </div>
