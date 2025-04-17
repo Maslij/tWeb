@@ -1614,6 +1614,11 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
       return targetComponent.category === 'sink';
     }
     
+    // Allow sinks to connect to other sinks
+    if (sourceComponent.category === 'sink') {
+      return targetComponent.category === 'sink';
+    }
+    
     // By default, connections are not allowed
     return false;
   };
