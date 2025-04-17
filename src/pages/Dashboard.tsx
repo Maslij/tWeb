@@ -109,7 +109,7 @@ const Dashboard = () => {
             top: 0;
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
-            background-color: var(--nav-bg, rgba(255, 255, 255, 0.85));
+            background-color: transparent;
             z-index: 100;
             padding: 11px;
           }

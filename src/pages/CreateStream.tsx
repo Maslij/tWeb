@@ -145,11 +145,15 @@ const CreateStream = () => {
             z-index: 100;
             padding: 1rem 0;
           }
+
+          :root[data-theme="dark"] .header {
+            background-color: transparent;
+          }
           
           .title {
             font-size: 2rem;
             font-weight: 600;
-            color: var(--text-primary, #1d1d1f);
+            color: var(--text-primary);
             margin: 0;
             letter-spacing: -0.5px;
           }
@@ -178,41 +182,41 @@ const CreateStream = () => {
           }
           
           .btn-primary {
-            background: var(--accent-color, #0071e3);
+            background: var(--accent-color);
             color: white;
           }
           
           .btn-primary:hover:not(:disabled) {
-            background: var(--accent-hover, #0077ed);
+            background: var(--accent-hover);
             transform: scale(1.02);
           }
           
           .btn-primary:disabled {
-            background: var(--accent-disabled, #76b6ee);
+            background: var(--accent-disabled);
             cursor: not-allowed;
             opacity: 0.7;
           }
           
           .btn-secondary {
-            background: var(--hover-bg, rgba(0, 0, 0, 0.05));
-            color: var(--text-primary, #1d1d1f);
+            background: var(--hover-bg);
+            color: var(--text-primary);
           }
           
           .btn-secondary:hover {
-            background: var(--button-hover, rgba(0, 0, 0, 0.1));
+            background: var(--button-hover);
           }
 
           .card {
-            background: white;
+            background: var(--background-primary);
             border-radius: 20px;
             padding: 2rem;
-            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+            box-shadow: 0 4px 24px var(--shadow-color);
             margin-bottom: 2rem;
             transition: box-shadow 0.3s ease;
           }
 
           .card h3 {
-            color: var(--text-primary, #1d1d1f);
+            color: var(--text-primary);
             font-size: 1.5rem;
             font-weight: 600;
             margin: 0 0 1rem 0;
@@ -220,7 +224,7 @@ const CreateStream = () => {
           }
 
           .card p {
-            color: var(--text-secondary, #86868b);
+            color: var(--text-secondary);
             margin: 0 0 1.5rem 0;
             line-height: 1.5;
           }
@@ -233,7 +237,7 @@ const CreateStream = () => {
           }
 
           .template-card {
-            background: var(--background-secondary, #f5f5f7);
+            background: var(--background-secondary);
             border-radius: 16px;
             padding: 1.5rem;
             cursor: pointer;
@@ -245,12 +249,12 @@ const CreateStream = () => {
           }
 
           .template-card:hover {
-            background: var(--background-hover, #e5e5ea);
+            background: var(--background-hover);
           }
           
           .template-card.active {
-            border-color: var(--accent-color, #0071e3);
-            background: rgba(0, 113, 227, 0.05);
+            border-color: var(--accent-color);
+            background: var(--accent-bg);
           }
           
           .template-card.active::after {
@@ -261,7 +265,7 @@ const CreateStream = () => {
             width: 16px;
             height: 16px;
             border-radius: 50%;
-            background: var(--accent-color, #0071e3);
+            background: var(--accent-color);
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E");
             background-size: 10px;
             background-position: center;
@@ -271,19 +275,19 @@ const CreateStream = () => {
           .template-icon {
             width: 40px;
             height: 40px;
-            color: var(--accent-color, #0071e3);
+            color: var(--accent-color);
             margin-bottom: 1rem;
           }
 
           .template-card h4 {
-            color: var(--text-primary, #1d1d1f);
+            color: var(--text-primary);
             font-size: 1.1rem;
             font-weight: 600;
             margin: 0 0 0.5rem 0;
           }
 
           .template-card p {
-            color: var(--text-secondary, #86868b);
+            color: var(--text-secondary);
             font-size: 0.9rem;
             margin: 0;
           }
@@ -295,10 +299,10 @@ const CreateStream = () => {
           .form-heading {
             font-size: 1.2rem;
             font-weight: 600;
-            color: var(--text-primary, #1d1d1f);
+            color: var(--text-primary);
             margin: 0 0 1.5rem 0;
             padding-bottom: 0.5rem;
-            border-bottom: 1px solid var(--border-color, rgba(0, 0, 0, 0.1));
+            border-bottom: 1px solid var(--border-color);
           }
 
           .form-group {
@@ -308,33 +312,35 @@ const CreateStream = () => {
           .form-group label {
             display: block;
             font-weight: 500;
-            color: var(--text-primary, #1d1d1f);
+            color: var(--text-primary);
             margin-bottom: 0.5rem;
           }
 
           .form-control {
             width: 100%;
             padding: 0.75rem 1rem;
-            border: 1px solid var(--border-color, #d2d2d7);
+            border: 1px solid var(--border-color);
             border-radius: 12px;
             font-size: 1rem;
             transition: all 0.2s ease;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: var(--input-bg);
+            color: var(--text-primary);
           }
 
           .form-control:focus {
             outline: none;
-            border-color: var(--accent-color, #0071e3);
-            box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.1);
+            border-color: var(--accent-color);
+            box-shadow: 0 0 0 4px var(--accent-shadow);
           }
           
           .form-control::placeholder {
-            color: var(--text-tertiary, #aaa);
+            color: var(--text-tertiary);
           }
 
           .error-message {
-            background: rgba(255, 59, 48, 0.08);
-            color: #ff3b30;
+            background: var(--error-bg);
+            color: var(--error-color);
             padding: 1rem 1.5rem;
             border-radius: 12px;
             margin-bottom: 1.5rem;
@@ -375,8 +381,8 @@ const CreateStream = () => {
             width: 22px;
             height: 22px;
             border-radius: 6px;
-            border: 1px solid var(--border-color, #d2d2d7);
-            background: white;
+            border: 1px solid var(--border-color);
+            background: var(--input-bg);
             transition: all 0.2s ease;
             display: flex;
             align-items: center;
@@ -384,8 +390,8 @@ const CreateStream = () => {
           }
           
           .checkbox-wrapper input[type="checkbox"]:checked + .custom-checkbox {
-            background: var(--accent-color, #0071e3);
-            border-color: var(--accent-color, #0071e3);
+            background: var(--accent-color);
+            border-color: var(--accent-color);
           }
           
           .checkbox-wrapper input[type="checkbox"]:checked + .custom-checkbox svg {
@@ -393,7 +399,7 @@ const CreateStream = () => {
           }
           
           .checkbox-wrapper input[type="checkbox"]:focus + .custom-checkbox {
-            box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.1);
+            box-shadow: 0 0 0 4px var(--accent-shadow);
           }
           
           .custom-checkbox svg {
@@ -405,7 +411,7 @@ const CreateStream = () => {
           }
 
           .help-text {
-            color: var(--text-secondary, #86868b);
+            color: var(--text-secondary);
             font-size: 0.85rem;
             margin-top: 0.5rem;
             line-height: 1.4;
@@ -442,16 +448,58 @@ const CreateStream = () => {
           .source-example {
             font-size: 0.8rem;
             padding: 0.3rem 0.75rem;
-            background: var(--background-secondary, #f5f5f7);
+            background: var(--background-secondary);
             border-radius: 980px;
-            color: var(--text-secondary, #86868b);
+            color: var(--text-secondary);
             cursor: pointer;
             transition: all 0.2s ease;
           }
           
           .source-example:hover {
-            background: var(--accent-color, #0071e3);
+            background: var(--accent-color);
             color: white;
+          }
+
+          :root {
+            --text-primary: #1d1d1f;
+            --text-secondary: #86868b;
+            --text-tertiary: #aaa;
+            --background-primary: #ffffff;
+            --background-secondary: #f5f5f7;
+            --background-hover: #e5e5ea;
+            --border-color: #d2d2d7;
+            --accent-color: #0071e3;
+            --accent-hover: #0077ed;
+            --accent-disabled: #76b6ee;
+            --accent-shadow: rgba(0, 113, 227, 0.1);
+            --accent-bg: rgba(0, 113, 227, 0.05);
+            --button-hover: rgba(0, 0, 0, 0.1);
+            --hover-bg: rgba(0, 0, 0, 0.05);
+            --shadow-color: rgba(0, 0, 0, 0.04);
+            --error-bg: rgba(255, 59, 48, 0.08);
+            --error-color: #ff3b30;
+            --input-bg: #ffffff;
+          }
+
+          :root[data-theme="dark"] {
+            --text-primary: #ffffff;
+            --text-secondary: #98989d;
+            --text-tertiary: #666;
+            --background-primary: #1c1c1e;
+            --background-secondary: #2c2c2e;
+            --background-hover: #3a3a3c;
+            --border-color: #38383a;
+            --accent-color: #0a84ff;
+            --accent-hover: #0591ff;
+            --accent-disabled: #0a84ff80;
+            --accent-shadow: rgba(10, 132, 255, 0.15);
+            --accent-bg: rgba(10, 132, 255, 0.1);
+            --button-hover: rgba(255, 255, 255, 0.1);
+            --hover-bg: rgba(255, 255, 255, 0.05);
+            --shadow-color: rgba(0, 0, 0, 0.2);
+            --error-bg: rgba(255, 69, 58, 0.15);
+            --error-color: #ff453a;
+            --input-bg: #1c1c1e;
           }
         `}
       </style>
