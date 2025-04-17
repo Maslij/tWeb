@@ -1700,17 +1700,20 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     
     // Handle connecting nodes
     if (isDrawingConnection && connectionStart) {
-      // Find node at mouse position
+      // Find node at mouse position by checking if click is within any node's bounds
       const targetNode = pipeline.nodes.find(node => {
-        const nodeRect = {
-          left: node.position.x,
-          right: node.position.x + 180,
-          top: node.position.y,
-          bottom: node.position.y + 80
-        };
+        const nodeElement = document.getElementById(node.id);
+        if (!nodeElement) return false;
         
-        return x >= nodeRect.left && x <= nodeRect.right && 
-               y >= nodeRect.top && y <= nodeRect.bottom;
+        const domRect = nodeElement.getBoundingClientRect();
+        const builderRect = builderRef.current!.getBoundingClientRect();
+        
+        // Adjust coordinates relative to the builder canvas
+        const nodeX = domRect.left - builderRect.left;
+        const nodeY = domRect.top - builderRect.top;
+        
+        return x >= nodeX && x <= nodeX + domRect.width && 
+               y >= nodeY && y <= nodeY + domRect.height;
       });
       
       if (targetNode && targetNode.id !== connectionStart.nodeId) {
