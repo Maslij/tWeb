@@ -1700,17 +1700,23 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     
     // Handle connecting nodes
     if (isDrawingConnection && connectionStart) {
-      // Find node at mouse position
+      // Find node at mouse position by checking all node elements
       const targetNode = pipeline.nodes.find(node => {
-        const nodeRect = {
-          left: node.position.x,
-          right: node.position.x + 180,
-          top: node.position.y,
-          bottom: node.position.y + 80
-        };
+        const nodeElement = document.getElementById(node.id);
+        if (!nodeElement) return false;
         
-        return x >= nodeRect.left && x <= nodeRect.right && 
-               y >= nodeRect.top && y <= nodeRect.bottom;
+        const nodeRect = nodeElement.getBoundingClientRect();
+        const builderRect = builderRef.current!.getBoundingClientRect();
+        
+        // Calculate relative position within the builder canvas
+        const relativeX = e.clientX - builderRect.left + builderRef.current!.scrollLeft;
+        const relativeY = e.clientY - builderRect.top + builderRef.current!.scrollTop;
+        
+        // Check if click is within node bounds
+        return relativeX >= node.position.x && 
+               relativeX <= node.position.x + nodeRect.width && 
+               relativeY >= node.position.y && 
+               relativeY <= node.position.y + nodeRect.height;
       });
       
       if (targetNode && targetNode.id !== connectionStart.nodeId) {
@@ -2498,7 +2504,6 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
           </svg>
           
           <div className="nodes-container" style={{ position: 'relative', zIndex: 2 }}>
-            {/* Render nodes */}
             {pipeline.nodes.map(node => {
               const component = componentsList.find(c => c.id === node.componentId);
               if (!component) return null;
@@ -2512,12 +2517,25 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
                   style={{ 
                     left: `${node.position.x}px`, 
                     top: `${node.position.y}px`,
+                    cursor: isDrawingConnection && isPossibleTarget ? 'pointer' : 'default'
                   }}
                   id={node.id}
                   data-node-id={node.id}
                   data-component-id={component.id}
-                  onClick={(e) => handleNodeSelect(node.id, e)}
-                  onMouseDown={(e) => handleNodeDragStart(node.id, e)}
+                  onClick={(e) => {
+                    if (isDrawingConnection) {
+                      // Let the handleMouseUp handle the connection logic
+                      return;
+                    }
+                    handleNodeSelect(node.id, e);
+                  }}
+                  onMouseDown={(e) => {
+                    if (isDrawingConnection) {
+                      // Prevent dragging while drawing connections
+                      return;
+                    }
+                    handleNodeDragStart(node.id, e);
+                  }}
                 >
                   <div className="node-header">
                     <div className="node-name">{component.name}</div>
