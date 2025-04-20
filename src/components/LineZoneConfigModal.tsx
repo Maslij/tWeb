@@ -45,6 +45,7 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingLineName, setEditingLineName] = useState('');
+  const [editingLineId, setEditingLineId] = useState<string | null>(null);
   
   // Reference to the canvas element
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -79,7 +80,7 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
     if (!imageRef.current || !imageLoaded) return;
     
     const img = imageRef.current;
-    const container = img.parentElement;
+     const container = img.parentElement;
     if (!container) return;
 
     // Calculate the displayed image dimensions while maintaining aspect ratio
@@ -324,22 +325,22 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
 
   // Start editing a line name
   const startEditing = (lineId: string) => {
-    selectLine(lineId);
-    setIsEditing(true);
+    const line = lines.find(l => l.id === lineId);
+    if (line) {
+      setEditingLineName(line.name || '');
+      setEditingLineId(lineId);
+    }
   };
 
   // Save the edited line name
-  const saveLineName = () => {
-    if (!selectedLineId) return;
-    
+  const saveLineName = (lineId: string) => {
     setLines(lines.map(line => {
-      if (line.id === selectedLineId) {
+      if (line.id === lineId) {
         return { ...line, name: editingLineName };
       }
       return line;
     }));
-    
-    setIsEditing(false);
+    setEditingLineId(null);
   };
 
   // Handle canvas mouse up to end dragging
@@ -437,15 +438,15 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
                     onClick={() => selectLine(line.id)}
                   >
                     <div className="line-info">
-                      {isEditing && selectedLineId === line.id ? (
+                      {editingLineId === line.id ? (
                         <div className="line-name-edit">
                           <input
                             type="text"
                             value={editingLineName}
                             onChange={(e) => setEditingLineName(e.target.value)}
                             autoFocus
+                            onClick={(e) => e.stopPropagation()}
                           />
-                          <button onClick={saveLineName}>Save</button>
                         </div>
                       ) : (
                         <span className="line-name">{line.name || `Line ${line.id}`}</span>
@@ -459,14 +460,18 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
                     </div>
                     <div className="line-actions">
                       <button 
-                        className="edit-button" 
+                        className={editingLineId === line.id ? "save-button" : "edit-button"}
                         onClick={(e) => {
                           e.stopPropagation();
-                          startEditing(line.id);
+                          if (editingLineId === line.id) {
+                            saveLineName(line.id);
+                          } else {
+                            startEditing(line.id);
+                          }
                         }}
-                        title="Edit line name"
+                        title={editingLineId === line.id ? "Save line name" : "Edit line name"}
                       >
-                        Edit
+                        {editingLineId === line.id ? "Save" : "Edit"}
                       </button>
                       <button 
                         className="delete-button" 
