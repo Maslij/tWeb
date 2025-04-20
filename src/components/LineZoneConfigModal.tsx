@@ -175,8 +175,6 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
     
     const newLine: Line = {
       id: `line_${Date.now()}`,
-      name: `Line ${lines.length + 1}`,
-      // Set pixel coordinates directly
       start_x: Math.floor(0.2 * width),
       start_y: randomY,
       end_x: Math.floor(0.8 * width),

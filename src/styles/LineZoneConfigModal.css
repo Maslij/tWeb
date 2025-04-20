@@ -105,12 +105,12 @@
 }
 
 .line-item:hover {
-  background-color: var(--background-hover, #e0e0e0);
+  background-color: color-mix(in srgb, var(--text-primary) 5%, transparent);
 }
 
 .line-item.selected {
-  background-color: var(--accent-color-light, #c8e6c9);
-  border-left: 3px solid var(--accent-color, #4caf50);
+  background-color: color-mix(in srgb, var(--accent-color) 15%, transparent);
+  border-left: 3px solid var(--accent-color);
 }
 
 .line-info {
