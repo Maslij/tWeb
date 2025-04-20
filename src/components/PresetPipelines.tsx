@@ -24,6 +24,7 @@ export const presetPipelines: PipelinePreset[] = [
     nodes: [
       {
         componentId: 'camera_feed',
+        id: 'camera_feed',
         connections: ['object_detector_1'],
         config: {},
       },
@@ -35,6 +36,10 @@ export const presetPipelines: PipelinePreset[] = [
           model: 'yolov4',
           confidence: 0.6,
           classes: ['person', 'car', 'dog', 'cat'],
+          model_classes: {
+            "yolov4": ["person", "bicycle", "car", "motorcycle", "bus", "truck", "dog", "cat", "bird", "horse", "sheep", "cow"],
+            "yolov8": ["person", "bicycle", "car", "motorcycle", "bus", "truck", "dog", "cat", "bird", "horse", "sheep", "cow"]
+          }
         },
       },
       {
@@ -61,6 +66,7 @@ export const presetPipelines: PipelinePreset[] = [
     nodes: [
       {
         componentId: 'camera_feed',
+        id: 'camera_feed',
         connections: ['object_detector_1'],
         config: {},
       },
@@ -72,6 +78,10 @@ export const presetPipelines: PipelinePreset[] = [
           model: 'yolov4',
           confidence: 0.6,
           classes: ['person'],
+          model_classes: {
+            "yolov4": ["person", "bicycle", "car", "motorcycle", "bus", "truck", "dog", "cat", "bird", "horse", "sheep", "cow"],
+            "yolov8": ["person", "bicycle", "car", "motorcycle", "bus", "truck", "dog", "cat", "bird", "horse", "sheep", "cow"]
+          }
         },
       },
       {
@@ -87,7 +97,7 @@ export const presetPipelines: PipelinePreset[] = [
         config: {
           lines: [
             {
-              id: `line_${Date.now()}`,
+              id: 'line_1',
               start_x: 50,
               start_y: 300,
               end_x: 1000,
@@ -123,6 +133,7 @@ export const presetPipelines: PipelinePreset[] = [
     nodes: [
       {
         componentId: 'camera_feed',
+        id: 'camera_feed',
         connections: ['object_detector_1'],
         config: {},
       },
@@ -134,6 +145,10 @@ export const presetPipelines: PipelinePreset[] = [
           model: 'yolov4',
           confidence: 0.6,
           classes: ['person'],
+          model_classes: {
+            "yolov4": ["person", "bicycle", "car", "motorcycle", "bus", "truck", "dog", "cat", "bird", "horse", "sheep", "cow"],
+            "yolov8": ["person", "bicycle", "car", "motorcycle", "bus", "truck", "dog", "cat", "bird", "horse", "sheep", "cow"]
+          }
         },
       },
       {
@@ -178,6 +193,7 @@ export const presetPipelines: PipelinePreset[] = [
     nodes: [
       {
         componentId: 'camera_feed',
+        id: 'camera_feed',
         connections: ['object_detector_1'],
         config: {},
       },
@@ -189,6 +205,10 @@ export const presetPipelines: PipelinePreset[] = [
           model: 'yolov4',
           confidence: 0.6,
           classes: ['car', 'truck', 'bus', 'motorcycle'],
+          model_classes: {
+            "yolov4": ["person", "bicycle", "car", "motorcycle", "bus", "train", "truck", "boat", "traffic light", "fire hydrant"],
+            "yolov8": ["person", "bicycle", "car", "motorcycle", "bus", "train", "truck", "boat", "traffic light", "fire hydrant"]
+          }
         },
       },
       {
@@ -204,7 +224,7 @@ export const presetPipelines: PipelinePreset[] = [
         config: {
           lines: [
             {
-              id: `line_${Date.now()}`,
+              id: 'line_1',
               start_x: 50,
               start_y: 400,
               end_x: 1000,

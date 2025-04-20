@@ -4,6 +4,14 @@ import LineZoneConfigModal from './LineZoneConfigModal';
 import PresetPipelines, { PipelinePreset } from './PresetPipelines';
 import ConfigurableProperties from './ConfigurableProperties';
 
+// Add a declaration for the global window property
+declare global {
+  interface Window {
+    __COMPONENT_DEFS__?: any[];
+    __PIPELINE_DATA__?: any;
+  }
+}
+
 // Define types for our vision components
 interface VisionComponent {
   id: string;
@@ -15,6 +23,7 @@ interface VisionComponent {
   outputs?: string[];
   requiresParent?: string[];
   config?: Record<string, any>;
+  model_classes?: Record<string, string[]>;
 }
 
 // Add a utility function to normalize component formats from the API
@@ -29,7 +38,8 @@ const normalizeComponent = (component: any): VisionComponent => {
     inputs: component.inputs || [],
     outputs: component.outputs || [],
     requiresParent: component.requiresParent || [],
-    config: component.config || {}
+    config: component.config || {},
+    model_classes: component.model_classes || {}
   };
   
   // Special handling for annotated stream components to ensure they have all the config options
@@ -502,60 +512,74 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
     // Effect to load available models when component mounts or changes
     useEffect(() => {
       const loadModelData = () => {
-        // Check if this component has available_models property
-        const nodeConfig = document.getElementById(`node-config-${nodeId}`);
+        console.log("Loading model data for component:", nodeId, componentType);
         let modelList: any[] = [];
         
-        if (nodeConfig) {
-          const configData = (nodeConfig as any).dataset?.config;
-          if (configData) {
-            try {
-              const config = JSON.parse(configData);
-              console.log("Config for model dropdown:", config);
-              
-              // Handle available_models
-              if (config.available_models) {
-                if (typeof config.available_models === 'string') {
-                  try {
-                    modelList = JSON.parse(config.available_models);
-                  } catch (e) {
-                    console.error("Failed to parse available_models string:", e);
-                  }
-                } else if (Array.isArray(config.available_models)) {
-                  modelList = config.available_models;
-                }
-              }
-              
-              // If no models found directly, try extracting them from model_classes
-              if (modelList.length === 0 && config.model_classes) {
-                let modelClasses = config.model_classes;
-                if (typeof modelClasses === 'string') {
-                  try {
-                    modelClasses = JSON.parse(modelClasses);
-                  } catch (e) {
-                    console.error("Failed to parse model_classes:", e);
-                  }
-                }
+        // First check for model_classes in the global component definitions
+        const componentDef = window.__COMPONENT_DEFS__?.find(c => c.id === componentType);
+        
+        if (componentDef && componentDef.model_classes) {
+          console.log("Found model_classes in component definition:", componentDef.model_classes);
+          const modelClasses = componentDef.model_classes;
+          
+          if (typeof modelClasses === 'object' && !Array.isArray(modelClasses)) {
+            modelList = Object.keys(modelClasses).map(id => ({ 
+              id, 
+              name: id.toUpperCase() // Uppercase for better display
+            }));
+            console.log("Extracted models from component definition:", modelList);
+          }
+        }
+        
+        // If no models found, check component config
+        if (modelList.length === 0) {
+          const nodeConfig = document.getElementById(`node-config-${nodeId}`);
+          if (nodeConfig) {
+            const configData = (nodeConfig as any).dataset?.config;
+            if (configData) {
+              try {
+                const config = JSON.parse(configData);
                 
-                if (typeof modelClasses === 'object' && !Array.isArray(modelClasses)) {
-                  // Extract model IDs from the model_classes object
-                  modelList = Object.keys(modelClasses).map(id => ({ 
-                    id, 
-                    name: id.toUpperCase() // Uppercase for better display
-                  }));
+                // Check model_classes in config
+                if (config.model_classes) {
+                  console.log("Found model_classes in component config:", config.model_classes);
+                  let modelClasses = config.model_classes;
+                  
+                  if (typeof modelClasses === 'string') {
+                    try {
+                      modelClasses = JSON.parse(modelClasses);
+                    } catch (e) {
+                      console.error("Failed to parse model_classes string:", e);
+                    }
+                  }
+                  
+                  if (typeof modelClasses === 'object' && !Array.isArray(modelClasses)) {
+                    modelList = Object.keys(modelClasses).map(id => ({ 
+                      id, 
+                      name: id.toUpperCase() // Uppercase for better display
+                    }));
+                    console.log("Extracted models from config:", modelList);
+                  }
                 }
+              } catch (e) {
+                console.error("Failed to parse config data:", e);
               }
-              
-              console.log("Available models found:", modelList);
-            } catch (e) {
-              console.error("Failed to parse config data:", e);
             }
           }
         }
         
-        // If we don't have available_models, create a default option
+        // Last resort - provide default models if nothing found
         if (modelList.length === 0) {
-          modelList = [{ id: propValue, name: propValue }];
+          console.log("No models found in component or config, using defaults");
+          modelList = [
+            { id: 'yolov4', name: 'YOLOV4' },
+            { id: 'yolov8', name: 'YOLOV8' }
+          ];
+          
+          // If the current model value is different, add it too
+          if (propValue && !modelList.some(m => m.id === propValue)) {
+            modelList.push({ id: propValue, name: propValue.toUpperCase() });
+          }
         }
         
         // Update state with the found models
@@ -621,7 +645,9 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
     // Effect to load available classes for the current model
     useEffect(() => {
       const loadClassData = () => {
-        // Check if this component has model_classes property
+        console.log("Loading class data for component:", nodeId, componentType);
+        
+        // Check if this component has model_classes property (first in config then globally)
         const nodeConfig = document.getElementById(`node-config-${nodeId}`);
         let modelClassesMap: Record<string, string[]> = {};
         let model = "";
@@ -650,25 +676,54 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
                 }
               }
               
-              console.log("Current model:", model);
-              console.log("Model classes map:", modelClassesMap);
+              console.log("From node config - Current model:", model);
+              console.log("From node config - Model classes map:", modelClassesMap);
             } catch (e) {
               console.error("Failed to parse config data:", e);
             }
           }
         }
         
+        // If no model_classes found in node config, try getting from window.__COMPONENT_DEFS__
+        if (Object.keys(modelClassesMap).length === 0) {
+          const componentDef = window.__COMPONENT_DEFS__?.find(c => c.id === componentType);
+          if (componentDef && componentDef.model_classes) {
+            console.log("Using model_classes from global component definitions:", componentDef.model_classes);
+            modelClassesMap = componentDef.model_classes;
+          }
+          
+          // If still no model_classes, use default
+          if (Object.keys(modelClassesMap).length === 0) {
+            console.log("Using default model_classes");
+            modelClassesMap = {
+              "yolov4": ["person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light", 
+                      "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow"],
+              "yolov8": ["person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light", 
+                      "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow"]
+            };
+          }
+        }
+        
         // Get classes for the current model
         let classes: string[] = [];
+        
+        // If we have a model and that model exists in the map, use its classes
         if (model && modelClassesMap[model]) {
           classes = modelClassesMap[model];
+        } 
+        // Otherwise if we have any model with classes, use the first one
+        else if (Object.keys(modelClassesMap).length > 0) {
+          const firstModel = Object.keys(modelClassesMap)[0];
+          console.log(`No model selected, using classes from first available model: ${firstModel}`);
+          model = firstModel;
+          classes = modelClassesMap[firstModel];
         }
         
         console.log("Available classes for model:", classes);
         
         // Update state with found data
         setCurrentModel(model);
-        setAvailableClasses(classes);
+        setAvailableClasses(classes || []);
       };
       
       // Load class data initially
@@ -1481,6 +1536,24 @@ const getConnectionPointPosition = (nodeElement: HTMLElement, isInput: boolean):
   };
 };
 
+// Add a debug function to log connections
+const logPipelineConnections = (pipeline: Pipeline, label: string) => {
+  console.group(`Pipeline Connections Debug (${label})`);
+  console.log("Pipeline:", JSON.stringify(pipeline, null, 2));
+  console.log("Connections:");
+  pipeline.nodes.forEach(node => {
+    console.log(`Node ${node.id} (${node.componentId}) connects to:`, node.connections);
+    // Check if these connection targets actually exist
+    const missingTargets = node.connections.filter(
+      targetId => !pipeline.nodes.some(n => n.id === targetId)
+    );
+    if (missingTargets.length > 0) {
+      console.error(`WARNING: Node ${node.id} has connections to non-existent nodes:`, missingTargets);
+    }
+  });
+  console.groupEnd();
+};
+
 const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({ 
   streamId, 
   streamName, 
@@ -1577,6 +1650,26 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
         config: {}
       });
     }
+    
+    // Ensure detector components have model_classes
+    components.forEach(component => {
+      if (component.category === 'detector' && (!component.model_classes || Object.keys(component.model_classes || {}).length === 0)) {
+        console.log(`Adding default model_classes to ${component.id}`);
+        component.model_classes = {
+          "yolov4": ["person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light", 
+                   "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow"],
+          "yolov8": ["person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light", 
+                   "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow"]
+        };
+      }
+      
+      if (component.model_classes) {
+        console.log(`Component ${component.id} has model_classes:`, component.model_classes);
+      }
+    });
+    
+    // Make component definitions available globally for other components to access
+    (window as any).__COMPONENT_DEFS__ = components;
     
     return components;
   }, [availableComponents, streamSource]);
@@ -2674,19 +2767,25 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
 
   // Add method to apply a preset pipeline
   const applyPresetPipeline = (preset: PipelinePreset) => {
+    console.log("Applying preset pipeline:", preset);
+    
     // Generate unique IDs for each node
     const timestamp = Date.now();
     const nodeMap: Record<string, string> = {};
     
     // First pass: Create all nodes with unique IDs
     const newNodes = preset.nodes.map((presetNode, index) => {
-      // For camera_feed (source) components, use the existing one or create a new one
+      // Generate a unique ID for this node that maintains its original ID pattern
+      // This is critical for maintaining connection references
+      const uniqueId = `${presetNode.componentId}_${timestamp}_${index}`;
+      
+      // For camera_feed (source) components, handle specially
       if (presetNode.componentId === 'camera_feed') {
         const sourceNode: PipelineNode = {
-          id: `camera_feed_${timestamp}`,
+          id: uniqueId,
           componentId: 'camera_feed',
           position: { x: 50, y: 50 + (index * 150) }, 
-          connections: [],
+          connections: [], // Start with empty connections, we'll fill them in the second pass
           config: presetNode.config || {},
           sourceDetails: {
             name: streamName,
@@ -2695,24 +2794,25 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
           }
         };
         
-        // Store the mapping from preset ID to actual node ID
-        nodeMap[presetNode.id || 'camera_feed'] = sourceNode.id;
+        // Store mapping from preset ID to actual node ID
+        nodeMap[presetNode.id] = uniqueId;
+        console.log(`Mapping preset node ${presetNode.id} to ${uniqueId}`);
         
         return sourceNode;
       }
       
       // For other components, create with the preset config
-      const nodeId = presetNode.id || `${presetNode.componentId}_${timestamp}_${index}`;
       const newNode: PipelineNode = {
-        id: nodeId,
+        id: uniqueId,
         componentId: presetNode.componentId,
         position: { x: 350, y: 50 + (index * 150) },
-        connections: [],
+        connections: [], // Start with empty connections, we'll fill them in the second pass
         config: presetNode.config || {}
       };
       
-      // Store the mapping from preset ID to actual node ID
-      nodeMap[presetNode.id || nodeId] = newNode.id;
+      // Store mapping from preset ID to actual node ID
+      nodeMap[presetNode.id] = uniqueId;
+      console.log(`Mapping preset node ${presetNode.id} to ${uniqueId}`);
       
       return newNode;
     });
@@ -2720,13 +2820,20 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     // Second pass: Add connections using the ID mapping
     preset.nodes.forEach((presetNode, index) => {
       if (presetNode.connections && presetNode.connections.length > 0) {
-        const sourceNodeId = nodeMap[presetNode.id || `${presetNode.componentId}_${timestamp}_${index}`];
-        const sourceNode = newNodes.find(node => node.id === sourceNodeId);
+        // Find the corresponding node in our new nodes array
+        const presetNodeId = presetNode.id || `${presetNode.componentId}_${index}`;
+        const uniqueNodeId = nodeMap[presetNodeId];
+        const sourceNode = newNodes.find(node => node.id === uniqueNodeId);
         
         if (sourceNode) {
+          // Map the preset connection IDs to our unique IDs
           sourceNode.connections = presetNode.connections.map((targetId: string) => {
-            return nodeMap[targetId] || targetId;
+            const mappedId = nodeMap[targetId];
+            console.log(`Mapping connection from ${sourceNode.id} to target ${targetId} -> ${mappedId}`);
+            return mappedId || targetId;
           });
+          
+          console.log(`Set connections for node ${sourceNode.id}:`, sourceNode.connections);
         }
       }
     });
@@ -2738,9 +2845,52 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
       nodes: newNodes
     };
     
+    console.log("Created new pipeline from preset:", newPipeline);
+    
+    // Log pipeline connections before setting state
+    logPipelineConnections(newPipeline, "Before setState");
+    
     // Apply the pipeline
     setPipeline(newPipeline);
     setShowPresetSelector(false);
+    
+    // On next render cycle, check if connections are still intact
+    setTimeout(() => {
+      logPipelineConnections(newPipeline, "After setState (before save)");
+    }, 100);
+    
+    // Save the pipeline after a delay to ensure the UI is updated
+    setTimeout(() => {
+      console.log("Saving new preset pipeline");
+      // Create a deep copy to avoid any reference issues
+      const pipelineToSave = JSON.parse(JSON.stringify(newPipeline));
+      pipelineToSave.streamId = streamId;
+      pipelineToSave.active = true;
+      
+      // Log pipeline connections before saving
+      logPipelineConnections(pipelineToSave, "Before saving");
+      
+      try {
+        onSave(pipelineToSave);
+        setFlashMessage({
+          message: 'Pipeline created from preset successfully!',
+          type: 'success'
+        });
+        
+        // Check pipeline connections after save attempt
+        setTimeout(() => {
+          const currentPipeline = JSON.parse(JSON.stringify(pipeline));
+          logPipelineConnections(currentPipeline, "After save");
+        }, 500);
+        
+      } catch (error) {
+        console.error("Error saving preset pipeline:", error);
+        setFlashMessage({
+          message: 'Error creating pipeline from preset.',
+          type: 'error'
+        });
+      }
+    }, 500);
   };
 
   return (
