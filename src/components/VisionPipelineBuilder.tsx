@@ -38,10 +38,27 @@ const normalizeComponent = (component: any): VisionComponent => {
       show_title: true,
       show_timestamp: true,
       show_performance_metrics: false,  // This is the correct format
+      show_line_zones: true,           // Enable line zones display
       label_font_scale: 0.5,
       text_color: [255, 255, 255],
       title_position: [10, 30],
       timestamp_position: [10, 60],
+      // Default line zone config
+      line_zone_thickness: 2,
+      line_zone_color: [255, 255, 255],
+      line_zone_text_color: [0, 0, 0],
+      line_zone_text_thickness: 2,
+      line_zone_text_scale: 0.5,
+      line_zone_text_offset: 1.5,
+      line_zone_text_padding: 10,
+      line_zone_display_in_count: true,
+      line_zone_display_out_count: true,
+      line_zone_display_text_box: true,
+      line_zone_text_orient_to_line: false,
+      line_zone_text_centered: true,
+      // When normalizing a component, also add default line zone config
+      // This will be updated when a pipeline is constructed
+      line_zones: [],
       ...normalizedComponent.config // Keep any existing config values
     };
   }
@@ -94,6 +111,95 @@ const normalizeComponent = (component: any): VisionComponent => {
       max_events_per_day: 1000,
       ...normalizedComponent.config // Keep any existing config values
     };
+  }
+  
+  // Special handling for line zone components
+  if (normalizedComponent.id === 'line_zone') {
+    // Generate a line that goes across the screen horizontally at a random y position
+    // Random Y between 200 and 500 for good visibility
+    const randomY = Math.floor(Math.random() * 300) + 200;
+    
+    // Create an initial line object
+    const initialLine = {
+      id: `line_${Date.now()}`,
+      start_x: 50,          // Start from left side
+      start_y: randomY,     // Random Y position
+      end_x: 1000,          // End at right side (should be wide enough for most videos)
+      end_y: randomY,       // Same Y position (horizontal line)
+      in_count: 0,
+      out_count: 0
+    };
+    
+    normalizedComponent.config = {
+      minimum_crossing_threshold: 1,  // Default value
+      // Default triggering anchors (all corners of the bounding box)
+      triggering_anchors: ["TOP_LEFT", "TOP_RIGHT", "BOTTOM_LEFT", "BOTTOM_RIGHT"],
+      // Store lines in an array instead of individual properties
+      lines: [initialLine],
+      ...normalizedComponent.config // Keep any existing config values
+    };
+    
+    // If we have legacy config with individual properties, convert them to a line
+    if (component.config && (component.config.start_x !== undefined || 
+                            component.config.start_y !== undefined ||
+                            component.config.end_x !== undefined || 
+                            component.config.end_y !== undefined)) {
+      const legacyLine = {
+        id: `line_${Date.now()}`,
+        start_x: component.config.start_x ?? 50,
+        start_y: component.config.start_y ?? randomY,
+        end_x: component.config.end_x ?? 1000,
+        end_y: component.config.end_y ?? randomY,
+        in_count: 0,
+        out_count: 0
+      };
+      
+      // Replace the initial line with the legacy config
+      normalizedComponent.config.lines = [legacyLine];
+    }
+  }
+  
+  // Special handling for line zone manager component
+  if (normalizedComponent.id === 'line_zone_manager') {
+    // Generate a line that goes across the screen horizontally at a random y position
+    // Random Y between 200 and 500 for good visibility
+    const randomY = Math.floor(Math.random() * 300) + 200;
+    
+    // Create an initial line object with additional line zone manager properties
+    const initialLine = {
+      id: `line_${Date.now()}`,
+      start_x: 50,          // Start from left side
+      start_y: randomY,     // Random Y position
+      end_x: 1000,          // End at right side (should be wide enough for most videos)
+      end_y: randomY,       // Same Y position (horizontal line)
+      minimum_crossing_threshold: 1, // Minimum number of frames a tracked object must cross the line
+      triggering_anchors: ["TOP_LEFT", "TOP_RIGHT", "BOTTOM_LEFT", "BOTTOM_RIGHT"], // Points to check for crossing
+      in_count: 0,
+      out_count: 0
+    };
+    
+    // Initialize the line_zone_manager configuration with the initial line
+    normalizedComponent.config = {
+      lines: [initialLine],
+      ...normalizedComponent.config // Keep any existing config values
+    };
+    
+    // If there are already lines in the configuration, ensure they have the required properties
+    if (normalizedComponent.config.lines && Array.isArray(normalizedComponent.config.lines)) {
+      normalizedComponent.config.lines = normalizedComponent.config.lines.map((line: any) => {
+        return {
+          id: line.id || `line_${Date.now()}`,
+          start_x: line.start_x || 50,
+          start_y: line.start_y || randomY,
+          end_x: line.end_x || 1000,
+          end_y: line.end_y || randomY,
+          minimum_crossing_threshold: line.minimum_crossing_threshold || 1,
+          triggering_anchors: line.triggering_anchors || ["TOP_LEFT", "TOP_RIGHT", "BOTTOM_LEFT", "BOTTOM_RIGHT"],
+          in_count: line.in_count || 0,
+          out_count: line.out_count || 0
+        };
+      });
+    }
   }
   
   return normalizedComponent;
@@ -234,6 +340,168 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
   const alarmProperties = ['min_confidence', 'trigger_delay', 'cool_down_period', 'notify_on_alarm', 'allowed_classes'];
   const loggerProperties = ['log_level', 'include_images', 'retention_days', 'max_events_per_day'];
   const modelProperties = ['model', 'classes', 'confidence'];
+  
+  // Special handling for line_zone coordinates
+  if ((componentType === 'line_zone' || componentType === 'line_zone_manager') && propKey === 'lines') {
+    // Use state to manage the array of lines
+    const [lines, setLines] = useState<any[]>(Array.isArray(propValue) ? propValue : []);
+    
+    // Add a new line function
+    const addLine = () => {
+      const randomY = Math.floor(Math.random() * 300) + 200;
+      const newLine = {
+        id: `line_${Date.now()}`,
+        start_x: 50,
+        start_y: randomY,
+        end_x: 1000,
+        end_y: randomY,
+        in_count: 0,
+        out_count: 0,
+        minimum_crossing_threshold: 1,
+        triggering_anchors: ["TOP_LEFT", "TOP_RIGHT", "BOTTOM_LEFT", "BOTTOM_RIGHT"]
+      };
+      
+      const updatedLines = [...lines, newLine];
+      setLines(updatedLines);
+      onConfigUpdate(nodeId, propKey, updatedLines);
+    };
+    
+    // Remove a line function
+    const removeLine = (lineId: string) => {
+      if (lines.length <= 1) {
+        // Don't allow removing the last line
+        return;
+      }
+      
+      const updatedLines = lines.filter(line => line.id !== lineId);
+      setLines(updatedLines);
+      onConfigUpdate(nodeId, propKey, updatedLines);
+    };
+    
+    // Update line properties
+    const updateLineProperty = (lineId: string, property: string, value: any) => {
+      const updatedLines = lines.map(line => {
+        if (line.id === lineId) {
+          return { ...line, [property]: value };
+        }
+        return line;
+      });
+      
+      setLines(updatedLines);
+      onConfigUpdate(nodeId, propKey, updatedLines);
+    };
+    
+    return (
+      <div className="config-item line-zones-editor">
+        <label>{formatPropName(propKey)}:</label>
+        <div className="line-zones-list">
+          {lines.map((line, index) => (
+            <div key={line.id} className="line-zone-item">
+              <div className="line-zone-header">
+                <h4>Line {index + 1}</h4>
+                {lines.length > 1 && (
+                  <button 
+                    className="remove-line-btn" 
+                    onClick={() => removeLine(line.id)}
+                    title="Remove line"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+              
+              <div className="line-coords">
+                <div className="coord-group">
+                  <label>Start X:</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="2000"
+                    value={line.start_x}
+                    onChange={(e) => updateLineProperty(line.id, 'start_x', parseFloat(e.target.value))}
+                    style={{ width: '80px' }}
+                  />
+                </div>
+                
+                <div className="coord-group">
+                  <label>Start Y:</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="2000"
+                    value={line.start_y}
+                    onChange={(e) => updateLineProperty(line.id, 'start_y', parseFloat(e.target.value))}
+                    style={{ width: '80px' }}
+                  />
+                </div>
+                
+                <div className="coord-group">
+                  <label>End X:</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="2000"
+                    value={line.end_x}
+                    onChange={(e) => updateLineProperty(line.id, 'end_x', parseFloat(e.target.value))}
+                    style={{ width: '80px' }}
+                  />
+                </div>
+                
+                <div className="coord-group">
+                  <label>End Y:</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="2000"
+                    value={line.end_y}
+                    onChange={(e) => updateLineProperty(line.id, 'end_y', parseFloat(e.target.value))}
+                    style={{ width: '80px' }}
+                  />
+                </div>
+                
+                {componentType === 'line_zone_manager' && (
+                  <div className="coord-group">
+                    <label>Min. Crossing:</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="10"
+                      value={line.minimum_crossing_threshold || 1}
+                      onChange={(e) => updateLineProperty(line.id, 'minimum_crossing_threshold', parseInt(e.target.value))}
+                      style={{ width: '80px' }}
+                      title="Minimum crossing threshold"
+                    />
+                  </div>
+                )}
+              </div>
+              
+              <div className="line-counts">
+                <small>In Count: {line.in_count || 0}</small>
+                <small>Out Count: {line.out_count || 0}</small>
+              </div>
+            </div>
+          ))}
+          
+          <button className="add-line-btn" onClick={addLine}>
+            + Add Line
+          </button>
+        </div>
+      </div>
+    );
+  }
+  
+  // Keep the legacy individual property handlers for backward compatibility
+  if ((componentType === 'line_zone' || componentType === 'line_zone_manager') && 
+      (propKey === 'start_x' || propKey === 'start_y' || propKey === 'end_x' || propKey === 'end_y')) {
+    return (
+      <div className="config-item legacy-warning">
+        <label>{formatPropName(propKey)}:</label>
+        <div className="warning-message">
+          This property is deprecated. Please use the 'Lines' property instead.
+        </div>
+      </div>
+    );
+  }
   
   // Special handling for model selection dropdown
   if (propKey === 'model' && componentType && (
@@ -2071,24 +2339,82 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     
     console.log("Saving pipeline with config:", apiPipeline);
     
-    // Special handling for event_alarm components: Removed logic that overwrites user-set allowed_classes
-    // The block that gathered all detector classes and applied them to all alarms has been deleted.
+    // Find all line zone components and annotated stream components
+    const lineZoneNodes = apiPipeline.nodes.filter((node: PipelineNode) => 
+      node.componentId === 'line_zone' || node.componentId === 'line_zone_manager'
+    );
+    const annotatedNodes = apiPipeline.nodes.filter((node: PipelineNode) => 
+      node.componentId === 'annotated_stream' || node.componentId === 'annotated_video_sink'
+    );
+    
+    // If we have both line zones and annotated stream components, update the configs
+    if (lineZoneNodes.length > 0 && annotatedNodes.length > 0) {
+      console.log("Found line zone and annotated stream components, updating config...");
       
+      // Create line zones configuration from line zone components
+      const lineZones = lineZoneNodes.flatMap((node: PipelineNode) => {
+        // Check if we have the new lines array format
+        if (node.config?.lines && Array.isArray(node.config.lines)) {
+          // Use the lines array, adding node ID as identifier
+          return node.config.lines.map((line: any) => ({
+            ...line,
+            id: line.id || `${node.id}_${Date.now()}`,
+            // For line_zone_manager, ensure we have these properties
+            minimum_crossing_threshold: line.minimum_crossing_threshold || 1,
+            triggering_anchors: line.triggering_anchors || ["TOP_LEFT", "TOP_RIGHT", "BOTTOM_LEFT", "BOTTOM_RIGHT"]
+          }));
+        } else {
+          // Fallback to legacy format
+          const startX = node.config?.start_x ?? 50;
+          const startY = node.config?.start_y ?? 200;
+          const endX = node.config?.end_x ?? 1000;
+          const endY = node.config?.end_y ?? 200;
+          
+          return [{
+            id: node.id,
+            start_x: startX,
+            start_y: startY,
+            end_x: endX,
+            end_y: endY,
+            in_count: 0,
+            out_count: 0,
+            // Add these fields for line_zone_manager compatibility
+            minimum_crossing_threshold: 1,
+            triggering_anchors: ["TOP_LEFT", "TOP_RIGHT", "BOTTOM_LEFT", "BOTTOM_RIGHT"]
+          }];
+        }
+      });
+      
+      // Update each annotated stream component
+      annotatedNodes.forEach((node: PipelineNode) => {
+        // Ensure we have a config object
+        if (!node.config) {
+          node.config = {};
+        }
+        
+        // Set line zones config
+        node.config.show_line_zones = true;
+        node.config.line_zones = lineZones;
+      });
+      
+      console.log("Updated pipeline config with line zones:", lineZones);
+    }
+    
     // Final validation pass - ensure ALL event_alarm components have valid allowed_classes
     // Keep this validation logic
-    apiPipeline.nodes.forEach((node: any) => {
+    apiPipeline.nodes.forEach((node: PipelineNode) => {
       if (node.componentId === 'event_alarm') {
         if (!node.config || !node.config.allowed_classes) {
           console.error(`Event alarm ${node.id} is missing allowed_classes`);
-        }
-        if (!Array.isArray(node.config.allowed_classes)) {
-          console.error(`Event alarm ${node.id} allowed_classes is not an array`);
-        }
-        if (node.config.allowed_classes.length === 0) {
-          console.error(`Event alarm ${node.id} allowed_classes is empty`);
-        }
-        if (!node.config.allowed_classes.includes("person")) {
-          console.error(`Event alarm ${node.id} allowed_classes does not include "person"`);
+        } else {
+          // Only check these conditions if config and allowed_classes exist
+          if (!Array.isArray(node.config.allowed_classes)) {
+            console.error(`Event alarm ${node.id} allowed_classes is not an array`);
+          } else if (node.config.allowed_classes.length === 0) {
+            console.error(`Event alarm ${node.id} allowed_classes is empty`);
+          } else if (!node.config.allowed_classes.includes("person")) {
+            console.error(`Event alarm ${node.id} allowed_classes does not include "person"`);
+          }
         }
       }
     });

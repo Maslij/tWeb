@@ -1427,4 +1427,126 @@
 .preview-enlarge-btn:hover {
   opacity: 1;
   background-color: var(--hover-bg);
+}
+
+/* Line Zones Editor Styles */
+.line-zones-editor {
+  width: 100%;
+}
+
+.line-zones-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.line-zone-item {
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 12px;
+  background-color: #f9f9f9;
+  transition: box-shadow 0.3s ease;
+}
+
+.line-zone-item:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.line-zone-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.line-zone-header h4 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.remove-line-btn {
+  background-color: #ff4d4f;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.line-coords {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.coord-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.coord-group label {
+  font-size: 13px;
+  font-weight: normal;
+  color: #666;
+}
+
+.coord-group input {
+  padding: 6px 8px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+}
+
+.line-counts {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #ddd;
+  font-weight: bold;
+}
+
+.line-counts small {
+  font-size: 12px;
+  color: #666;
+  background-color: #f0f0f0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+}
+
+.add-line-btn {
+  background-color: #1890ff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  margin-top: 8px;
+  align-self: flex-start;
+}
+
+.add-line-btn:hover {
+  background-color: #096dd9;
+}
+
+.legacy-warning {
+  opacity: 0.6;
+}
+
+.legacy-warning .warning-message {
+  color: #ff4d4f;
+  font-size: 12px;
+  margin-top: 4px;
 } 

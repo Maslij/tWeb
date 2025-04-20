@@ -97,7 +97,7 @@ const getFullUrl = (path: string): string => {
   if (window.location.hostname === 'localhost') {
     // Check if this is a development environment or production
     // If we have VITE_TAPI_SERVER environment variable, use it
-    const apiServer = import.meta.env.VITE_TAPI_SERVER || 'localhost:8080';
+    const apiServer = import.meta.env.VITE_TAPI_SERVER || 'localhost:8081';
     const protocol = window.location.protocol;
     return `${protocol}//${apiServer}${path}`;
   }
@@ -248,7 +248,7 @@ const apiService = {
   // WebSocket URL host
   getWebSocketHost: () => {
     // Always use the VITE_TAPI_SERVER environment variable if available
-    return import.meta.env.VITE_TAPI_SERVER || 'localhost:8080';
+    return import.meta.env.VITE_TAPI_SERVER || 'localhost:8081';
   },
   
   // Helper method to get a frame URL with timestamp to prevent caching
