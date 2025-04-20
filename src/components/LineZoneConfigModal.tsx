@@ -79,25 +79,136 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
     if (!imageRef.current || !imageLoaded) return;
     
     const img = imageRef.current;
+    const container = img.parentElement;
+    if (!container) return;
+
+    // Calculate the displayed image dimensions while maintaining aspect ratio
+    const containerAspectRatio = container.clientWidth / container.clientHeight;
+    const imageAspectRatio = img.naturalWidth / img.naturalHeight;
     
-    // Store the displayed dimensions
+    let displayWidth, displayHeight;
+    
+    if (containerAspectRatio > imageAspectRatio) {
+      // Container is wider than image aspect ratio - height is limiting factor
+      displayHeight = container.clientHeight;
+      displayWidth = displayHeight * imageAspectRatio;
+    } else {
+      // Container is taller than image aspect ratio - width is limiting factor
+      displayWidth = container.clientWidth;
+      displayHeight = displayWidth / imageAspectRatio;
+    }
+
+    // Set the canvas dimensions to match the displayed image size
+    if (canvasRef.current) {
+      canvasRef.current.width = displayWidth;
+      canvasRef.current.height = displayHeight;
+      canvasRef.current.style.width = `${displayWidth}px`;
+      canvasRef.current.style.height = `${displayHeight}px`;
+    }
+    
+    // Store both the display and natural dimensions
     setCanvasDimensions({
-      width: img.width,
-      height: img.height
+      width: displayWidth,
+      height: displayHeight
     });
     
-    // Store the image (original) dimensions
     setImageDimensions({
       width: img.naturalWidth,
       height: img.naturalHeight
     });
-    
-    if (canvasRef.current) {
-      canvasRef.current.width = img.width;
-      canvasRef.current.height = img.height;
-      drawLines();
-    }
+
+    drawLines();
   }, [imageLoaded, lines, selectedLineId, selectedPoint]);
+
+  // Update the mouse event handlers to use the correct scaling
+  const getCanvasCoordinates = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = imageDimensions.width / canvas.width;
+    const scaleY = imageDimensions.height / canvas.height;
+
+    const x = Math.round((e.clientX - rect.left) * scaleX);
+    const y = Math.round((e.clientY - rect.top) * scaleY);
+
+    return { x, y };
+  };
+
+  // Handle canvas mouse down to select lines and points
+  const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!canvasRef.current) return;
+    
+    const { x, y } = getCanvasCoordinates(e);
+    
+    // Check if the user clicked on a point of the selected line
+    if (selectedLineId) {
+      const selectedLine = lines.find(line => line.id === selectedLineId);
+      if (selectedLine) {
+        // Check if clicked on start point
+        const startDistance = Math.sqrt(
+          Math.pow(selectedLine.start_x - x, 2) + 
+          Math.pow(selectedLine.start_y - y, 2)
+        );
+        
+        // Check if clicked on end point
+        const endDistance = Math.sqrt(
+          Math.pow(selectedLine.end_x - x, 2) + 
+          Math.pow(selectedLine.end_y - y, 2)
+        );
+        
+        // Tolerance for clicking on a point
+        const tolerance = 10;
+        
+        if (startDistance < tolerance) {
+          setSelectedPoint('start');
+          setIsDragging(true);
+          return;
+        }
+        
+        if (endDistance < tolerance) {
+          setSelectedPoint('end');
+          setIsDragging(true);
+          return;
+        }
+      }
+    }
+    
+    // Check if the user clicked on any line
+    for (const line of lines) {
+      const lineDistance = distanceToLine(
+        x, y,
+        line.start_x, line.start_y,
+        line.end_x, line.end_y
+      );
+      
+      if (lineDistance < 10) {
+        selectLine(line.id);
+        return;
+      }
+    }
+    
+    setSelectedLineId(null);
+    setSelectedPoint(null);
+  };
+
+  // Handle canvas mouse move for dragging points
+  const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDragging || !selectedLineId || !selectedPoint || !canvasRef.current) return;
+    
+    const { x, y } = getCanvasCoordinates(e);
+    
+    setLines(lines.map(line => {
+      if (line.id === selectedLineId) {
+        if (selectedPoint === 'start') {
+          return { ...line, start_x: x, start_y: y };
+        } else if (selectedPoint === 'end') {
+          return { ...line, end_x: x, end_y: y };
+        }
+      }
+      return line;
+    }));
+  };
 
   // Draw lines on the canvas
   const drawLines = () => {
@@ -110,7 +221,7 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
     // Clear the canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // Scale factor for display (canvas might be scaled for display)
+    // Scale factor for drawing
     const scaleX = canvas.width / imageDimensions.width;
     const scaleY = canvas.height / imageDimensions.height;
     
@@ -231,123 +342,6 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
     setIsEditing(false);
   };
 
-  // Handle canvas mouse down to select lines and points
-  const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current) return;
-    
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
-    // Scale factor for converting display coordinates to image coordinates
-    const scaleX = imageDimensions.width / canvas.width;
-    const scaleY = imageDimensions.height / canvas.height;
-    
-    // Check if the user clicked on a point of the selected line
-    if (selectedLineId) {
-      const selectedLine = lines.find(line => line.id === selectedLineId);
-      if (selectedLine) {
-        // Scale coordinates for display
-        const startX = selectedLine.start_x / scaleX;
-        const startY = selectedLine.start_y / scaleY;
-        const endX = selectedLine.end_x / scaleX;
-        const endY = selectedLine.end_y / scaleY;
-        
-        // Check if clicked on start point
-        const startDistance = Math.sqrt(
-          Math.pow(startX - x, 2) + 
-          Math.pow(startY - y, 2)
-        );
-        
-        // Check if clicked on end point
-        const endDistance = Math.sqrt(
-          Math.pow(endX - x, 2) + 
-          Math.pow(endY - y, 2)
-        );
-        
-        // Tolerance for clicking on a point
-        const tolerance = 10;
-        
-        if (startDistance < tolerance) {
-          setSelectedPoint('start');
-          setIsDragging(true);
-          return;
-        }
-        
-        if (endDistance < tolerance) {
-          setSelectedPoint('end');
-          setIsDragging(true);
-          return;
-        }
-      }
-    }
-    
-    // Check if the user clicked on any line
-    for (const line of lines) {
-      // Scale coordinates for display
-      const startX = line.start_x * (canvas.width / imageDimensions.width);
-      const startY = line.start_y * (canvas.height / imageDimensions.height);
-      const endX = line.end_x * (canvas.width / imageDimensions.width);
-      const endY = line.end_y * (canvas.height / imageDimensions.height);
-      
-      // Calculate distance from point to line segment
-      const lineDistance = distanceToLine(
-        x, y, 
-        startX, startY, 
-        endX, endY
-      );
-      
-      // If clicked close enough to a line, select it
-      if (lineDistance < 10) {
-        selectLine(line.id);
-        return;
-      }
-    }
-    
-    // If no line or point was clicked, deselect
-    setSelectedLineId(null);
-    setSelectedPoint(null);
-  };
-
-  // Handle canvas mouse move for dragging points
-  const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDragging || !selectedLineId || !selectedPoint || !canvasRef.current) return;
-    
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
-    // Scale factor to convert from display to image coordinates
-    const scaleX = imageDimensions.width / canvas.width;
-    const scaleY = imageDimensions.height / canvas.height;
-    
-    // Convert to actual image coordinates
-    const imageX = Math.round(x * scaleX);
-    const imageY = Math.round(y * scaleY);
-    
-    // Update the position of the selected point
-    setLines(lines.map(line => {
-      if (line.id === selectedLineId) {
-        if (selectedPoint === 'start') {
-          return { 
-            ...line, 
-            start_x: imageX,
-            start_y: imageY
-          };
-        } else if (selectedPoint === 'end') {
-          return { 
-            ...line, 
-            end_x: imageX,
-            end_y: imageY
-          };
-        }
-      }
-      return line;
-    }));
-  };
-
   // Handle canvas mouse up to end dragging
   const handleCanvasMouseUp = () => {
     if (isDragging) {
@@ -404,38 +398,32 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
   return (
     <Modal isOpen={isOpen} onClose={onClose}>
       <div className="line-zone-config-modal">
-        <h2>Line Zone Configuration</h2>
+        <h2 className="line-zone-config-title">Line Zone Configuration</h2>
         
-        <div className="line-zone-config-container" ref={containerRef}>
-          <div className="camera-view-container">
-            <img 
-              ref={imageRef}
-              src={imageUrl} 
-              alt="Camera Feed"
-              className="camera-feed-image"
-              onLoad={() => setImageLoaded(true)}
-            />
-            <canvas
-              ref={canvasRef}
-              className="line-zone-canvas"
-              onMouseDown={handleCanvasMouseDown}
-              onMouseMove={handleCanvasMouseMove}
-              onMouseUp={handleCanvasMouseUp}
-              onMouseLeave={handleCanvasMouseUp}
-            />
-          </div>
-          
-          <div className="config-controls">
-            <button className="add-line-button" onClick={addLine}>
-              + Add New Line
-            </button>
-            <div className="image-dimensions-info">
-              Image: {imageDimensions.width}×{imageDimensions.height}px 
+        <div className="line-zone-config-container">
+          <div className="main-content">
+            <div className="camera-view-container">
+              <img 
+                ref={imageRef}
+                src={imageUrl} 
+                alt="Camera Feed"
+                className="camera-feed-image"
+                onLoad={() => setImageLoaded(true)}
+              />
+              <canvas
+                ref={canvasRef}
+                className="line-zone-canvas"
+                onMouseDown={handleCanvasMouseDown}
+                onMouseMove={handleCanvasMouseMove}
+                onMouseUp={handleCanvasMouseUp}
+                onMouseLeave={handleCanvasMouseUp}
+              />
             </div>
           </div>
           
           <div className="line-list-container">
             <h3>Line Zones</h3>
+            
             {lines.length === 0 ? (
               <div className="no-lines-message">
                 No lines defined. Click "Add New Line" to create one.
@@ -495,11 +483,16 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
                 ))}
               </div>
             )}
-          </div>
-          
-          <div className="modal-actions">
-            <button className="cancel-button" onClick={onClose}>Cancel</button>
-            <button className="apply-button" onClick={handleApply}>Apply Changes</button>
+            
+            <div className="line-list-footer">
+              <button className="add-line-button" onClick={addLine}>
+                + Add New Line
+              </button>
+              <div className="modal-actions">
+                <button className="cancel-button" onClick={onClose}>Cancel</button>
+                <button className="apply-button" onClick={handleApply}>Apply Changes</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>

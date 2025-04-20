@@ -3,94 +3,138 @@
   flex-direction: column;
   width: 100%;
   height: 100%;
+  max-height: 90vh;
+  color: var(--text-primary);
+  background-color: var(--background-primary);
+  padding: 24px;
+}
+
+.line-zone-config-title {
+  margin-bottom: 16px;
+  flex-shrink: 0;
 }
 
 .line-zone-config-container {
   flex: 1;
   display: flex;
+  gap: 24px;
+  min-height: 0;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
   flex-direction: column;
-  overflow: hidden;
+  min-width: 0;
 }
 
 .camera-view-container {
   position: relative;
-  width: 100%;
-  height: 60vh;
+  width: fit-content;
+  min-width: 100%;
+  height: 100%;
   background-color: #000;
-  overflow: hidden;
-  border-radius: 4px;
-  margin-bottom: 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .camera-feed-image {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
   object-fit: contain;
 }
 
 .line-zone-canvas {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: auto;
+  height: auto;
   cursor: crosshair;
-}
-
-.config-controls {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-
-.add-line-button {
-  background-color: var(--accent-color, #4caf50);
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 8px 16px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.add-line-button:hover {
-  background-color: var(--accent-color-dark, #388e3c);
+  pointer-events: all;
 }
 
 .line-list-container {
-  flex: 1;
-  overflow-y: auto;
-  margin-bottom: 16px;
-  border: 1px solid var(--border-color, #ccc);
-  border-radius: 4px;
-  padding: 16px;
-  min-height: 150px;
-  max-height: 200px;
+  width: 360px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background-color: var(--background-secondary);
+  height: 100%;
 }
 
 .line-list-container h3 {
-  margin-top: 0;
-  margin-bottom: 16px;
+  padding: 16px 16px 8px;
+  margin: 0;
   font-size: 16px;
-  color: var(--text-primary, #333);
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.line-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 16px;
+  min-height: 0;
 }
 
 .no-lines-message {
-  color: var(--text-secondary, #666);
+  color: var(--text-secondary);
   font-style: italic;
   text-align: center;
   padding: 16px;
 }
 
-.line-list {
+.line-list-footer {
+  padding: 16px;
+  background-color: var(--background-secondary);
+  border-top: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.add-line-button {
+  width: 100%;
+  background-color: var(--success-color);
+  color: var(--text-on-success);
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 4px var(--shadow-color, rgba(0, 0, 0, 0.1));
+}
+
+.add-line-button:hover {
+  background-color: var(--success-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px var(--shadow-color, rgba(0, 0, 0, 0.15));
+}
+
+.add-line-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px var(--shadow-color, rgba(0, 0, 0, 0.1));
+}
+
+.modal-actions {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+  margin-top: auto;
 }
 
 .line-item {
@@ -98,19 +142,20 @@
   justify-content: space-between;
   align-items: center;
   padding: 8px 12px;
-  border-radius: 4px;
-  background-color: var(--background-secondary, #f5f5f5);
+  border-radius: 8px;
+  background-color: var(--background-primary);
   transition: background-color 0.2s;
   cursor: pointer;
+  border: 1px solid transparent;
 }
 
 .line-item:hover {
-  background-color: color-mix(in srgb, var(--text-primary) 5%, transparent);
+  background-color: var(--hover-bg, rgba(0, 0, 0, 0.05));
 }
 
 .line-item.selected {
   background-color: color-mix(in srgb, var(--accent-color) 15%, transparent);
-  border-left: 3px solid var(--accent-color);
+  border: 1px solid var(--accent-color);
 }
 
 .line-info {
@@ -121,12 +166,12 @@
 
 .line-name {
   font-weight: bold;
-  color: var(--text-primary, #333);
+  color: var(--text-primary);
 }
 
 .line-counts {
   font-size: 12px;
-  color: var(--text-secondary, #666);
+  color: var(--text-secondary);
 }
 
 .line-actions {
@@ -136,30 +181,33 @@
 
 .edit-button,
 .delete-button {
-  background: none;
-  border: 1px solid var(--border-color, #ccc);
+  background-color: var(--button-secondary-bg, transparent);
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   padding: 4px 8px;
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
 }
 
 .edit-button {
-  color: var(--text-primary, #333);
+  color: var(--text-primary);
 }
 
 .edit-button:hover {
-  background-color: var(--background-hover, #e0e0e0);
+  background-color: var(--button-secondary-hover-bg);
+  border-color: var(--border-hover-color, var(--border-color));
 }
 
 .delete-button {
-  color: var(--error-color, #f44336);
+  color: var(--error-color);
+  border-color: var(--error-color-muted, var(--error-color));
 }
 
 .delete-button:hover {
-  background-color: var(--error-color-light, #ffebee);
-  border-color: var(--error-color, #f44336);
+  background-color: var(--error-color-light);
+  border-color: var(--error-color);
+  color: var(--error-color-dark, var(--error-color));
 }
 
 .line-name-edit {
@@ -170,72 +218,147 @@
 
 .line-name-edit input {
   padding: 4px 8px;
-  border: 1px solid var(--border-color, #ccc);
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   font-size: 14px;
+  background-color: var(--input-bg, var(--background-primary));
+  color: var(--text-primary);
+  transition: all 0.2s ease;
+}
+
+.line-name-edit input:focus {
+  border-color: var(--accent-color);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-color-transparent);
 }
 
 .line-name-edit button {
-  background-color: var(--accent-color, #4caf50);
-  color: white;
+  background-color: var(--accent-color);
+  color: var(--text-on-accent);
   border: none;
   border-radius: 4px;
   padding: 4px 8px;
   font-size: 12px;
   cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 8px;
+.line-name-edit button:hover {
+  background-color: var(--accent-hover);
+  transform: translateY(-1px);
 }
 
-.cancel-button,
-.apply-button {
-  padding: 8px 16px;
-  border-radius: 4px;
+.line-name-edit button:active {
+  transform: translateY(0);
+}
+
+.modal-content {
+  max-width: 100%;
+}
+
+.button {
+  padding: 10px 16px;
+  border-radius: 8px;
   font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.2s ease;
 }
 
 .cancel-button {
-  background: none;
-  border: 1px solid var(--border-color, #ccc);
-  color: var(--text-primary, #333);
+  background-color: var(--button-secondary-bg, transparent);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
 }
 
 .cancel-button:hover {
-  background-color: var(--background-hover, #e0e0e0);
+  background-color: var(--button-secondary-hover-bg);
+  border-color: var(--border-hover-color, var(--border-color));
+  transform: translateY(-1px);
+}
+
+.cancel-button:active {
+  transform: translateY(0);
 }
 
 .apply-button {
-  background-color: var(--accent-color, #4caf50);
-  color: white;
+  background-color: var(--accent-color);
+  color: var(--text-on-accent);
   border: none;
+  box-shadow: 0 2px 4px var(--shadow-color, rgba(0, 0, 0, 0.1));
 }
 
 .apply-button:hover {
-  background-color: var(--accent-color-dark, #388e3c);
+  background-color: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px var(--shadow-color, rgba(0, 0, 0, 0.15));
+}
+
+.apply-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px var(--shadow-color, rgba(0, 0, 0, 0.1));
+}
+
+/* Add focus styles for accessibility */
+.add-line-button:focus,
+.edit-button:focus,
+.delete-button:focus,
+.line-name-edit button:focus,
+.cancel-button:focus,
+.apply-button:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-color-transparent);
+}
+
+/* Disabled state styles */
+.button:disabled,
+.add-line-button:disabled,
+.edit-button:disabled,
+.delete-button:disabled,
+.line-name-edit button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .image-dimensions-info {
   font-size: 12px;
-  color: var(--text-secondary, #666);
-  background-color: rgba(0, 0, 0, 0.05);
-  padding: 6px 10px;
-  border-radius: 4px;
-  border-left: 3px solid var(--accent-color, #4caf50);
+  color: var(--text-secondary);
+  background-color: var(--background-secondary);
+  padding: 8px 12px;
+  border-radius: 8px;
+  border-left: 3px solid var(--accent-color);
+  margin-bottom: 16px;
 }
 
 .line-coords-info {
   font-size: 10px;
-  color: var(--text-secondary, #999);
-  background-color: rgba(0, 0, 0, 0.05);
-  padding: 2px 4px;
-  border-radius: 2px;
+  color: var(--text-secondary);
+  background-color: var(--background-secondary);
+  padding: 4px 6px;
+  border-radius: 4px;
   margin-top: 4px;
   font-family: monospace;
+}
+
+/* Add these CSS variables to your theme: */
+
+:root {
+  /* Light theme */
+  --success-color: #2e7d32; /* Green 800 */
+  --success-hover: #1b5e20; /* Green 900 */
+  --text-on-success: #ffffff;
+  --accent-color: #1976d2; /* Blue 700 */
+  --accent-hover: #0d47a1; /* Blue 900 */
+  --text-on-accent: #ffffff;
+}
+
+[data-theme="dark"] {
+  --success-color: #4caf50; /* Green 500 */
+  --success-hover: #2e7d32; /* Green 800 */
+  --text-on-success: #ffffff;
+  --accent-color: #2196f3; /* Blue 500 */
+  --accent-hover: #1976d2; /* Blue 700 */
+  --text-on-accent: #ffffff;
 } 

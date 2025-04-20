@@ -162,26 +162,8 @@ const normalizeComponent = (component: any): VisionComponent => {
   
   // Special handling for line zone manager component
   if (normalizedComponent.id === 'line_zone_manager') {
-    // Generate a line that goes across the screen horizontally at a random y position
-    // Random Y between 200 and 500 for good visibility
-    const randomY = Math.floor(Math.random() * 300) + 200;
-    
-    // Create an initial line object with additional line zone manager properties
-    const initialLine = {
-      id: `line_${Date.now()}`,
-      start_x: 50,          // Start from left side
-      start_y: randomY,     // Random Y position
-      end_x: 1000,          // End at right side (should be wide enough for most videos)
-      end_y: randomY,       // Same Y position (horizontal line)
-      minimum_crossing_threshold: 1, // Minimum number of frames a tracked object must cross the line
-      triggering_anchors: ["TOP_LEFT", "TOP_RIGHT", "BOTTOM_LEFT", "BOTTOM_RIGHT"], // Points to check for crossing
-      in_count: 0,
-      out_count: 0
-    };
-    
-    // Initialize the line_zone_manager configuration with the initial line
+    // Initialize the line_zone_manager configuration without any default lines
     normalizedComponent.config = {
-      lines: [initialLine],
       ...normalizedComponent.config // Keep any existing config values
     };
     
@@ -191,9 +173,9 @@ const normalizeComponent = (component: any): VisionComponent => {
         return {
           id: line.id || `line_${Date.now()}`,
           start_x: line.start_x || 50,
-          start_y: line.start_y || randomY,
+          start_y: line.start_y || 200,
           end_x: line.end_x || 1000,
-          end_y: line.end_y || randomY,
+          end_y: line.end_y || 200,
           minimum_crossing_threshold: line.minimum_crossing_threshold || 1,
           triggering_anchors: line.triggering_anchors || ["TOP_LEFT", "TOP_RIGHT", "BOTTOM_LEFT", "BOTTOM_RIGHT"],
           in_count: line.in_count || 0,
