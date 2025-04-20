@@ -379,50 +379,43 @@ const StreamDetails = () => {
         </button>
       </header>
 
-      <div className="card" style={{ marginTop: '20px' }}>
-        <h3>Vision Pipeline Builder</h3>
-        <div style={{ margin: '20px 0' }}>
-          <p style={{ marginBottom: '15px' }}>
-            Build a computer vision pipeline by dragging components from the left panel to the canvas.
-            Connect components by clicking the arrow button and dragging to another component.
-          </p>
-          {loadingVisionData ? (
-            <div className="loading-indicator">Loading vision components...</div>
-          ) : error ? (
-            <div className="error" style={{ marginBottom: '15px', padding: '10px' }}>
-              {error}
-              <button 
-                className="btn btn-small" 
-                style={{ marginLeft: '10px' }}
-                onClick={() => {
-                  setError(null);
-                  fetchVisionComponents();
-                  fetchPipelines();
-                }}
-              >
-                Retry
-              </button>
-            </div>
-          ) : (
-            <VisionPipelineBuilder 
-              streamId={stream.id}
-              streamName={stream.name || 'Unnamed Stream'}
-              streamSource={stream.source}
-              streamType={stream.type || 'camera'}
-              streamStatus={stream.status}
-              streamResolution={stream.width && stream.height ? `${stream.width}x${stream.height}` : undefined}
-              streamFps={stream.fps}
-              onSave={handleSavePipeline}
-              onStartStream={handleStartStream}
-              onStopStream={handleStopStream}
-              onDeleteStream={handleDeleteStream}
-              actionLoading={actionLoading}
-              availableComponents={visionComponents}
-              initialPipeline={activePipeline}
-              renderCameraFeedPreview={renderCameraFeedPreview}
-            />
-          )}
-        </div>
+      <div className="card" style={{ margin: '20px 0' }}>
+        {loadingVisionData ? (
+          <div className="loading-indicator">Loading vision components...</div>
+        ) : error ? (
+          <div className="error" style={{ marginBottom: '15px', padding: '10px' }}>
+            {error}
+            <button 
+              className="btn btn-small" 
+              style={{ marginLeft: '10px' }}
+              onClick={() => {
+                setError(null);
+                fetchVisionComponents();
+                fetchPipelines();
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        ) : (
+          <VisionPipelineBuilder 
+            streamId={stream.id}
+            streamName={stream.name || 'Unnamed Stream'}
+            streamSource={stream.source}
+            streamType={(stream.type as 'camera' | 'file' | 'rtsp') || 'camera'}
+            streamStatus={stream.status}
+            streamResolution={stream.width && stream.height ? `${stream.width}x${stream.height}` : undefined}
+            streamFps={stream.fps}
+            onSave={handleSavePipeline}
+            onStartStream={handleStartStream}
+            onStopStream={handleStopStream}
+            onDeleteStream={handleDeleteStream}
+            actionLoading={actionLoading}
+            availableComponents={visionComponents}
+            initialPipeline={activePipeline}
+            renderCameraFeedPreview={renderCameraFeedPreview}
+          />
+        )}
       </div>
 
       <div style={{ marginTop: '20px' }}>

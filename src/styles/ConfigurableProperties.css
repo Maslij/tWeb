@@ -1,0 +1,61 @@
+.configurable-properties {
+  margin-bottom: 20px;
+}
+
+.basic-properties {
+  margin-bottom: 15px;
+}
+
+.property-item {
+  margin-bottom: 10px;
+}
+
+.advanced-toggle {
+  margin: 15px 0;
+  text-align: center;
+}
+
+.toggle-button {
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  color: #495057;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toggle-button:hover {
+  background-color: #e9ecef;
+}
+
+.toggle-button.active {
+  background-color: #e9ecef;
+  border-color: #ced4da;
+}
+
+.toggle-icon {
+  margin-left: 6px;
+  font-size: 0.7rem;
+}
+
+.advanced-properties {
+  background-color: #f8f9fa;
+  border-radius: 6px;
+  padding: 15px;
+  margin-top: 10px;
+  border: 1px solid #e9ecef;
+}
+
+.advanced-header {
+  font-weight: bold;
+  margin-bottom: 12px;
+  color: #495057;
+  font-size: 0.95rem;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #dee2e6;
+} 
