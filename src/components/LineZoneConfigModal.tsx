@@ -19,11 +19,6 @@ interface Line {
   out_count: number;
   minimum_crossing_threshold: number;
   triggering_anchors: string[];
-  // Add normalized coordinates
-  norm_start_x?: number;
-  norm_start_y?: number;
-  norm_end_x?: number;
-  norm_end_y?: number;
 }
 
 interface LineZoneConfigModalProps {
@@ -41,18 +36,8 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
   lines: initialLines,
   onSave,
 }) => {
-  // State for storing lines with normalized coordinates
-  const [lines, setLines] = useState<Line[]>(() => {
-    // Initialize with the original lines first
-    return initialLines.map(line => ({
-      ...line,
-      // Ensure we always have norm_* properties, calculate them if they don't exist
-      norm_start_x: line.norm_start_x !== undefined ? line.norm_start_x : line.start_x / 1920,
-      norm_start_y: line.norm_start_y !== undefined ? line.norm_start_y : line.start_y / 1080,
-      norm_end_x: line.norm_end_x !== undefined ? line.norm_end_x : line.end_x / 1920,
-      norm_end_y: line.norm_end_y !== undefined ? line.norm_end_y : line.end_y / 1080,
-    }));
-  });
+  // State for storing lines with proper coordinates
+  const [lines, setLines] = useState<Line[]>(initialLines);
 
   // State for tracking the currently selected line and point
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
@@ -72,7 +57,7 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
   const [imageLoaded, setImageLoaded] = useState(false);
   
   // Store the natural (original) image dimensions
-  const [naturalDimensions, setNaturalDimensions] = useState({ width: 0, height: 0 });
+  const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
 
   // Load the image and set up the canvas
   useEffect(() => {
@@ -89,7 +74,7 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
     return () => clearInterval(intervalId);
   }, [isOpen, streamId]);
 
-  // When the image loads, update the canvas dimensions and store natural dimensions
+  // When the image loads, update the canvas dimensions and store image dimensions
   useEffect(() => {
     if (!imageRef.current || !imageLoaded) return;
     
@@ -101,8 +86,8 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
       height: img.height
     });
     
-    // Store the natural (original) dimensions
-    setNaturalDimensions({
+    // Store the image (original) dimensions
+    setImageDimensions({
       width: img.naturalWidth,
       height: img.naturalHeight
     });
@@ -114,44 +99,7 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
     }
   }, [imageLoaded, lines, selectedLineId, selectedPoint]);
 
-  // Effect to update normalized coordinates when natural dimensions become available
-  useEffect(() => {
-    if (naturalDimensions.width > 0 && naturalDimensions.height > 0) {
-      setLines(currentLines => currentLines.map(line => {
-        // Keep the existing normalized coordinates if they exist instead of recalculating
-        // Only recalculate normalized coordinates if they don't exist
-        const normStartX = line.norm_start_x !== undefined ? line.norm_start_x : line.start_x / naturalDimensions.width;
-        const normStartY = line.norm_start_y !== undefined ? line.norm_start_y : line.start_y / naturalDimensions.height;
-        const normEndX = line.norm_end_x !== undefined ? line.norm_end_x : line.end_x / naturalDimensions.width;
-        const normEndY = line.norm_end_y !== undefined ? line.norm_end_y : line.end_y / naturalDimensions.height;
-        
-        return {
-          ...line,
-          norm_start_x: normStartX,
-          norm_start_y: normStartY,
-          norm_end_x: normEndX,
-          norm_end_y: normEndY,
-          // Also update pixel coordinates to match natural dimensions
-          start_x: normalizedToPixel(normStartX, naturalDimensions.width),
-          start_y: normalizedToPixel(normStartY, naturalDimensions.height),
-          end_x: normalizedToPixel(normEndX, naturalDimensions.width),
-          end_y: normalizedToPixel(normEndY, naturalDimensions.height)
-        };
-      }));
-    }
-  }, [naturalDimensions]);
-
-  // Helper function to convert normalized (0-1) coordinates to pixel coordinates
-  const normalizedToPixel = (norm: number, dimension: number): number => {
-    return Math.round(norm * dimension);
-  };
-
-  // Helper function to convert pixel coordinates to normalized (0-1) coordinates
-  const pixelToNormalized = (pixel: number, dimension: number): number => {
-    return dimension > 0 ? pixel / dimension : 0;
-  };
-
-  // Draw lines on the canvas using the current canvas dimensions
+  // Draw lines on the canvas
   const drawLines = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -162,15 +110,19 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
     // Clear the canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
+    // Scale factor for display (canvas might be scaled for display)
+    const scaleX = canvas.width / imageDimensions.width;
+    const scaleY = canvas.height / imageDimensions.height;
+    
     // Draw all lines
     lines.forEach(line => {
       const isSelected = line.id === selectedLineId;
       
-      // Convert normalized coordinates to pixel coordinates for display
-      const startX = normalizedToPixel(line.norm_start_x || 0, canvas.width);
-      const startY = normalizedToPixel(line.norm_start_y || 0, canvas.height);
-      const endX = normalizedToPixel(line.norm_end_x || 0, canvas.width);
-      const endY = normalizedToPixel(line.norm_end_y || 0, canvas.height);
+      // Scale coordinates for display
+      const startX = line.start_x * scaleX;
+      const startY = line.start_y * scaleY;
+      const endX = line.end_x * scaleX;
+      const endY = line.end_y * scaleY;
       
       // Line style
       ctx.lineWidth = isSelected ? 3 : 2;
@@ -214,26 +166,21 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
 
   // Add a new line at a random position
   const addLine = () => {
-    // Get canvas dimensions to place line within visible area
-    const width = canvasDimensions.width || 1000;
-    const height = canvasDimensions.height || 800;
+    // Get dimensions to place line within visible area
+    const width = imageDimensions.width || 1920;
+    const height = imageDimensions.height || 1080;
     
-    // Create a horizontal line at a random y position (in normalized coordinates)
-    const randomY = Math.random() * 0.8 + 0.1; // 10% to 90% of height
+    // Create a horizontal line at a random y position
+    const randomY = Math.floor(Math.random() * 0.8 * height + 0.1 * height); // 10% to 90% of height
     
     const newLine: Line = {
       id: `line_${Date.now()}`,
       name: `Line ${lines.length + 1}`,
-      // Store normalized coordinates (0-1 range)
-      norm_start_x: 0.2, // 20% from left
-      norm_start_y: randomY,
-      norm_end_x: 0.8, // 80% from left
-      norm_end_y: randomY,
-      // Set pixel coordinates for API compatibility
-      start_x: normalizedToPixel(0.2, naturalDimensions.width),
-      start_y: normalizedToPixel(randomY, naturalDimensions.height),
-      end_x: normalizedToPixel(0.8, naturalDimensions.width),
-      end_y: normalizedToPixel(randomY, naturalDimensions.height),
+      // Set pixel coordinates directly
+      start_x: Math.floor(0.2 * width),
+      start_y: randomY,
+      end_x: Math.floor(0.8 * width),
+      end_y: randomY,
       in_count: 0,
       out_count: 0,
       minimum_crossing_threshold: 1,
@@ -295,15 +242,19 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     
+    // Scale factor for converting display coordinates to image coordinates
+    const scaleX = imageDimensions.width / canvas.width;
+    const scaleY = imageDimensions.height / canvas.height;
+    
     // Check if the user clicked on a point of the selected line
     if (selectedLineId) {
       const selectedLine = lines.find(line => line.id === selectedLineId);
       if (selectedLine) {
-        // Convert normalized coordinates to pixel coordinates for hit testing
-        const startX = normalizedToPixel(selectedLine.norm_start_x || 0, canvas.width);
-        const startY = normalizedToPixel(selectedLine.norm_start_y || 0, canvas.height);
-        const endX = normalizedToPixel(selectedLine.norm_end_x || 0, canvas.width);
-        const endY = normalizedToPixel(selectedLine.norm_end_y || 0, canvas.height);
+        // Scale coordinates for display
+        const startX = selectedLine.start_x / scaleX;
+        const startY = selectedLine.start_y / scaleY;
+        const endX = selectedLine.end_x / scaleX;
+        const endY = selectedLine.end_y / scaleY;
         
         // Check if clicked on start point
         const startDistance = Math.sqrt(
@@ -336,11 +287,11 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
     
     // Check if the user clicked on any line
     for (const line of lines) {
-      // Convert normalized coordinates to pixel coordinates for hit testing
-      const startX = normalizedToPixel(line.norm_start_x || 0, canvas.width);
-      const startY = normalizedToPixel(line.norm_start_y || 0, canvas.height);
-      const endX = normalizedToPixel(line.norm_end_x || 0, canvas.width);
-      const endY = normalizedToPixel(line.norm_end_y || 0, canvas.height);
+      // Scale coordinates for display
+      const startX = line.start_x * (canvas.width / imageDimensions.width);
+      const startY = line.start_y * (canvas.height / imageDimensions.height);
+      const endX = line.end_x * (canvas.width / imageDimensions.width);
+      const endY = line.end_y * (canvas.height / imageDimensions.height);
       
       // Calculate distance from point to line segment
       const lineDistance = distanceToLine(
@@ -370,32 +321,28 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     
-    // Update the position of the selected point with normalized coordinates
+    // Scale factor to convert from display to image coordinates
+    const scaleX = imageDimensions.width / canvas.width;
+    const scaleY = imageDimensions.height / canvas.height;
+    
+    // Convert to actual image coordinates
+    const imageX = Math.round(x * scaleX);
+    const imageY = Math.round(y * scaleY);
+    
+    // Update the position of the selected point
     setLines(lines.map(line => {
       if (line.id === selectedLineId) {
-        // Convert pixel coordinates to normalized coordinates
-        const normX = pixelToNormalized(x, canvas.width);
-        const normY = pixelToNormalized(y, canvas.height);
-        
         if (selectedPoint === 'start') {
-          // Update both normalized and pixel coordinates
           return { 
             ...line, 
-            norm_start_x: normX,
-            norm_start_y: normY,
-            // Update pixel coordinates for API
-            start_x: normalizedToPixel(normX, naturalDimensions.width),
-            start_y: normalizedToPixel(normY, naturalDimensions.height)
+            start_x: imageX,
+            start_y: imageY
           };
         } else if (selectedPoint === 'end') {
-          // Update both normalized and pixel coordinates
           return { 
             ...line, 
-            norm_end_x: normX,
-            norm_end_y: normY,
-            // Update pixel coordinates for API
-            end_x: normalizedToPixel(normX, naturalDimensions.width),
-            end_y: normalizedToPixel(normY, naturalDimensions.height)
+            end_x: imageX,
+            end_y: imageY
           };
         }
       }
@@ -449,25 +396,10 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
     return Math.sqrt(dx * dx + dy * dy);
   };
 
-  // Apply and save changes with updated pixel coordinates
+  // Apply and save changes, using pixel coordinates directly
   const handleApply = () => {
-    // Make sure all lines have their pixel coordinates updated from normalized values
-    const updatedLines = lines.map(line => {
-      // Update pixel coordinates from normalized coordinates
-      const apiLine = {
-        ...line,
-        start_x: normalizedToPixel(line.norm_start_x || 0, naturalDimensions.width),
-        start_y: normalizedToPixel(line.norm_start_y || 0, naturalDimensions.height),
-        end_x: normalizedToPixel(line.norm_end_x || 0, naturalDimensions.width),
-        end_y: normalizedToPixel(line.norm_end_y || 0, naturalDimensions.height),
-      };
-      
-      // Keep the normalized coordinates when saving to the API 
-      // (Changed from removing them to preserving them)
-      return apiLine;
-    });
-    
-    onSave(updatedLines);
+    // Save the lines as they are (with actual pixel coordinates)
+    onSave(lines);
     onClose();
   };
 
@@ -500,8 +432,7 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
               + Add New Line
             </button>
             <div className="image-dimensions-info">
-              Image: {naturalDimensions.width}×{naturalDimensions.height}px 
-              {naturalDimensions.width > 0 && <span> (Coordinates will be scaled)</span>}
+              Image: {imageDimensions.width}×{imageDimensions.height}px 
             </div>
           </div>
           
