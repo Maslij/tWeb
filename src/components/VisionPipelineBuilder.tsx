@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import '../styles/VisionPipelineBuilder.css';
+import LineZoneConfigModal from './LineZoneConfigModal';
 
 // Define types for our vision components
 interface VisionComponent {
@@ -1512,7 +1513,7 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
   availableComponents, 
   initialPipeline, 
   renderCameraFeedPreview 
-}): React.ReactElement => {
+}) => {
   const [pipeline, setPipeline] = useState<Pipeline>(() => {
     // If initialPipeline is provided, use it
     if (initialPipeline) {
@@ -1558,6 +1559,11 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [showDeletePipelineConfirmation, setShowDeletePipelineConfirmation] = useState(false);
   
+  // Add state for LineZoneConfigModal
+  const [isLineZoneModalOpen, setIsLineZoneModalOpen] = useState(false);
+  const [currentLineZoneNode, setCurrentLineZoneNode] = useState<PipelineNode | null>(null);
+  const [cameraFeedNode, setCameraFeedNode] = useState<PipelineNode | null>(null);
+
   const builderRef = useRef<HTMLDivElement>(null);
 
   // Modify the componentsList definition to ensure there's a source component
@@ -2579,6 +2585,30 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
         {/* Hidden element to store configuration data */}
         <div id={`node-config-${node.id}`} data-config={configJson} style={{ display: 'none' }}></div>
         
+        {/* Add the "Configure Line Zones" button for line_zone_manager components */}
+        {component.id === 'line_zone_manager' && streamStatus === 'running' && (
+          <div className="line-zone-config-button-container">
+            <button 
+              className="line-zone-config-button"
+              onClick={() => openLineZoneConfigModal(node.id)}
+            >
+              Configure Line Zones
+            </button>
+            <p className="line-zone-config-hint">
+              Click the button above to visually configure line zones using the camera feed.
+            </p>
+          </div>
+        )}
+        
+        {component.id === 'line_zone_manager' && streamStatus !== 'running' && (
+          <div className="line-zone-config-warning">
+            <p>
+              <strong>Note:</strong> To use the visual line configuration tool, 
+              the stream must be running. Start the stream to enable this feature.
+            </p>
+          </div>
+        )}
+        
         <div className="node-config">
           <h5>Configuration</h5>
           
@@ -2601,6 +2631,48 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
         </div>
       </div>
     );
+  };
+
+  // Add a function to open the LineZoneConfigModal
+  const openLineZoneConfigModal = (nodeId: string) => {
+    const node = pipeline.nodes.find(n => n.id === nodeId);
+    if (!node) return;
+    
+    // Find the camera feed node to get the source URL
+    const cameraNode = pipeline.nodes.find(n => n.componentId === 'camera_feed');
+    setCameraFeedNode(cameraNode || null);
+    setCurrentLineZoneNode(node);
+    setIsLineZoneModalOpen(true);
+  };
+
+  // Add a function to handle saving line zones from the modal
+  const handleSaveLineZones = (lines: any[]) => {
+    if (!currentLineZoneNode) return;
+    
+    // Process the lines to ensure we retain normalized coordinates
+    const processedLines = lines.map(line => {
+      // Use the normalized coordinates from the line object directly
+      // They should already be present from the modal
+      const processedLine = { ...line };
+      
+      // If for some reason norm coordinates are missing, calculate them
+      if (processedLine.norm_start_x === undefined) {
+        // Default to 1920x1080 if we don't know the actual dimensions
+        const width = 1920;
+        const height = 1080;
+        
+        processedLine.norm_start_x = line.start_x / width;
+        processedLine.norm_start_y = line.start_y / height;
+        processedLine.norm_end_x = line.end_x / width;
+        processedLine.norm_end_y = line.end_y / height;
+      }
+      
+      return processedLine;
+    });
+    
+    // Update the node configuration with the new lines
+    updateNodeConfig(currentLineZoneNode.id, 'lines', processedLines);
+    setIsLineZoneModalOpen(false);
   };
 
   return (
@@ -3087,6 +3159,17 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
         }}
         onCancel={() => setShowDeletePipelineConfirmation(false)}
       />
+      
+      {/* Add the LineZoneConfigModal */}
+      {isLineZoneModalOpen && currentLineZoneNode && (
+        <LineZoneConfigModal 
+          isOpen={isLineZoneModalOpen}
+          onClose={() => setIsLineZoneModalOpen(false)}
+          streamId={streamId}
+          lines={currentLineZoneNode.config?.lines || []}
+          onSave={handleSaveLineZones}
+        />
+      )}
     </div>
   );
 };
