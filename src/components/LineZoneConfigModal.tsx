@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import apiService from '../services/api';
 import Modal from './Modal';
 import '../styles/LineZoneConfigModal.css';
@@ -38,6 +38,18 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
 }) => {
   // State for storing lines with proper coordinates
   const [lines, setLines] = useState<Line[]>(initialLines);
+  
+  // Add a ref to track if we've already initialized from props
+  const initializedRef = useRef(false);
+
+  // Only set lines from initialLines once on mount, not during updates
+  useEffect(() => {
+    if (!initializedRef.current && initialLines.length > 0) {
+      console.log("Initial lines setup:", initialLines);
+      setLines(initialLines);
+      initializedRef.current = true;
+    }
+  }, [initialLines]);
 
   // State for tracking the currently selected line and point
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
@@ -80,7 +92,7 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
     if (!imageRef.current || !imageLoaded) return;
     
     const img = imageRef.current;
-     const container = img.parentElement;
+    const container = img.parentElement;
     if (!container) return;
 
     // Calculate the displayed image dimensions while maintaining aspect ratio
@@ -118,8 +130,41 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
       height: img.naturalHeight
     });
 
-    drawLines();
-  }, [imageLoaded, lines, selectedLineId, selectedPoint]);
+    console.log("Image loaded with dimensions:", {
+      natural: { width: img.naturalWidth, height: img.naturalHeight },
+      display: { width: displayWidth, height: displayHeight }
+    });
+    console.log("Current lines to draw:", lines);
+    
+    // Force redraw after a short delay to ensure the dimensions are all set
+    setTimeout(() => {
+      drawLines();
+    }, 50);
+  }, [imageLoaded]);
+
+  // Add a function to force a redraw of the canvas
+  const forceRedraw = useCallback(() => {
+    if (canvasRef.current && imageRef.current && imageLoaded) {
+      drawLines();
+    }
+  }, [imageLoaded, lines, imageDimensions]);
+
+  // Ensure lines are drawn initially after canvas is ready
+  useEffect(() => {
+    if (imageDimensions.width > 0 && imageDimensions.height > 0 && !initializedRef.current) {
+      console.log("Canvas ready, drawing initial lines");
+      forceRedraw();
+      initializedRef.current = true;
+    }
+  }, [forceRedraw, imageDimensions, initializedRef]);
+  
+  // Add a separate effect to redraw lines when image dimensions change or lines change
+  useEffect(() => {
+    if (imageDimensions.width > 0 && imageDimensions.height > 0 && !isDragging) {
+      console.log("Drawing lines after image dimensions set:", lines);
+      drawLines();
+    }
+  }, [imageDimensions, lines, selectedLineId, selectedPoint, isDragging]);
 
   // Update the mouse event handlers to use the correct scaling
   const getCanvasCoordinates = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -127,11 +172,23 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
     if (!canvas) return { x: 0, y: 0 };
 
     const rect = canvas.getBoundingClientRect();
+    
+    // Calculate position relative to the canvas
+    const canvasX = e.clientX - rect.left;
+    const canvasY = e.clientY - rect.top;
+    
+    // Apply scaling to get the actual coordinates in the image
     const scaleX = imageDimensions.width / canvas.width;
     const scaleY = imageDimensions.height / canvas.height;
 
-    const x = Math.round((e.clientX - rect.left) * scaleX);
-    const y = Math.round((e.clientY - rect.top) * scaleY);
+    const x = Math.round(canvasX * scaleX);
+    const y = Math.round(canvasY * scaleY);
+    
+    console.log("Canvas coordinates:", { 
+      canvasPos: { x: canvasX, y: canvasY },
+      imagePos: { x, y }, 
+      scaling: { x: scaleX, y: scaleY }
+    });
 
     return { x, y };
   };
@@ -141,6 +198,7 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
     if (!canvasRef.current) return;
     
     const { x, y } = getCanvasCoordinates(e);
+    console.log("Mouse down at:", { x, y });
     
     // Check if the user clicked on a point of the selected line
     if (selectedLineId) {
@@ -159,17 +217,23 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
         );
         
         // Tolerance for clicking on a point
-        const tolerance = 10;
+        const tolerance = 20; // Increase tolerance for easier selection
         
         if (startDistance < tolerance) {
+          console.log("Selected start point of line:", selectedLineId);
           setSelectedPoint('start');
           setIsDragging(true);
+          // Set flag to prevent updates from initial lines
+          initializedRef.current = true;
           return;
         }
         
         if (endDistance < tolerance) {
+          console.log("Selected end point of line:", selectedLineId);
           setSelectedPoint('end');
           setIsDragging(true);
+          // Set flag to prevent updates from initial lines
+          initializedRef.current = true;
           return;
         }
       }
@@ -183,12 +247,14 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
         line.end_x, line.end_y
       );
       
-      if (lineDistance < 10) {
+      if (lineDistance < 15) { // Increase tolerance for line selection
+        console.log("Selected line:", line.id);
         selectLine(line.id);
         return;
       }
     }
     
+    console.log("No line or point selected");
     setSelectedLineId(null);
     setSelectedPoint(null);
   };
@@ -197,18 +263,100 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
   const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isDragging || !selectedLineId || !selectedPoint || !canvasRef.current) return;
     
+    // Prevent default to avoid text selection during drag
+    e.preventDefault();
+    
     const { x, y } = getCanvasCoordinates(e);
     
-    setLines(lines.map(line => {
+    console.log(`Dragging ${selectedPoint} point of line ${selectedLineId} to:`, { x, y });
+    
+    // Create a copy of the current lines to avoid state mutation issues
+    const updatedLines = lines.map(line => {
       if (line.id === selectedLineId) {
         if (selectedPoint === 'start') {
-          return { ...line, start_x: x, start_y: y };
+          return { 
+            ...line, 
+            start_x: x, 
+            start_y: y 
+          };
         } else if (selectedPoint === 'end') {
-          return { ...line, end_x: x, end_y: y };
+          return { 
+            ...line, 
+            end_x: x, 
+            end_y: y 
+          };
         }
       }
       return line;
-    }));
+    });
+    
+    // Update state with the new line positions
+    setLines(updatedLines);
+    
+    // Always draw directly to canvas during drag for responsiveness
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      // Clear the canvas and redraw all lines
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Scale factor for drawing
+      const scaleX = canvas.width / imageDimensions.width;
+      const scaleY = canvas.height / imageDimensions.height;
+      
+      // Draw all updated lines
+      updatedLines.forEach(line => {
+        const isSelected = line.id === selectedLineId;
+        
+        // Scale coordinates for display
+        const startX = line.start_x * scaleX;
+        const startY = line.start_y * scaleY;
+        const endX = line.end_x * scaleX;
+        const endY = line.end_y * scaleY;
+        
+        // Line style
+        ctx.lineWidth = isSelected ? 3 : 2;
+        ctx.strokeStyle = isSelected ? '#00ff00' : '#ffffff';
+        
+        // Draw the line
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+        
+        // Draw endpoints (circles)
+        const startPointSelected = isSelected && selectedPoint === 'start';
+        const endPointSelected = isSelected && selectedPoint === 'end';
+        
+        // Increase size of points during dragging for better visibility
+        const startPointSize = startPointSelected ? 12 : 6;
+        const endPointSize = endPointSelected ? 12 : 6;
+        
+        // Start point
+        ctx.beginPath();
+        ctx.arc(startX, startY, startPointSize, 0, 2 * Math.PI);
+        ctx.fillStyle = startPointSelected ? '#00ff00' : '#ffffff';
+        ctx.fill();
+        
+        // End point
+        ctx.beginPath();
+        ctx.arc(endX, endY, endPointSize, 0, 2 * Math.PI);
+        ctx.fillStyle = endPointSelected ? '#00ff00' : '#ffffff';
+        ctx.fill();
+        
+        // Draw line name if available
+        if (line.name) {
+          const midX = (startX + endX) / 2;
+          const midY = (startY + endY) / 2;
+          
+          ctx.font = isSelected ? 'bold 14px Arial' : '12px Arial';
+          ctx.fillStyle = isSelected ? '#00ff00' : '#ffffff';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(line.name, midX, midY - 15);
+        }
+      });
+    }
   };
 
   // Draw lines on the canvas
@@ -221,6 +369,14 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
     
     // Clear the canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // If no image dimensions yet, we can't draw properly scaled lines
+    if (imageDimensions.width === 0 || imageDimensions.height === 0) {
+      console.log("Cannot draw lines: image dimensions not available yet");
+      return;
+    }
+    
+    console.log("Drawing lines:", lines.length, "with image dimensions:", imageDimensions);
     
     // Scale factor for drawing
     const scaleX = canvas.width / imageDimensions.width;
@@ -236,6 +392,15 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
       const endX = line.end_x * scaleX;
       const endY = line.end_y * scaleY;
       
+      // Skip excessive logging for better performance during frequent redraws
+      if (!isDragging) {
+        console.log(`Drawing line ${line.id}:`, {
+          original: { start: { x: line.start_x, y: line.start_y }, end: { x: line.end_x, y: line.end_y } },
+          scaled: { start: { x: startX, y: startY }, end: { x: endX, y: endY } },
+          scaling: { x: scaleX, y: scaleY }
+        });
+      }
+      
       // Line style
       ctx.lineWidth = isSelected ? 3 : 2;
       ctx.strokeStyle = isSelected ? '#00ff00' : '#ffffff';
@@ -250,15 +415,19 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
       const startPointSelected = isSelected && selectedPoint === 'start';
       const endPointSelected = isSelected && selectedPoint === 'end';
       
+      // Increase size of points during dragging for better usability
+      const startPointSize = startPointSelected && isDragging ? 10 : startPointSelected ? 8 : 6;
+      const endPointSize = endPointSelected && isDragging ? 10 : endPointSelected ? 8 : 6;
+      
       // Start point
       ctx.beginPath();
-      ctx.arc(startX, startY, startPointSelected ? 8 : 6, 0, 2 * Math.PI);
+      ctx.arc(startX, startY, startPointSize, 0, 2 * Math.PI);
       ctx.fillStyle = startPointSelected ? '#00ff00' : '#ffffff';
       ctx.fill();
       
       // End point
       ctx.beginPath();
-      ctx.arc(endX, endY, endPointSelected ? 8 : 6, 0, 2 * Math.PI);
+      ctx.arc(endX, endY, endPointSize, 0, 2 * Math.PI);
       ctx.fillStyle = endPointSelected ? '#00ff00' : '#ffffff';
       ctx.fill();
       
@@ -346,8 +515,13 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
   // Handle canvas mouse up to end dragging
   const handleCanvasMouseUp = () => {
     if (isDragging) {
+      console.log("Drag ended");
       setIsDragging(false);
-      setSelectedPoint(null);
+      
+      // Force a complete redraw after dragging ends
+      setTimeout(() => {
+        drawLines();
+      }, 10);
     }
   };
 

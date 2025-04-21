@@ -2744,10 +2744,61 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     const node = pipeline.nodes.find(n => n.id === nodeId);
     if (!node) return;
     
+    console.log("Opening line zone config modal for node:", node);
+    
     // Find the camera feed node to get the source URL
     const cameraNode = pipeline.nodes.find(n => n.componentId === 'camera_feed');
     setCameraFeedNode(cameraNode || null);
-    setCurrentLineZoneNode(node);
+    
+    // Ensure that line coordinates are properly formatted before passing to modal
+    // Deep clone the node to avoid modifying the original
+    const clonedNode = JSON.parse(JSON.stringify(node));
+    
+    // Ensure node has a config and lines array
+    if (!clonedNode.config) {
+      clonedNode.config = {};
+    }
+    
+    if (!clonedNode.config.lines || !Array.isArray(clonedNode.config.lines)) {
+      clonedNode.config.lines = [];
+    }
+    
+    // Ensure each line has required properties and is valid
+    clonedNode.config.lines = clonedNode.config.lines.map((line: any) => {
+      // Skip invalid lines
+      if (!line || typeof line !== 'object') {
+        console.warn("Skipping invalid line:", line);
+        return null;
+      }
+      
+      // Ensure the line has a valid ID
+      if (!line.id) {
+        line.id = `line_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+      }
+      
+      // Ensure the line has the required properties
+      return {
+        id: line.id,
+        name: line.name || '',
+        start_x: Number(line.start_x || 100),
+        start_y: Number(line.start_y || 200),
+        end_x: Number(line.end_x || 800),
+        end_y: Number(line.end_y || 200),
+        in_count: Number(line.in_count || 0),
+        out_count: Number(line.out_count || 0),
+        minimum_crossing_threshold: Number(line.minimum_crossing_threshold || 1),
+        triggering_anchors: line.triggering_anchors || ["TOP_LEFT", "TOP_RIGHT", "BOTTOM_LEFT", "BOTTOM_RIGHT"],
+        // Preserve normalized coordinates if they exist
+        norm_start_x: line.norm_start_x,
+        norm_start_y: line.norm_start_y,
+        norm_end_x: line.norm_end_x,
+        norm_end_y: line.norm_end_y
+      };
+    }).filter(Boolean); // Remove any null entries
+    
+    console.log("Passing lines to modal:", clonedNode.config.lines);
+    
+    setCurrentLineZoneNode(clonedNode);
     setIsLineZoneModalOpen(true);
   };
 
@@ -2755,10 +2806,11 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
   const handleSaveLineZones = (lines: any[]) => {
     if (!currentLineZoneNode) return;
     
+    console.log("Saving lines from modal:", lines);
+    
     // Process the lines to ensure we retain normalized coordinates
     const processedLines = lines.map(line => {
-      // Use the normalized coordinates from the line object directly
-      // They should already be present from the modal
+      // Create a new object to avoid mutating the original
       const processedLine = { ...line };
       
       // If for some reason norm coordinates are missing, calculate them
@@ -2775,6 +2827,8 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
       
       return processedLine;
     });
+    
+    console.log("Processed lines with normalized coordinates:", processedLines);
     
     // Update the node configuration with the new lines
     updateNodeConfig(currentLineZoneNode.id, 'lines', processedLines);
