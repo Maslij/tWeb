@@ -322,6 +322,21 @@ export const getPipelinesForStream = async (streamId: string): Promise<any[]> =>
   }
 };
 
+// Add function to get pipeline processing state
+export const getPipelineProcessingState = async (streamId: string, pipelineId: string): Promise<string> => {
+  try {
+    const response = await fetch(getFullUrl(`/api/streams/${streamId}/pipelines/${pipelineId}/state`));
+    if (!response.ok) {
+      throw new Error(`Failed to fetch pipeline state: ${response.status}`);
+    }
+    const data = await response.json();
+    return data.processing_state || 'idle';
+  } catch (error) {
+    console.error('Error fetching pipeline processing state:', error);
+    return 'error'; // Return error state if we can't determine the actual state
+  }
+};
+
 export const getPipeline = async (streamId: string, pipelineId: string): Promise<any> => {
   try {
     const response = await fetch(getFullUrl(`/api/streams/${streamId}/pipelines/${pipelineId}`));
@@ -406,18 +421,51 @@ export const activatePipeline = async (streamId: string, pipelineId: string): Pr
   }
 };
 
-export const deactivatePipeline = async (streamId: string, pipelineId: string): Promise<void> => {
+// Check if a pipeline is being processed
+export const isPipelineProcessing = async (streamId: string, pipelineId: string): Promise<boolean> => {
   try {
-    const response = await fetch(getFullUrl(`/api/streams/${streamId}/pipelines/${pipelineId}/deactivate`), {
-      method: 'POST',
-    });
-    if (!response.ok) {
-      throw new Error(`Failed to deactivate pipeline: ${response.status}`);
-    }
+    const state = await getPipelineProcessingState(streamId, pipelineId);
+    return state === 'processing';
   } catch (error) {
-    console.error('Error deactivating pipeline:', error);
-    throw error;
+    console.error('Error checking pipeline processing state:', error);
+    return false;
   }
+};
+
+// Wait for pipeline processing to complete
+export const waitForPipelineProcessing = async (
+  streamId: string, 
+  pipelineId: string, 
+  timeoutMs: number = 30000, // Default 30 second timeout
+  intervalMs: number = 500    // Check every 500ms
+): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const startTime = Date.now();
+    
+    const checkState = async () => {
+      try {
+        const state = await getPipelineProcessingState(streamId, pipelineId);
+        
+        // If the state is not 'processing', we're done
+        if (state !== 'processing') {
+          return resolve(state);
+        }
+        
+        // Check if we've exceeded the timeout
+        if (Date.now() - startTime > timeoutMs) {
+          return reject(new Error(`Pipeline processing timed out after ${timeoutMs}ms`));
+        }
+        
+        // Check again after the interval
+        setTimeout(checkState, intervalMs);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    
+    // Start checking
+    checkState();
+  });
 };
 
 export const getActivePipeline = async (streamId: string): Promise<any> => {

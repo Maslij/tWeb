@@ -3,6 +3,7 @@ import '../styles/VisionPipelineBuilder.css';
 import LineZoneConfigModal from './LineZoneConfigModal';
 import PresetPipelines, { PipelinePreset } from './PresetPipelines';
 import ConfigurableProperties from './ConfigurableProperties';
+import { isPipelineProcessing, waitForPipelineProcessing } from '../services/api';
 
 // Add a declaration for the global window property
 declare global {
@@ -1624,7 +1625,11 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
   
   // Add new state for preset selector
   const [showPresetSelector, setShowPresetSelector] = useState(!initialPipeline);
-
+  
+  // Add state for pipeline processing status
+  const [processingState, setProcessingState] = useState<'idle' | 'processing' | 'error'>('idle');
+  const [processingMessage, setProcessingMessage] = useState<string>('');
+  
   const builderRef = useRef<HTMLDivElement>(null);
 
   // Modify the componentsList definition to ensure there's a source component
@@ -2433,6 +2438,8 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
   const handleSavePipeline = () => {
     // Set saving state
     setIsSaving(true);
+    setProcessingState('processing');
+    setProcessingMessage('Saving pipeline and applying changes...');
     
     // Create a deep copy of the current pipeline for the API
     const apiPipeline = JSON.parse(JSON.stringify(pipeline));
@@ -2525,11 +2532,47 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
       // Call the onSave handler passed from parent
       onSave(apiPipeline);
       
-      // Show success message
-      setFlashMessage({
-        message: 'Pipeline saved successfully!',
-        type: 'success'
-      });
+      // Wait for processing to complete
+      if (pipeline.id) {
+        waitForPipelineProcessing(streamId, pipeline.id, 30000)
+          .then((finalState) => {
+            if (finalState === 'error') {
+              // Show error message if save fails
+              setFlashMessage({
+                message: 'Error applying pipeline changes',
+                type: 'error'
+              });
+            } else {
+              // Show success message
+              setFlashMessage({
+                message: 'Pipeline saved successfully!',
+                type: 'success'
+              });
+            }
+            setProcessingState('idle');
+            setProcessingMessage('');
+            setIsSaving(false);
+          })
+          .catch(error => {
+            console.error('Error waiting for pipeline processing:', error);
+            setFlashMessage({
+              message: 'Operation timed out. Pipeline status unknown.',
+              type: 'error'
+            });
+            setProcessingState('error');
+            setProcessingMessage('');
+            setIsSaving(false);
+          });
+      } else {
+        // No pipeline ID yet, just show success and reset state
+        setFlashMessage({
+          message: 'Pipeline saved successfully!',
+          type: 'success'
+        });
+        setProcessingState('idle');
+        setProcessingMessage('');
+        setIsSaving(false);
+      }
     } catch (error) {
       // Show error message if save fails
       setFlashMessage({
@@ -2537,12 +2580,10 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
         type: 'error'
       });
       console.error('Error saving pipeline:', error);
-    }
-    
-    // End saving state after a short delay
-    setTimeout(() => {
+      setProcessingState('error');
+      setProcessingMessage('');
       setIsSaving(false);
-    }, 500);
+    }
   };
 
   // Clear flash message
@@ -2837,14 +2878,11 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
 
   // Add method to apply a preset pipeline
   const applyPresetPipeline = (preset: PipelinePreset) => {
+    setProcessingState('processing');
+    setProcessingMessage('Setting up preset pipeline...');
+    
     console.log("Applying preset pipeline:", preset);
     
-    // Show loading message
-    setFlashMessage({
-      message: 'Loading pipeline components...',
-      type: 'info'
-    });
-
     // Define an async function to handle the actual work
     const processPreset = async () => {
       try {
@@ -3095,7 +3133,7 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
         
         // Create the new pipeline
         const newPipeline: Pipeline = {
-          id: initialPipeline?.id || `pipeline_${timestamp}`,
+          id: `pipeline_${timestamp}`,
           name: `${streamName || 'New'} ${preset.name} Pipeline`,
           nodes: newNodes
         };
@@ -3173,8 +3211,48 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     setSelectedComponent(null);
   };
 
+  // Add a function to check pipeline processing state
+  const checkPipelineProcessingState = useCallback(async () => {
+    if (!pipeline || !pipeline.id || !streamId) return;
+    
+    try {
+      const isProcessing = await isPipelineProcessing(streamId, pipeline.id);
+      setProcessingState(isProcessing ? 'processing' : 'idle');
+    } catch (error) {
+      console.error('Error checking pipeline processing state:', error);
+      setProcessingState('error');
+    }
+  }, [pipeline, streamId]);
+  
+  // Check processing state when component mounts and when pipeline ID changes
+  useEffect(() => {
+    checkPipelineProcessingState();
+    
+    // Set up interval to check processing state
+    const intervalId = setInterval(checkPipelineProcessingState, 2000);
+    
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [pipeline.id, checkPipelineProcessingState]);
+  
+  // Disable UI interaction if pipeline is processing
+  const isUIDisabled = processingState === 'processing' || actionLoading;
+
   return (
     <div className="vision-pipeline-builder">
+      {/* Add overlay for processing state */}
+      {isUIDisabled && (
+        <div className="pipeline-processing-overlay">
+          <div className="processing-content">
+            <div className="processing-spinner"></div>
+            <div className="processing-message">
+              {processingMessage || 'Processing pipeline, please wait...'}
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Flash message */}
       {flashMessage && (
         <FlashMessage 
@@ -3309,10 +3387,10 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
             <div 
               ref={builderRef}
               className="builder-canvas"
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
+              onMouseMove={isUIDisabled ? undefined : handleMouseMove}
+              onMouseUp={isUIDisabled ? undefined : handleMouseUp}
+              onDragOver={isUIDisabled ? undefined : handleDragOver}
+              onDrop={isUIDisabled ? undefined : handleDrop}
               onClick={(e) => {
                 // If a component is selected, place it at the click position
                 if (selectedComponent && builderRef.current) {

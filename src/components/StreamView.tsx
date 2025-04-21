@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import apiService, { getStreamAlarms, hasPipelineComponent } from '../services/api';
+import apiService, { getStreamAlarms, hasPipelineComponent, isPipelineProcessing, getActivePipeline } from '../services/api';
 import AlarmModal from './AlarmModal';
+import '../styles/StreamView.css';
 
 interface StreamViewProps {
   streamId: string;
@@ -16,6 +17,8 @@ const StreamView = ({ streamId, width = '100%', height = 'auto', refreshRate = 1
   const [alarmCount, setAlarmCount] = useState<number>(0);
   const [hasAlarmComponent, setHasAlarmComponent] = useState<boolean>(false);
   const [showAlarmModal, setShowAlarmModal] = useState<boolean>(false);
+  const [pipelineProcessing, setPipelineProcessing] = useState<boolean>(false);
+  const [activePipelineId, setActivePipelineId] = useState<string | null>(null);
 
   // Check if the stream has an EventAlarm component
   useEffect(() => {
@@ -38,6 +41,50 @@ const StreamView = ({ streamId, width = '100%', height = 'auto', refreshRate = 1
     
     return () => {
       mounted = false;
+    };
+  }, [streamId]);
+
+  // Check for active pipeline and its processing state
+  useEffect(() => {
+    if (!streamId) return;
+
+    let mounted = true;
+    
+    const checkPipelineState = async () => {
+      try {
+        // Get active pipeline ID
+        const activePipeline = await getActivePipeline(streamId);
+        if (!mounted) return;
+        
+        if (activePipeline && activePipeline.active && activePipeline.pipelineId) {
+          setActivePipelineId(activePipeline.pipelineId);
+          
+          // Check if pipeline is processing
+          const isProcessing = await isPipelineProcessing(streamId, activePipeline.pipelineId);
+          if (mounted) {
+            setPipelineProcessing(isProcessing);
+          }
+        } else {
+          setActivePipelineId(null);
+          setPipelineProcessing(false);
+        }
+      } catch (error) {
+        console.error('Error checking pipeline state:', error);
+        if (mounted) {
+          setPipelineProcessing(false);
+        }
+      }
+    };
+    
+    // Check immediately
+    checkPipelineState();
+    
+    // Set up interval for checking
+    const intervalId = setInterval(checkPipelineState, 3000);
+    
+    return () => {
+      mounted = false;
+      clearInterval(intervalId);
     };
   }, [streamId]);
 
@@ -99,6 +146,14 @@ const StreamView = ({ streamId, width = '100%', height = 'auto', refreshRate = 1
   return (
     <div className="stream-view-container">
       <div className="stream-view" style={{ position: 'relative' }}>
+        {/* Add pipeline processing indicator */}
+        {pipelineProcessing && (
+          <div className="pipeline-processing-indicator">
+            <div className="processing-spinner"></div>
+            <span>Updating pipeline...</span>
+          </div>
+        )}
+        
         {hasAlarmComponent && hasAlarms && (
           <div 
             className={`alarm-indicator ${alarmCount > 0 ? 'alarm-pulse' : ''}`}
@@ -116,13 +171,22 @@ const StreamView = ({ streamId, width = '100%', height = 'auto', refreshRate = 1
         )}
         
         {imageUrl ? (
-          <img 
-            src={imageUrl} 
-            alt="Stream view" 
-            className="stream-image"
-            style={{ width, height, maxHeight: '70vh', objectFit: 'contain' }}
-            onError={() => setImageUrl('/placeholder-error.jpg')}
-          />
+          <div className={`stream-image-container ${pipelineProcessing ? 'processing' : ''}`}>
+            <img 
+              src={imageUrl} 
+              alt="Stream view" 
+              className="stream-image"
+              style={{ width, height, maxHeight: '70vh', objectFit: 'contain' }}
+              onError={() => setImageUrl('/placeholder-error.jpg')}
+            />
+            
+            {/* Show processing overlay on the image */}
+            {pipelineProcessing && (
+              <div className="image-processing-overlay">
+                <div className="processing-text">Applying pipeline changes...</div>
+              </div>
+            )}
+          </div>
         ) : (
           <div 
             style={{ 

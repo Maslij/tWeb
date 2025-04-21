@@ -1,0 +1,189 @@
+/* StreamView styles */
+.stream-view-container {
+  position: relative;
+  width: 100%;
+}
+
+.stream-view {
+  position: relative;
+  margin-bottom: 20px;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+/* Processing indicator styles */
+.pipeline-processing-indicator {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  z-index: 10;
+  animation: fade-in 0.3s ease;
+}
+
+/* Dark mode support for processing indicator */
+@media (prefers-color-scheme: dark) {
+  .pipeline-processing-indicator {
+    background-color: rgba(20, 20, 20, 0.9);
+    color: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  }
+}
+
+.pipeline-processing-indicator .processing-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-left: 2px solid white;
+  border-radius: 50%;
+  margin-right: 8px;
+  animation: spin 1s linear infinite;
+}
+
+.pipeline-processing-indicator span {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+/* Image container styles */
+.stream-image-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.stream-image-container.processing {
+  filter: brightness(0.9) contrast(0.95);
+}
+
+/* Dark mode support for processing image */
+@media (prefers-color-scheme: dark) {
+  .stream-image-container.processing {
+    filter: brightness(0.7) contrast(0.9) saturate(0.9);
+  }
+}
+
+.image-processing-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.2);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 5;
+}
+
+/* Dark mode support for overlay */
+@media (prefers-color-scheme: dark) {
+  .image-processing-overlay {
+    background-color: rgba(0, 0, 0, 0.4);
+  }
+}
+
+.processing-text {
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 10px 16px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+/* Dark mode support for processing text */
+@media (prefers-color-scheme: dark) {
+  .processing-text {
+    background-color: rgba(30, 30, 30, 0.9);
+    color: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  }
+}
+
+/* Alarm indicator styles */
+.alarm-indicator {
+  position: absolute;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #dc3545;
+  color: white;
+  border-radius: 50%;
+  font-weight: bold;
+  cursor: pointer;
+  z-index: 10;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+/* Dark mode support for alarm indicator */
+@media (prefers-color-scheme: dark) {
+  .alarm-indicator {
+    background-color: #e53935;
+    box-shadow: 0 2px 8px rgba(229, 57, 53, 0.3);
+  }
+}
+
+.alarm-pulse {
+  animation: pulse 2s infinite;
+}
+
+/* Light mode animations */
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+  }
+  
+  70% {
+    transform: scale(1.1);
+    box-shadow: 0 0 0 10px rgba(220, 53, 69, 0);
+  }
+  
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+  }
+}
+
+/* Dark mode animations */
+@media (prefers-color-scheme: dark) {
+  @keyframes pulse {
+    0% {
+      transform: scale(1);
+      box-shadow: 0 0 0 0 rgba(229, 57, 53, 0.7);
+    }
+    
+    70% {
+      transform: scale(1.1);
+      box-shadow: 0 0 0 10px rgba(229, 57, 53, 0);
+    }
+    
+    100% {
+      transform: scale(1);
+      box-shadow: 0 0 0 0 rgba(229, 57, 53, 0);
+    }
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+} 
