@@ -1554,6 +1554,7 @@ const logPipelineConnections = (pipeline: Pipeline, label: string) => {
   console.groupEnd();
 };
 
+// Add the Promise to the return type of the function component
 const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({ 
   streamId, 
   streamName, 
@@ -1621,7 +1622,7 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
   const [currentLineZoneNode, setCurrentLineZoneNode] = useState<PipelineNode | null>(null);
   const [cameraFeedNode, setCameraFeedNode] = useState<PipelineNode | null>(null);
   
-  // Add new state for preset selection mode
+  // Add new state for preset selector
   const [showPresetSelector, setShowPresetSelector] = useState(!initialPipeline);
 
   const builderRef = useRef<HTMLDivElement>(null);
@@ -1776,6 +1777,21 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
       setSelectedCategory(availableCategories[0]);
     }
   }, [availableCategories, selectedCategory]);
+
+  // Add a new effect to cleanup state when showing preset selector
+  useEffect(() => {
+    if (showPresetSelector) {
+      // Clean up all connection-related state when showing preset selector
+      setIsDrawingConnection(false);
+      setConnectionStart(null);
+      setConnectionEnd(null);
+      setPossibleConnectionTargets([]);
+      setSelectedNode(null);
+      setDraggingNode(null);
+      setActiveComponent(null);
+      setSelectedComponent(null);
+    }
+  }, [showPresetSelector]);
 
   // Filter components based on selected category
   const filteredComponents = componentsList.filter(
@@ -2769,128 +2785,338 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
   const applyPresetPipeline = (preset: PipelinePreset) => {
     console.log("Applying preset pipeline:", preset);
     
-    // Generate unique IDs for each node
-    const timestamp = Date.now();
-    const nodeMap: Record<string, string> = {};
-    
-    // First pass: Create all nodes with unique IDs
-    const newNodes = preset.nodes.map((presetNode, index) => {
-      // Generate a unique ID for this node that maintains its original ID pattern
-      // This is critical for maintaining connection references
-      const uniqueId = `${presetNode.componentId}_${timestamp}_${index}`;
-      
-      // For camera_feed (source) components, handle specially
-      if (presetNode.componentId === 'camera_feed') {
-        const sourceNode: PipelineNode = {
-          id: uniqueId,
-          componentId: 'camera_feed',
-          position: { x: 50, y: 50 + (index * 150) }, 
-          connections: [], // Start with empty connections, we'll fill them in the second pass
-          config: presetNode.config || {},
-          sourceDetails: {
-            name: streamName,
-            source: streamSource,
-            type: streamType
-          }
-        };
-        
-        // Store mapping from preset ID to actual node ID
-        nodeMap[presetNode.id] = uniqueId;
-        console.log(`Mapping preset node ${presetNode.id} to ${uniqueId}`);
-        
-        return sourceNode;
-      }
-      
-      // For other components, create with the preset config
-      const newNode: PipelineNode = {
-        id: uniqueId,
-        componentId: presetNode.componentId,
-        position: { x: 350, y: 50 + (index * 150) },
-        connections: [], // Start with empty connections, we'll fill them in the second pass
-        config: presetNode.config || {}
-      };
-      
-      // Store mapping from preset ID to actual node ID
-      nodeMap[presetNode.id] = uniqueId;
-      console.log(`Mapping preset node ${presetNode.id} to ${uniqueId}`);
-      
-      return newNode;
+    // Show loading message
+    setFlashMessage({
+      message: 'Loading pipeline components...',
+      type: 'info'
     });
-    
-    // Second pass: Add connections using the ID mapping
-    preset.nodes.forEach((presetNode, index) => {
-      if (presetNode.connections && presetNode.connections.length > 0) {
-        // Find the corresponding node in our new nodes array
-        const presetNodeId = presetNode.id || `${presetNode.componentId}_${index}`;
-        const uniqueNodeId = nodeMap[presetNodeId];
-        const sourceNode = newNodes.find(node => node.id === uniqueNodeId);
-        
-        if (sourceNode) {
-          // Map the preset connection IDs to our unique IDs
-          sourceNode.connections = presetNode.connections.map((targetId: string) => {
-            const mappedId = nodeMap[targetId];
-            console.log(`Mapping connection from ${sourceNode.id} to target ${targetId} -> ${mappedId}`);
-            return mappedId || targetId;
-          });
-          
-          console.log(`Set connections for node ${sourceNode.id}:`, sourceNode.connections);
-        }
-      }
-    });
-    
-    // Create the new pipeline
-    const newPipeline: Pipeline = {
-      id: initialPipeline?.id || `pipeline_${timestamp}`,
-      name: `${streamName || 'New'} ${preset.name} Pipeline`,
-      nodes: newNodes
-    };
-    
-    console.log("Created new pipeline from preset:", newPipeline);
-    
-    // Log pipeline connections before setting state
-    logPipelineConnections(newPipeline, "Before setState");
-    
-    // Apply the pipeline
-    setPipeline(newPipeline);
-    setShowPresetSelector(false);
-    
-    // On next render cycle, check if connections are still intact
-    setTimeout(() => {
-      logPipelineConnections(newPipeline, "After setState (before save)");
-    }, 100);
-    
-    // Save the pipeline after a delay to ensure the UI is updated
-    setTimeout(() => {
-      console.log("Saving new preset pipeline");
-      // Create a deep copy to avoid any reference issues
-      const pipelineToSave = JSON.parse(JSON.stringify(newPipeline));
-      pipelineToSave.streamId = streamId;
-      pipelineToSave.active = true;
-      
-      // Log pipeline connections before saving
-      logPipelineConnections(pipelineToSave, "Before saving");
-      
+
+    // Define an async function to handle the actual work
+    const processPreset = async () => {
       try {
-        onSave(pipelineToSave);
-        setFlashMessage({
-          message: 'Pipeline created from preset successfully!',
-          type: 'success'
+        // Fetch the latest vision components to ensure we have all available model_classes
+        let visionComponentsData = componentsList;
+        try {
+          // Import the getVisionComponents function from the API service
+          const { getVisionComponents } = await import('../services/api');
+          const components = await getVisionComponents();
+          if (components && components.length > 0) {
+            console.log("Successfully fetched vision components from API");
+            visionComponentsData = components.map(comp => normalizeComponent(comp));
+          }
+        } catch (error) {
+          console.error("Error fetching vision components:", error);
+          // Continue with the existing componentsList if API fetch fails
+        }
+        
+        // Generate unique IDs for each node
+        const timestamp = Date.now();
+        const nodeMap: Record<string, string> = {};
+      
+        // Calculate layout grid parameters
+        const nodeWidth = 180; // Approximate width of a node
+        const nodeHeight = 120; // Approximate height of a node
+        const horizontalGap = 220; // Gap between nodes horizontally
+        const verticalGap = 250; // Increased vertical gap to prevent overlapping
+        const nodesPerRow = 3; // Maximum number of nodes per row
+        const startX = 50; // Starting X position
+        const startY = 50; // Starting Y position
+      
+        // First pass: Create all nodes with unique IDs
+        const newNodes = preset.nodes.map((presetNode, index) => {
+          // Generate a unique ID for this node that maintains its original ID pattern
+          // This is critical for maintaining connection references
+          const uniqueId = `${presetNode.componentId}_${timestamp}_${index}`;
+          
+          // Calculate grid position
+          const row = Math.floor(index / nodesPerRow);
+          const col = index % nodesPerRow;
+          const posX = startX + (col * horizontalGap);
+          const posY = startY + (row * verticalGap);
+          
+          // For camera_feed (source) components, handle specially
+          if (presetNode.componentId === 'camera_feed') {
+            const sourceNode: PipelineNode = {
+              id: uniqueId,
+              componentId: 'camera_feed',
+              position: { x: posX, y: posY }, 
+              connections: [], // Start with empty connections, we'll fill them in the second pass
+              config: presetNode.config ? { ...presetNode.config } : {},
+              sourceDetails: {
+                name: streamName,
+                source: streamSource,
+                type: streamType
+              }
+            };
+            
+            // Store mapping from preset ID to actual node ID
+            nodeMap[presetNode.id] = uniqueId;
+            console.log(`Mapping preset node ${presetNode.id} to ${uniqueId}`);
+            
+            return sourceNode;
+          }
+          
+          // For other components, create with the preset config
+          const newNode: PipelineNode = {
+            id: uniqueId,
+            componentId: presetNode.componentId,
+            position: { x: posX, y: posY },
+            connections: [], // Start with empty connections, we'll fill them in the second pass
+            config: presetNode.config ? { ...presetNode.config } : {}
+          };
+          
+          // For object detector nodes, ensure we include all available model_classes from the API
+          if (presetNode.componentId === 'object_detector' || presetNode.componentId.includes('detector')) {
+            // Find this component type in our fetched components list
+            const detectorComponent = visionComponentsData.find(comp => 
+              comp.id === presetNode.componentId
+            );
+            
+            if (detectorComponent && detectorComponent.model_classes) {
+              console.log(`Found model_classes for ${presetNode.componentId}:`, detectorComponent.model_classes);
+              
+              // Ensure we're not overwriting any existing configuration
+              if (!newNode.config) {
+                newNode.config = {};
+              }
+              
+              // Save the model and selected classes from the preset
+              const presetModel = presetNode.config?.model;
+              const presetSelectedClasses = presetNode.config?.classes || [];
+              
+              // Use the complete model_classes data from the API
+              newNode.config.model_classes = detectorComponent.model_classes;
+              
+              // Keep the preset's selected model and classes
+              if (presetModel) {
+                newNode.config.model = presetModel;
+              }
+              
+              // Keep the preset's selected classes
+              if (Array.isArray(presetSelectedClasses) && presetSelectedClasses.length > 0) {
+                newNode.config.classes = presetSelectedClasses;
+              }
+            }
+          }
+          
+          // Store mapping from preset ID to actual node ID
+          nodeMap[presetNode.id] = uniqueId;
+          console.log(`Mapping preset node ${presetNode.id} to ${uniqueId}`);
+          
+          return newNode;
         });
         
-        // Check pipeline connections after save attempt
-        setTimeout(() => {
-          const currentPipeline = JSON.parse(JSON.stringify(pipeline));
-          logPipelineConnections(currentPipeline, "After save");
-        }, 500);
+        // Second pass: Add connections using the ID mapping
+        preset.nodes.forEach((presetNode, index) => {
+          if (presetNode.connections && presetNode.connections.length > 0) {
+            // Find the corresponding node in our new nodes array
+            const presetNodeId = presetNode.id || `${presetNode.componentId}_${index}`;
+            const uniqueNodeId = nodeMap[presetNodeId];
+            const sourceNode = newNodes.find(node => node.id === uniqueNodeId);
+            
+            if (sourceNode) {
+              // Map the preset connection IDs to our unique IDs
+              sourceNode.connections = presetNode.connections.map((targetId: string) => {
+                const mappedId = nodeMap[targetId];
+                console.log(`Mapping connection from ${sourceNode.id} to target ${targetId} -> ${mappedId}`);
+                return mappedId || targetId;
+              });
+              
+              console.log(`Set connections for node ${sourceNode.id}:`, sourceNode.connections);
+            }
+          }
+        });
         
+        // Second pass: Add connections using the ID mapping and ensure correct ordering for alarm/annotation
+        preset.nodes.forEach((presetNode, index) => {
+          if (presetNode.connections && presetNode.connections.length > 0) {
+            // Find the corresponding node in our new nodes array
+            const presetNodeId = presetNode.id || `${presetNode.componentId}_${index}`;
+            const uniqueNodeId = nodeMap[presetNodeId];
+            const sourceNode = newNodes.find(node => node.id === uniqueNodeId);
+            
+            if (sourceNode) {
+              // Map the preset connection IDs to our unique IDs
+              sourceNode.connections = presetNode.connections.map((targetId: string) => {
+                const mappedId = nodeMap[targetId];
+                console.log(`Mapping connection from ${sourceNode.id} to target ${targetId} -> ${mappedId}`);
+                return mappedId || targetId;
+              });
+              
+              console.log(`Set connections for node ${sourceNode.id}:`, sourceNode.connections);
+            }
+          }
+        });
+        
+        // Third pass: Ensure correct ordering for alarm and annotation components
+        // First, identify if we have both an alarm and annotation component
+        const alarmNodes = newNodes.filter(node => node.componentId === 'event_alarm');
+        const annotationNodes = newNodes.filter(node => 
+          node.componentId === 'annotated_stream' || 
+          node.componentId === 'annotated_video_sink'
+        );
+        
+        // If we have both alarm and annotation components
+        if (alarmNodes.length > 0 && annotationNodes.length > 0) {
+          console.log("Found both alarm and annotation nodes, ensuring correct connection order");
+          
+          // Find detector or tracker nodes (sources for the alarm)
+          const detectorNodes = newNodes.filter(node => 
+            node.componentId.includes('detector') || 
+            node.componentId.includes('tracker')
+          );
+          
+          if (detectorNodes.length > 0) {
+            // For each detector/tracker node, check if it connects directly to an annotation
+            detectorNodes.forEach(detectorNode => {
+              // Get the IDs of nodes this detector connects to
+              const connectedToIds = detectorNode.connections;
+              
+              // Check if any of these connections are to annotation nodes
+              const connectsToAnnotation = connectedToIds.some(id => 
+                annotationNodes.some(anno => anno.id === id)
+              );
+              
+              if (connectsToAnnotation) {
+                // If detector connects directly to annotation but we have alarm nodes,
+                // we should insert the alarm in between
+                console.log("Detector connects directly to annotation, reordering to include alarm");
+                
+                // Remove direct connections from detector to annotation
+                detectorNode.connections = detectorNode.connections.filter(id => 
+                  !annotationNodes.some(anno => anno.id === id)
+                );
+                
+                // Connect detector to first alarm instead
+                if (alarmNodes.length > 0) {
+                  detectorNode.connections.push(alarmNodes[0].id);
+                  
+                  // Now connect the alarm to annotation
+                  const alarmNode = alarmNodes[0];
+                  // Clear existing connections from alarm
+                  alarmNode.connections = [];
+                  // Connect to annotation
+                  if (annotationNodes.length > 0) {
+                    alarmNode.connections.push(annotationNodes[0].id);
+                  }
+                }
+              }
+            });
+          }
+          
+          // Find any alarm node that's not connected to anything yet
+          const unconnectedAlarms = alarmNodes.filter(alarm => 
+            !newNodes.some(node => node.connections.includes(alarm.id))
+          );
+          
+          if (unconnectedAlarms.length > 0) {
+            console.log("Found unconnected alarms, attempting to insert into pipeline");
+            
+            // Find detectors that connect directly to annotations
+            const detectorToAnnotationConnections = newNodes.filter(node =>
+              node.connections.some(id => annotationNodes.some(anno => anno.id === id))
+            );
+            
+            if (detectorToAnnotationConnections.length > 0) {
+              // Take the first detector->annotation connection and reroute through alarm
+              const sourceNode = detectorToAnnotationConnections[0];
+              const annotationId = sourceNode.connections.find(id => 
+                annotationNodes.some(anno => anno.id === id)
+              );
+              
+              if (annotationId) {
+                // Remove direct connection
+                sourceNode.connections = sourceNode.connections.filter(id => id !== annotationId);
+                
+                // Connect to alarm instead
+                sourceNode.connections.push(unconnectedAlarms[0].id);
+                
+                // Connect alarm to annotation
+                unconnectedAlarms[0].connections = [annotationId];
+                console.log("Rerouted connection through alarm:", sourceNode.id, "->", unconnectedAlarms[0].id, "->", annotationId);
+              }
+            }
+          }
+        }
+        
+        // Create the new pipeline
+        const newPipeline: Pipeline = {
+          id: initialPipeline?.id || `pipeline_${timestamp}`,
+          name: `${streamName || 'New'} ${preset.name} Pipeline`,
+          nodes: newNodes
+        };
+        
+        console.log("Created new pipeline from preset:", newPipeline);
+        
+        // Log pipeline connections before setting state
+        logPipelineConnections(newPipeline, "Before setState");
+        
+        // Apply the pipeline
+        setPipeline(newPipeline);
+        resetPipelineState(); 
+        setShowPresetSelector(false);
+        
+        // On next render cycle, check if connections are still intact
+        setTimeout(() => {
+          logPipelineConnections(newPipeline, "After setState (before save)");
+        }, 100);
+        
+        // Save the pipeline after a delay to ensure the UI is updated
+        setTimeout(() => {
+          console.log("Saving new preset pipeline");
+          // Create a deep copy to avoid any reference issues
+          const pipelineToSave = JSON.parse(JSON.stringify(newPipeline));
+          pipelineToSave.streamId = streamId;
+          pipelineToSave.active = true;
+          
+          // Log pipeline connections before saving
+          logPipelineConnections(pipelineToSave, "Before saving");
+          
+          try {
+            onSave(pipelineToSave);
+            setFlashMessage({
+              message: 'Pipeline created from preset successfully!',
+              type: 'success'
+            });
+            
+            // Check pipeline connections after save attempt
+            setTimeout(() => {
+              const currentPipeline = JSON.parse(JSON.stringify(pipeline));
+              logPipelineConnections(currentPipeline, "After save");
+            }, 500);
+            
+          } catch (error) {
+            console.error("Error saving preset pipeline:", error);
+            setFlashMessage({
+              message: 'Error creating pipeline from preset.',
+              type: 'error'
+            });
+          }
+        }, 500);
       } catch (error) {
-        console.error("Error saving preset pipeline:", error);
+        console.error("Error applying preset pipeline:", error);
         setFlashMessage({
           message: 'Error creating pipeline from preset.',
           type: 'error'
         });
       }
-    }, 500);
+    };
+    
+    // Launch the async process
+    processPreset();
+  };
+
+  // Add a function to reset the pipeline state when switching to presets
+  const resetPipelineState = () => {
+    // Reset connection and selection states
+    setIsDrawingConnection(false);
+    setConnectionStart(null);
+    setConnectionEnd(null);
+    setPossibleConnectionTargets([]);
+    setSelectedNode(null);
+    setDraggingNode(null);
+    setActiveComponent(null);
+    setSelectedComponent(null);
   };
 
   return (
@@ -2933,7 +3159,10 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
               <button onClick={() => setShowComponentList(!showComponentList)}>
                 {showComponentList ? 'Hide Components' : 'Show Components'}
               </button>
-              <button onClick={() => setShowPresetSelector(true)} className="preset-button">
+              <button onClick={() => {
+                resetPipelineState();
+                setShowPresetSelector(true);
+              }} className="preset-button">
                 Use Preset Pipeline
               </button>
               <button 
