@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import apiService from '../services/api';
+import apiService, { OnvifCamera } from '../services/api';
 
 const CreateStream = () => {
   const navigate = useNavigate();
@@ -14,6 +14,12 @@ const CreateStream = () => {
   const [error, setError] = useState<string | null>(null);
   const [activeTemplate, setActiveTemplate] = useState<string | null>(null);
   const [formValid, setFormValid] = useState(false);
+  
+  // Camera scanning state
+  const [showScanModal, setShowScanModal] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [discoveredCameras, setDiscoveredCameras] = useState<OnvifCamera[]>([]);
+  const [scanError, setScanError] = useState<string | null>(null);
 
   useEffect(() => {
     // Validate form to enable/disable submit button
@@ -73,6 +79,43 @@ const CreateStream = () => {
       type: template.type
     });
     setActiveTemplate(template.id);
+    
+    // Open the scan modal if the scan template is selected
+    if (template.id === 'scan') {
+      setShowScanModal(true);
+    }
+  };
+
+  const scanForCameras = async () => {
+    try {
+      setScanning(true);
+      setScanError(null);
+      setDiscoveredCameras([]);
+      
+      // Call the API to discover cameras (with 10-second timeout)
+      const cameras = await apiService.discoverOnvifCameras(10);
+      
+      setDiscoveredCameras(cameras);
+      
+      if (cameras.length === 0) {
+        setScanError('No cameras found on your network. Make sure your cameras are powered on and connected to the same network.');
+      }
+    } catch (err) {
+      console.error('Error scanning for cameras:', err);
+      setScanError('Failed to scan for cameras. Please check your network connection and try again.');
+    } finally {
+      setScanning(false);
+    }
+  };
+  
+  const handleSelectCamera = (camera: OnvifCamera, rtspUrl: string) => {
+    setFormData({
+      ...formData,
+      name: camera.name,
+      source: rtspUrl,
+      type: 'rtsp'
+    });
+    setShowScanModal(false);
   };
 
   const templates = [
@@ -86,6 +129,23 @@ const CreateStream = () => {
         <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M15 10L19.5528 7.72361C19.8343 7.58281 20 7.29176 20 6.97631V17.0237C20 17.3392 19.8343 17.6302 19.5528 17.771L15 15.5V10Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           <rect x="3" y="6" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="2"/>
+        </svg>
+      )
+    },
+    {
+      id: 'scan',
+      name: 'Network Camera',
+      source: '',
+      type: 'rtsp' as const,
+      description: 'Scan for ONVIF cameras on your network',
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="2"/>
+          <path d="M12 8V12L14 14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M18.5 4.5L21 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          <path d="M19 9L22 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          <path d="M5 9L2 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          <path d="M5.5 4.5L3 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
         </svg>
       )
     },
@@ -120,6 +180,103 @@ const CreateStream = () => {
       )
     }
   ];
+
+  // Camera Scan Modal component - needs to be inside the main component to access functions
+  const CameraScanModal = () => {
+    return (
+      <div className={`modal-overlay ${showScanModal ? 'visible' : ''}`}>
+        <div className="modal-container">
+          <div className="modal-header">
+            <h3>Scan for Cameras</h3>
+            <button className="btn-close" onClick={() => setShowScanModal(false)}>
+              <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+          </div>
+          
+          <div className="modal-content">
+            {scanError && (
+              <div className="error-message">
+                <svg className="error-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 8V12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  <path d="M12 16.01L12.01 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" strokeWidth="2"/>
+                </svg>
+                {scanError}
+              </div>
+            )}
+            
+            {!scanning && discoveredCameras.length === 0 && (
+              <div className="scan-info">
+                <p>Click the button below to scan your network for ONVIF-compatible IP cameras.</p>
+                <p className="scan-help">This will search for cameras connected to your local network and list all available RTSP stream URLs.</p>
+              </div>
+            )}
+            
+            {scanning && (
+              <div className="scanning-indicator">
+                <div className="spinner"></div>
+                <p>Scanning for cameras on your network...</p>
+                <p className="scan-help">This may take up to 10 seconds.</p>
+              </div>
+            )}
+            
+            {!scanning && discoveredCameras.length > 0 && (
+              <div className="cameras-list">
+                <h4>Found {discoveredCameras.length} camera{discoveredCameras.length !== 1 ? 's' : ''}</h4>
+                
+                {discoveredCameras.map((camera, cIndex) => (
+                  <div key={camera.ip_address + cIndex} className="camera-item">
+                    <div className="camera-details">
+                      <div className="camera-name">{camera.name}</div>
+                      <div className="camera-ip">{camera.ip_address}</div>
+                      {camera.hardware && <div className="camera-hardware">{camera.hardware}</div>}
+                    </div>
+                    
+                    <div className="camera-streams">
+                      <h5>Available Streams:</h5>
+                      <div className="rtsp-list">
+                        {camera.rtsp_urls && camera.rtsp_urls.map((url, index) => (
+                          <button 
+                            key={index} 
+                            className="rtsp-url-btn"
+                            onClick={() => handleSelectCamera(camera, url)}
+                          >
+                            Stream {index + 1}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          <div className="modal-footer">
+            {!scanning && (
+              <button 
+                className="btn btn-primary" 
+                onClick={() => scanForCameras()}
+                disabled={scanning}
+              >
+                {discoveredCameras.length > 0 ? 'Scan Again' : 'Start Scan'}
+              </button>
+            )}
+            
+            <button 
+              className="btn btn-secondary" 
+              onClick={() => setShowScanModal(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="create-stream">
@@ -459,6 +616,206 @@ const CreateStream = () => {
             background: var(--accent-color);
             color: white;
           }
+          
+          /* Camera Scan Modal Styles */
+          .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+          }
+          
+          .modal-overlay.visible {
+            opacity: 1;
+            visibility: visible;
+          }
+          
+          .modal-container {
+            background: var(--background-primary);
+            border-radius: 20px;
+            width: 100%;
+            max-width: 700px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            transform: translateY(20px);
+            transition: transform 0.3s ease;
+          }
+          
+          .modal-overlay.visible .modal-container {
+            transform: translateY(0);
+          }
+          
+          .modal-header {
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          }
+          
+          .modal-header h3 {
+            font-size: 1.5rem;
+            margin: 0;
+            font-weight: 600;
+            color: var(--text-primary);
+          }
+          
+          .btn-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+          }
+          
+          .btn-close:hover {
+            background: var(--hover-bg);
+            color: var(--text-primary);
+          }
+          
+          .btn-close svg {
+            width: 20px;
+            height: 20px;
+          }
+          
+          .modal-content {
+            padding: 2rem;
+            overflow-y: auto;
+            max-height: calc(90vh - 180px);
+          }
+          
+          .modal-footer {
+            padding: 1.5rem 2rem;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+          }
+          
+          .scan-info {
+            text-align: center;
+            padding: 2rem 0;
+          }
+          
+          .scan-help {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+          }
+          
+          .scanning-indicator {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 3rem 0;
+            text-align: center;
+          }
+          
+          .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid var(--background-secondary);
+            border-top-color: var(--accent-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 1.5rem;
+          }
+          
+          .cameras-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+          }
+          
+          .cameras-list h4 {
+            font-size: 1.2rem;
+            margin: 0 0 1rem 0;
+            font-weight: 600;
+            color: var(--text-primary);
+          }
+          
+          .camera-item {
+            background: var(--background-secondary);
+            border-radius: 12px;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+          }
+          
+          .camera-details {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+          }
+          
+          .camera-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+          }
+          
+          .camera-ip {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+          }
+          
+          .camera-hardware {
+            font-size: 0.85rem;
+            color: var(--text-tertiary);
+          }
+          
+          .camera-streams {
+            margin-top: 0.5rem;
+          }
+          
+          .camera-streams h5 {
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin: 0 0 0.75rem 0;
+          }
+          
+          .rtsp-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+          }
+          
+          .rtsp-url-btn {
+            background: var(--background-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+          }
+          
+          .rtsp-url-btn:hover {
+            background: var(--accent-color);
+            color: white;
+            border-color: var(--accent-color);
+          }
 
           :root {
             --text-primary: #1d1d1f;
@@ -696,6 +1053,8 @@ const CreateStream = () => {
           </div>
         </form>
       </div>
+
+      <CameraScanModal />
     </div>
   );
 };

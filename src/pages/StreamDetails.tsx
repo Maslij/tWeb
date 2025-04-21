@@ -15,6 +15,49 @@ import VisionPipelineBuilder from '../components/VisionPipelineBuilder';
 import Modal from '../components/Modal';
 import '../styles/VisionPipelineBuilder.css';
 
+interface Pipeline {
+  id: string;
+  name: string;
+  nodes: PipelineNode[];
+  active?: boolean;
+}
+
+interface PipelineNode {
+  id: string;
+  componentId: string;
+  position: { x: number; y: number };
+  connections: string[];
+  config?: Record<string, any>;
+  sourceDetails?: {
+    name: string;
+    source: string;
+    type: string;
+  };
+}
+
+interface VisionComponent {
+  id: string;
+  type: string;
+  name: string;
+  category: 'source' | 'detector' | 'tracker' | 'classifier' | 'geometry' | 'sink';
+  description: string;
+  inputs?: string[];
+  outputs?: string[];
+  requiresParent?: string[];
+  config?: Record<string, any>;
+  model_classes?: Record<string, string[]>;
+  available_models?: string[];
+}
+
+// Helper function to get connection point position
+const getConnectionPointPosition = (element: HTMLElement, isInput: boolean) => {
+  const rect = element.getBoundingClientRect();
+  return {
+    x: isInput ? 0 : rect.width,
+    y: rect.height / 2
+  };
+};
+
 const StreamDetails = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -25,14 +68,21 @@ const StreamDetails = () => {
   const [useWebSocket, setUseWebSocket] = useState<boolean>(false);
   const [fps, setFps] = useState<number>(15);
   const [viewMode, setViewMode] = useState<'pipeline'>('pipeline');
-  const [visionComponents, setVisionComponents] = useState<any[]>([]);
-  const [pipelines, setPipelines] = useState<any[]>([]);
-  const [activePipeline, setActivePipeline] = useState<any>(null);
+  const [visionComponents, setVisionComponents] = useState<VisionComponent[]>([]);
+  const [pipelines, setPipelines] = useState<Pipeline[]>([]);
+  const [activePipeline, setActivePipeline] = useState<Pipeline | null>(null);
   const [loadingVisionData, setLoadingVisionData] = useState<boolean>(false);
   const [isStreamModalOpen, setIsStreamModalOpen] = useState<boolean>(false);
   const isPollingRef = useRef<boolean>(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const pollIntervalRef = useRef<number | null>(null);
+  const builderRef = useRef<HTMLDivElement>(null);
+  const [pipeline, setPipeline] = useState<Pipeline | null>(null);
+  const [componentsList, setComponentsList] = useState<VisionComponent[]>([]);
+  const [isDrawingConnection, setIsDrawingConnection] = useState<boolean>(false);
+  const [connectionStart, setConnectionStart] = useState<{nodeId: string, x: number, y: number} | null>(null);
+  const [connectionEnd, setConnectionEnd] = useState<{x: number, y: number} | null>(null);
+  const [possibleConnectionTargets, setPossibleConnectionTargets] = useState<string[]>([]);
 
   const fetchStream = async (silentUpdate = false) => {
     if (!id) {
@@ -103,11 +153,71 @@ const StreamDetails = () => {
       console.log("Fetching vision components...");
       const components = await getVisionComponents();
       console.log("Received components:", components);
-      setVisionComponents(components);
+      
+      // Explicitly check and log model classes if available
+      const hasModelClasses = components.some(c => c.model_classes || c.available_models);
+      if (hasModelClasses) {
+        console.log("Found model classes in component data");
+      } else {
+        console.warn("No model classes found in component data - adding defaults");
+      }
+      
+      // Check if we have detector components and ensure they have model_classes
+      const enhancedComponents = components.map(component => {
+        // Ensure detector components have model_classes
+        if (component.category === 'detector' && !component.model_classes) {
+          console.log(`Adding default model_classes to ${component.id}`);
+          return {
+            ...component,
+            model_classes: {
+              "yolov4": ["person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch", "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"],
+              "yolov8": ["person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light", "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow", "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee", "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch", "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"]
+            }
+          };
+        }
+        return component;
+      });
+      
+      setVisionComponents(enhancedComponents);
     } catch (err) {
       console.error('Error fetching vision components:', err);
-      // Show a temporary error notification but don't block the UI
       setError(`Error loading vision components: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      
+      // Even on error, provide some default components
+      const defaultComponents: VisionComponent[] = [
+        {
+          id: 'camera_feed',
+          name: 'Camera Feed',
+          category: 'source' as 'source',
+          type: 'source',
+          description: 'Stream video input',
+          inputs: [],
+          outputs: ['image']
+        },
+        {
+          id: 'object_detector',
+          name: 'Object Detector',
+          category: 'detector' as 'detector',
+          type: 'detector',
+          description: 'Detects objects in video frames',
+          inputs: ['image'],
+          outputs: ['detections'],
+          model_classes: {
+            "yolov4": ["person", "bicycle", "car", "motorcycle", "bus", "truck", "dog", "cat"]
+          }
+        },
+        {
+          id: 'annotated_stream',
+          name: 'Annotated Stream',
+          category: 'sink' as 'sink',
+          type: 'sink',
+          description: 'Displays annotated video stream',
+          inputs: ['image', 'detections'],
+          outputs: []
+        }
+      ];
+      setVisionComponents(defaultComponents);
+      
       setTimeout(() => setError(null), 5000); // Clear error after 5 seconds
     } finally {
       setLoadingVisionData(false);
@@ -125,6 +235,23 @@ const StreamDetails = () => {
       try {
         const pipelineData = await getPipelinesForStream(id);
         console.log("Received pipelines:", pipelineData);
+        
+        // Check that pipelines have connections
+        if (pipelineData.length > 0) {
+          pipelineData.forEach((pipeline: any) => {
+            console.log(`Pipeline ${pipeline.id} has ${pipeline.nodes.length} nodes`);
+            
+            // Log all connections for debugging
+            pipeline.nodes.forEach((node: any) => {
+              if (node.connections && node.connections.length > 0) {
+                console.log(`Node ${node.id} (${node.componentId}) connects to:`, node.connections);
+              } else {
+                console.log(`Node ${node.id} (${node.componentId}) has NO connections`);
+              }
+            });
+          });
+        }
+        
         setPipelines(pipelineData);
         
         // If there are pipelines and no active pipeline is set yet, use the first one
@@ -147,6 +274,17 @@ const StreamDetails = () => {
         // Only update active pipeline if one was returned as active
         if (activePipelineData.active && activePipelineData.pipeline) {
           console.log("Setting active pipeline from API:", activePipelineData.pipeline);
+          
+          // Check that pipeline has connections
+          const pipeline = activePipelineData.pipeline;
+          pipeline.nodes.forEach((node: any) => {
+            if (node.connections && node.connections.length > 0) {
+              console.log(`Node ${node.id} (${node.componentId}) connects to:`, node.connections);
+            } else {
+              console.log(`Node ${node.id} (${node.componentId}) has NO connections`);
+            }
+          });
+          
           setActivePipeline(activePipelineData.pipeline);
         } else if (pipelines.length > 0 && !activePipeline) {
           // If no active pipeline but we have pipelines, use the first one
@@ -198,13 +336,67 @@ const StreamDetails = () => {
     };
   }, [id]);
 
-  // Fetch vision data when loading the page if stream is running
+  // Effect to fetch vision data when loading the page if stream is running
   useEffect(() => {
     if (stream?.status === 'running') {
       fetchVisionComponents();
       fetchPipelines();
     }
   }, [stream?.status, id]);
+
+  // Added effect to update model classes in the active pipeline when components are loaded
+  useEffect(() => {
+    // If we have both components and an active pipeline, enhance the pipeline with model classes
+    if (visionComponents.length > 0 && activePipeline) {
+      console.log("Enhancing active pipeline with model classes from components");
+      
+      // Create a map of component IDs to model_classes
+      const componentModelClasses: Record<string, any> = {};
+      visionComponents.forEach(component => {
+        if (component.model_classes) {
+          componentModelClasses[component.id] = component.model_classes;
+        }
+      });
+      
+      // Deep clone the active pipeline
+      const enhancedPipeline = JSON.parse(JSON.stringify(activePipeline));
+      let needsUpdate = false;
+      
+      // Update each node in the pipeline that's a detector
+      enhancedPipeline.nodes.forEach((node: any) => {
+        const component = visionComponents.find(c => c.id === node.componentId);
+        if (component?.category === 'detector' && componentModelClasses[node.componentId]) {
+          if (!node.config) {
+            node.config = {};
+          }
+          
+          // Only update if the node doesn't already have model_classes
+          if (!node.config.model_classes) {
+            console.log(`Adding model_classes to node ${node.id} (${node.componentId})`);
+            node.config.model_classes = componentModelClasses[node.componentId];
+            needsUpdate = true;
+            
+            // If node has a model but no classes, set default classes
+            if (node.config.model && !node.config.classes) {
+              const model = node.config.model;
+              const classes = node.config.model_classes[model];
+              if (classes && classes.length > 0) {
+                console.log(`Setting default classes for model ${model} in node ${node.id}`);
+                node.config.classes = classes.slice(0, 5); // Take first 5 classes as default
+                needsUpdate = true;
+              }
+            }
+          }
+        }
+      });
+      
+      // Only update if changes were made
+      if (needsUpdate) {
+        console.log("Updating active pipeline with enhanced model classes");
+        setActivePipeline(enhancedPipeline);
+      }
+    }
+  }, [visionComponents, activePipeline]);
 
   const handleStartStream = async () => {
     if (!id) return;
@@ -252,7 +444,7 @@ const StreamDetails = () => {
     }
   };
 
-  const handleSavePipeline = async (pipeline: any) => {
+  const handleSavePipeline = async (pipeline: Pipeline) => {
     if (!id) return;
     
     try {
@@ -260,21 +452,33 @@ const StreamDetails = () => {
       
       let savedPipeline;
       
+      console.log("Saving pipeline:", pipeline);
+      console.log("Checking connections before save:");
+      pipeline.nodes.forEach((node: any) => {
+        if (node.connections && node.connections.length > 0) {
+          console.log(`Node ${node.id} (${node.componentId}) connects to:`, node.connections);
+        } else {
+          console.log(`Node ${node.id} (${node.componentId}) has NO connections`);
+        }
+      });
+      
       // Check if this pipeline already exists in our known pipelines list
       const existingPipeline = pipelines.find(p => p.id === pipeline.id);
       
-      console.log("Saving pipeline:", pipeline);
       console.log("Existing pipelines:", pipelines);
       console.log("Is existing pipeline:", !!existingPipeline);
+      
+      // Make a deep copy of the pipeline to avoid reference issues
+      const pipelineToSave = JSON.parse(JSON.stringify(pipeline));
       
       if (existingPipeline) {
         // Update existing pipeline
         console.log("Updating existing pipeline:", pipeline.id);
-        savedPipeline = await updatePipeline(id, pipeline.id, pipeline);
+        savedPipeline = await updatePipeline(id, pipeline.id, pipelineToSave);
       } else {
         // Create new pipeline - don't use the client-generated ID
         console.log("Creating new pipeline");
-        const { id: generatedId, ...pipelineWithoutId } = pipeline;
+        const { id: generatedId, ...pipelineWithoutId } = pipelineToSave;
         savedPipeline = await createPipeline(id, pipelineWithoutId);
       }
       
@@ -288,6 +492,22 @@ const StreamDetails = () => {
       // Explicitly force complete refresh of all pipeline data
       // First fetching the list, then setting the active pipeline directly
       const updatedPipelines = await getPipelinesForStream(id);
+      
+      // Check connections in the updated pipelines
+      if (updatedPipelines.length > 0) {
+        console.log("Checking connections in updated pipelines:");
+        updatedPipelines.forEach((pipeline: any) => {
+          console.log(`Pipeline ${pipeline.id} has ${pipeline.nodes.length} nodes`);
+          pipeline.nodes.forEach((node: any) => {
+            if (node.connections && node.connections.length > 0) {
+              console.log(`Node ${node.id} (${node.componentId}) connects to:`, node.connections);
+            } else {
+              console.log(`Node ${node.id} (${node.componentId}) has NO connections`);
+            }
+          });
+        });
+      }
+      
       setPipelines(updatedPipelines);
       
       // If we successfully activated this pipeline, update the activePipeline state
@@ -296,6 +516,17 @@ const StreamDetails = () => {
         const matchingPipeline = updatedPipelines.find(p => p.id === savedPipeline.id);
         if (matchingPipeline) {
           console.log("Setting active pipeline after save:", matchingPipeline);
+          
+          // Check connections in active pipeline
+          console.log("Checking connections in active pipeline:");
+          matchingPipeline.nodes.forEach((node: any) => {
+            if (node.connections && node.connections.length > 0) {
+              console.log(`Node ${node.id} (${node.componentId}) connects to:`, node.connections);
+            } else {
+              console.log(`Node ${node.id} (${node.componentId}) has NO connections`);
+            }
+          });
+          
           setActivePipeline(matchingPipeline);
         }
       }
@@ -335,6 +566,26 @@ const StreamDetails = () => {
       </div>
     );
   };
+
+  useEffect(() => {
+    // Make componentsList accessible to the VisionPipelineBuilder
+    setComponentsList(visionComponents);
+    console.log("Updated componentsList with fetched components:", visionComponents);
+    
+    // Add a debug log to check the model_classes
+    const detectorsWithClasses = visionComponents.filter(c => 
+      c.category === 'detector' && c.model_classes
+    );
+    
+    if (detectorsWithClasses.length > 0) {
+      console.log("Detectors with model classes:", 
+        detectorsWithClasses.map(d => ({
+          id: d.id,
+          models: Object.keys(d.model_classes || {})
+        }))
+      );
+    }
+  }, [visionComponents]);
 
   if (loading) {
     return <div className="loading">Loading stream details...</div>;
@@ -379,50 +630,44 @@ const StreamDetails = () => {
         </button>
       </header>
 
-      <div className="card" style={{ marginTop: '20px' }}>
-        <h3>Vision Pipeline Builder</h3>
-        <div style={{ margin: '20px 0' }}>
-          <p style={{ marginBottom: '15px' }}>
-            Build a computer vision pipeline by dragging components from the left panel to the canvas.
-            Connect components by clicking the arrow button and dragging to another component.
-          </p>
-          {loadingVisionData ? (
-            <div className="loading-indicator">Loading vision components...</div>
-          ) : error ? (
-            <div className="error" style={{ marginBottom: '15px', padding: '10px' }}>
-              {error}
-              <button 
-                className="btn btn-small" 
-                style={{ marginLeft: '10px' }}
-                onClick={() => {
-                  setError(null);
-                  fetchVisionComponents();
-                  fetchPipelines();
-                }}
-              >
-                Retry
-              </button>
-            </div>
-          ) : (
-            <VisionPipelineBuilder 
-              streamId={stream.id}
-              streamName={stream.name || 'Unnamed Stream'}
-              streamSource={stream.source}
-              streamType={stream.type || 'camera'}
-              streamStatus={stream.status}
-              streamResolution={stream.width && stream.height ? `${stream.width}x${stream.height}` : undefined}
-              streamFps={stream.fps}
-              onSave={handleSavePipeline}
-              onStartStream={handleStartStream}
-              onStopStream={handleStopStream}
-              onDeleteStream={handleDeleteStream}
-              actionLoading={actionLoading}
-              availableComponents={visionComponents}
-              initialPipeline={activePipeline}
-              renderCameraFeedPreview={renderCameraFeedPreview}
-            />
-          )}
-        </div>
+      <div className="card" style={{ margin: '20px 0' }}>
+        {loadingVisionData ? (
+          <div className="loading-indicator">Loading vision components...</div>
+        ) : error ? (
+          <div className="error" style={{ marginBottom: '15px', padding: '10px' }}>
+            {error}
+            <button 
+              className="btn btn-small" 
+              style={{ marginLeft: '10px' }}
+              onClick={() => {
+                setError(null);
+                fetchVisionComponents();
+                fetchPipelines();
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        ) : (
+          <VisionPipelineBuilder 
+            streamId={stream.id}
+            streamName={stream.name || 'Unnamed Stream'}
+            streamSource={stream.source}
+            streamType={(stream.type as 'camera' | 'file' | 'rtsp') || 'camera'}
+            streamStatus={stream.status}
+            streamResolution={stream.width && stream.height ? `${stream.width}x${stream.height}` : undefined}
+            streamFps={stream.fps}
+            onSave={handleSavePipeline}
+            onStartStream={handleStartStream}
+            onStopStream={handleStopStream}
+            onDeleteStream={handleDeleteStream}
+            actionLoading={actionLoading}
+            availableComponents={visionComponents}
+            initialPipeline={activePipeline}
+            renderCameraFeedPreview={renderCameraFeedPreview}
+            key={`pipeline-builder-${visionComponents.length > 0 ? 'loaded' : 'loading'}`}
+          />
+        )}
       </div>
 
       <div style={{ marginTop: '20px' }}>

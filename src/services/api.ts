@@ -77,6 +77,17 @@ export interface AlarmEvent {
   image_data?: string;
 }
 
+// ONVIF camera type definitions
+export interface OnvifCamera {
+  name: string;
+  ip_address: string;
+  hardware: string;
+  endpoint_reference: string;
+  types: string;
+  xaddrs: string;
+  rtsp_urls: string[];
+}
+
 // Helper function to ensure response is an array
 const ensureArray = (data: any): any[] => {
   if (Array.isArray(data)) {
@@ -97,7 +108,7 @@ const getFullUrl = (path: string): string => {
   if (window.location.hostname === 'localhost') {
     // Check if this is a development environment or production
     // If we have VITE_TAPI_SERVER environment variable, use it
-    const apiServer = import.meta.env.VITE_TAPI_SERVER || 'localhost:8080';
+    const apiServer = import.meta.env.VITE_TAPI_SERVER || 'localhost:8081';
     const protocol = window.location.protocol;
     return `${protocol}//${apiServer}${path}`;
   }
@@ -248,12 +259,39 @@ const apiService = {
   // WebSocket URL host
   getWebSocketHost: () => {
     // Always use the VITE_TAPI_SERVER environment variable if available
-    return import.meta.env.VITE_TAPI_SERVER || 'localhost:8080';
+    return import.meta.env.VITE_TAPI_SERVER || 'localhost:8081';
   },
   
   // Helper method to get a frame URL with timestamp to prevent caching
   getFrameUrlWithTimestamp: (id: string) => 
-    `${getFullUrl(`/api/streams/${id}/frame`)}?t=${new Date().getTime()}`
+    `${getFullUrl(`/api/streams/${id}/frame`)}?t=${new Date().getTime()}`,
+
+  // ONVIF Camera Discovery
+  discoverOnvifCameras: async (timeout?: number): Promise<OnvifCamera[]> => {
+    try {
+      const timeoutParam = timeout ? `?timeout=${timeout}` : '';
+      const response = await axios.get(getFullUrl(`/api/onvif/discover${timeoutParam}`), {
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        timeout: (timeout || 5) * 1000 + 2000 // API timeout + 2 seconds for network overhead
+      });
+      
+      // Log the response for debugging
+      console.log('ONVIF discovery response:', response.data);
+      
+      if (!response.data || !Array.isArray(response.data)) {
+        console.warn('ONVIF discovery response is not an array:', response.data);
+        return [];
+      }
+      
+      return response.data;
+    } catch (error) {
+      console.error('Error discovering ONVIF cameras:', error);
+      return [];
+    }
+  },
 };
 
 // Vision component API methods
