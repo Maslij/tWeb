@@ -1477,8 +1477,8 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
   return (
     <div className="confirmation-dialog-overlay">
       <div className="confirmation-dialog">
-        <h3>{title}</h3>
-        <p>{message}</p>
+        <h3 className="confirmation-title">{title}</h3>
+        <p className="confirmation-message">{message}</p>
         <div className="confirmation-buttons">
           <button className="btn-cancel" onClick={onCancel}>
             {cancelText}

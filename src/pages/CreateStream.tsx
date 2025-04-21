@@ -187,8 +187,8 @@ const CreateStream = () => {
       <div className={`modal-overlay ${showScanModal ? 'visible' : ''}`}>
         <div className="modal-container">
           <div className="modal-header">
-            <h3>Scan for Cameras</h3>
-            <button className="btn-close" onClick={() => setShowScanModal(false)}>
+            <h3>Scan for Network Cameras</h3>
+            <button className="btn-close" onClick={() => setShowScanModal(false)} aria-label="Close">
               <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 <path d="M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -200,78 +200,150 @@ const CreateStream = () => {
             {scanError && (
               <div className="error-message">
                 <svg className="error-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" strokeWidth="2"/>
                   <path d="M12 8V12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
                   <path d="M12 16.01L12.01 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                  <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" strokeWidth="2"/>
                 </svg>
                 {scanError}
               </div>
             )}
             
             {!scanning && discoveredCameras.length === 0 && (
-              <div className="scan-info">
-                <p>Click the button below to scan your network for ONVIF-compatible IP cameras.</p>
-                <p className="scan-help">This will search for cameras connected to your local network and list all available RTSP stream URLs.</p>
+              <div className="scan-start-container">
+                <div className="scan-icon">
+                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2"/>
+                    <path d="M12 7V12L15 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path d="M19 5L21 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                    <path d="M5 5L3 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                    <path d="M19 19L21 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                    <path d="M5 19L3 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                </div>
+                <h4>Discover ONVIF Cameras</h4>
+                <p className="scan-description">Scan your local network for ONVIF-compatible IP cameras to easily connect to their streams.</p>
+                <div className="scan-action">
+                  <button 
+                    className="btn btn-primary scan-btn" 
+                    onClick={() => scanForCameras()}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" strokeWidth="2"/>
+                      <path d="M14 12C14 13.1046 13.1046 14 12 14C10.8954 14 10 13.1046 10 12C10 10.8954 10.8954 10 12 10C13.1046 10 14 10.8954 14 12Z" stroke="currentColor" strokeWidth="2"/>
+                      <path d="M3 12H8" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                      <path d="M16 12H21" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                      <path d="M12 16V21" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                      <path d="M12 3V8" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                    </svg>
+                    Start Network Scan
+                  </button>
+                </div>
+                <div className="scan-note">
+                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" strokeWidth="2"/>
+                    <path d="M12 11V17" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                    <path d="M12 7.01L12.01 6.99889" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  <p>Cameras must be on the same network as this device and support the ONVIF protocol.</p>
+                </div>
               </div>
             )}
             
             {scanning && (
               <div className="scanning-indicator">
-                <div className="spinner"></div>
-                <p>Scanning for cameras on your network...</p>
-                <p className="scan-help">This may take up to 10 seconds.</p>
+                <div className="spinner-container">
+                  <div className="spinner"></div>
+                </div>
+                <h4>Scanning Network...</h4>
+                <p className="scan-progress">Looking for ONVIF cameras on your local network</p>
+                <div className="scan-status">This may take up to 10 seconds</div>
               </div>
             )}
             
             {!scanning && discoveredCameras.length > 0 && (
-              <div className="cameras-list">
-                <h4>Found {discoveredCameras.length} camera{discoveredCameras.length !== 1 ? 's' : ''}</h4>
+              <div className="cameras-found-container">
+                <div className="cameras-header">
+                  <h4>
+                    <span className="cameras-count">{discoveredCameras.length}</span> 
+                    Camera{discoveredCameras.length !== 1 ? 's' : ''} Found
+                  </h4>
+                  <button 
+                    className="btn btn-text-icon" 
+                    onClick={() => scanForCameras()}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M20 4V8H16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M4 20V16H8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M4 8V4H8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M20 16V20H16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M17.1583 6.84404C19.3134 9.00189 19.3134 12.4981 17.1583 14.656C14.9976 16.8195 11.499 16.8195 9.34169 14.656C7.18663 12.5036 7.18663 9.00189 9.34169 6.84404C11.5023 4.68053 14.9976 4.68053 17.1583 6.84404" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    Scan Again
+                  </button>
+                </div>
                 
-                {discoveredCameras.map((camera, cIndex) => (
-                  <div key={camera.ip_address + cIndex} className="camera-item">
-                    <div className="camera-details">
-                      <div className="camera-name">{camera.name}</div>
-                      <div className="camera-ip">{camera.ip_address}</div>
-                      {camera.hardware && <div className="camera-hardware">{camera.hardware}</div>}
-                    </div>
-                    
-                    <div className="camera-streams">
-                      <h5>Available Streams:</h5>
-                      <div className="rtsp-list">
-                        {camera.rtsp_urls && camera.rtsp_urls.map((url, index) => (
-                          <button 
-                            key={index} 
-                            className="rtsp-url-btn"
-                            onClick={() => handleSelectCamera(camera, url)}
-                          >
-                            Stream {index + 1}
-                          </button>
-                        ))}
+                <div className="cameras-list">
+                  {discoveredCameras.map((camera, cIndex) => (
+                    <div key={camera.ip_address + cIndex} className="camera-card">
+                      <div className="camera-card-header">
+                        <div className="camera-icon">
+                          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M15 10L19.5528 7.72361C19.8343 7.58281 20 7.29176 20 6.97631V17.0237C20 17.3392 19.8343 17.6302 19.5528 17.771L15 15.5V10Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                            <rect x="3" y="6" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="2"/>
+                          </svg>
+                        </div>
+                        <div className="camera-info">
+                          <div className="camera-name">{camera.name}</div>
+                          <div className="camera-meta">
+                            <span className="camera-ip">{camera.ip_address}</span>
+                            {camera.hardware && (
+                              <>
+                                <span className="meta-separator">•</span>
+                                <span className="camera-hardware">{camera.hardware}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="camera-card-content">
+                        <div className="stream-select-label">Available Streams:</div>
+                        <div className="stream-options">
+                          {camera.rtsp_urls && camera.rtsp_urls.map((url, index) => (
+                            <button 
+                              key={index} 
+                              className="stream-select-btn"
+                              onClick={() => handleSelectCamera(camera, url)}
+                              title={url}
+                            >
+                              Stream {index + 1}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             )}
           </div>
           
           <div className="modal-footer">
-            {!scanning && (
-              <button 
-                className="btn btn-primary" 
-                onClick={() => scanForCameras()}
-                disabled={scanning}
-              >
-                {discoveredCameras.length > 0 ? 'Scan Again' : 'Start Scan'}
-              </button>
-            )}
-            
             <button 
               className="btn btn-secondary" 
               onClick={() => setShowScanModal(false)}
             >
               Cancel
             </button>
+            
+            {!scanning && discoveredCameras.length === 0 && (
+              <button 
+                className="btn btn-primary" 
+                onClick={() => scanForCameras()}
+              >
+                Start Scan
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -498,18 +570,21 @@ const CreateStream = () => {
           .error-message {
             background: var(--error-bg);
             color: var(--error-color);
-            padding: 1rem 1.5rem;
+            padding: 16px;
             border-radius: 12px;
-            margin-bottom: 1.5rem;
+            margin: 24px;
             display: flex;
-            align-items: center;
-            gap: 0.75rem;
+            align-items: flex-start;
+            gap: 12px;
+            width: calc(100% - 48px);
+            box-sizing: border-box;
           }
           
           .error-icon {
             width: 20px;
             height: 20px;
             flex-shrink: 0;
+            margin-top: 2px;
           }
 
           .checkbox-group {
@@ -617,14 +692,16 @@ const CreateStream = () => {
             color: white;
           }
           
-          /* Camera Scan Modal Styles */
+          /* Camera Scan Modal Styles - Redesigned */
           .modal-overlay {
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -641,16 +718,17 @@ const CreateStream = () => {
           
           .modal-container {
             background: var(--background-primary);
-            border-radius: 20px;
+            border-radius: 16px;
             width: 100%;
-            max-width: 700px;
+            max-width: 750px;
             max-height: 90vh;
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             transform: translateY(20px);
-            transition: transform 0.3s ease;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            border: 1px solid var(--border-color);
           }
           
           .modal-overlay.visible .modal-container {
@@ -658,7 +736,7 @@ const CreateStream = () => {
           }
           
           .modal-header {
-            padding: 1.5rem 2rem;
+            padding: 20px 24px;
             border-bottom: 1px solid var(--border-color);
             display: flex;
             justify-content: space-between;
@@ -666,10 +744,11 @@ const CreateStream = () => {
           }
           
           .modal-header h3 {
-            font-size: 1.5rem;
+            font-size: 18px;
             margin: 0;
             font-weight: 600;
             color: var(--text-primary);
+            letter-spacing: -0.2px;
           }
           
           .btn-close {
@@ -677,12 +756,14 @@ const CreateStream = () => {
             border: none;
             color: var(--text-secondary);
             cursor: pointer;
-            padding: 0.5rem;
-            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            border-radius: 16px;
             display: flex;
             align-items: center;
             justify-content: center;
             transition: all 0.2s ease;
+            padding: 0;
           }
           
           .btn-close:hover {
@@ -691,172 +772,345 @@ const CreateStream = () => {
           }
           
           .btn-close svg {
+            width: 18px;
+            height: 18px;
+          }
+          
+          .modal-content {
+            padding: 0;
+            overflow-y: auto;
+            max-height: calc(90vh - 130px);
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+          }
+          
+          .modal-footer {
+            padding: 16px 24px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+          }
+          
+          /* Empty state - Start scanning */
+          .scan-start-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            padding: 40px 24px;
+            width: 100%;
+          }
+          
+          .scan-icon {
+            width: 64px;
+            height: 64px;
+            color: var(--accent-color);
+            margin-bottom: 16px;
+          }
+          
+          .scan-start-container h4 {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0 0 12px 0;
+            letter-spacing: -0.3px;
+          }
+          
+          .scan-description {
+            color: var(--text-secondary);
+            font-size: 16px;
+            max-width: 420px;
+            margin: 0 0 28px 0;
+            line-height: 1.5;
+          }
+          
+          .scan-action {
+            margin-bottom: 32px;
+          }
+          
+          .scan-btn {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: 500;
+          }
+          
+          .scan-btn svg {
             width: 20px;
             height: 20px;
           }
           
-          .modal-content {
-            padding: 2rem;
-            overflow-y: auto;
-            max-height: calc(90vh - 180px);
-          }
-          
-          .modal-footer {
-            padding: 1.5rem 2rem;
-            border-top: 1px solid var(--border-color);
+          .scan-note {
             display: flex;
-            justify-content: flex-end;
-            gap: 1rem;
+            align-items: flex-start;
+            gap: 12px;
+            max-width: 400px;
+            background: var(--background-secondary);
+            padding: 16px;
+            border-radius: 12px;
           }
           
-          .scan-info {
-            text-align: center;
-            padding: 2rem 0;
-          }
-          
-          .scan-help {
+          .scan-note svg {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
             color: var(--text-secondary);
-            font-size: 0.9rem;
-            margin-top: 0.5rem;
+            margin-top: 2px;
           }
           
+          .scan-note p {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin: 0;
+            line-height: 1.5;
+            text-align: left;
+          }
+          
+          /* Scanning state */
           .scanning-indicator {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 3rem 0;
+            padding: 48px 24px;
             text-align: center;
+            width: 100%;
+          }
+          
+          .spinner-container {
+            width: 70px;
+            height: 70px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+            position: relative;
+          }
+          
+          .spinner-container::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: var(--accent-bg);
           }
           
           .spinner {
-            width: 50px;
-            height: 50px;
-            border: 4px solid var(--background-secondary);
+            width: 40px;
+            height: 40px;
+            border: 3px solid transparent;
             border-top-color: var(--accent-color);
             border-radius: 50%;
             animation: spin 1s linear infinite;
-            margin-bottom: 1.5rem;
+          }
+          
+          .scanning-indicator h4 {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0 0 12px 0;
+          }
+          
+          .scan-progress {
+            color: var(--text-secondary);
+            font-size: 16px;
+            margin: 0 0 28px 0;
+          }
+          
+          .scan-status {
+            color: var(--text-tertiary);
+            font-size: 14px;
+            padding: 8px 16px;
+            background: var(--background-secondary);
+            border-radius: 16px;
+          }
+          
+          /* Cameras found state */
+          .cameras-found-container {
+            padding: 24px;
+            width: 100%;
+          }
+          
+          .cameras-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+          }
+          
+          .cameras-header h4 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+          }
+          
+          .cameras-count {
+            background: var(--accent-color);
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+          }
+          
+          .btn-text-icon {
+            background: var(--background-secondary);
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+          }
+          
+          .btn-text-icon:hover {
+            background: var(--hover-bg);
+          }
+          
+          .btn-text-icon svg {
+            width: 16px;
+            height: 16px;
           }
           
           .cameras-list {
-            display: flex;
-            flex-direction: column;
-            gap: 1.5rem;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 16px;
           }
           
-          .cameras-list h4 {
-            font-size: 1.2rem;
-            margin: 0 0 1rem 0;
-            font-weight: 600;
-            color: var(--text-primary);
+          @media (min-width: 768px) {
+            .cameras-list {
+              grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            }
           }
           
-          .camera-item {
+          .camera-card {
             background: var(--background-secondary);
             border-radius: 12px;
-            padding: 1.5rem;
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
+            overflow: hidden;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            border: 1px solid var(--border-color);
           }
           
-          .camera-details {
+          .camera-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+          }
+          
+          .camera-card-header {
+            padding: 16px;
             display: flex;
-            flex-direction: column;
-            gap: 0.25rem;
+            align-items: center;
+            gap: 16px;
+            border-bottom: 1px solid var(--border-color);
+          }
+          
+          .camera-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--accent-bg);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--accent-color);
+            flex-shrink: 0;
+          }
+          
+          .camera-icon svg {
+            width: 24px;
+            height: 24px;
+          }
+          
+          .camera-info {
+            overflow: hidden;
           }
           
           .camera-name {
-            font-size: 1.1rem;
+            font-size: 16px;
             font-weight: 600;
             color: var(--text-primary);
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
           }
           
-          .camera-ip {
-            font-size: 0.9rem;
+          .camera-meta {
+            font-size: 13px;
             color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
           }
           
-          .camera-hardware {
-            font-size: 0.85rem;
+          .meta-separator {
             color: var(--text-tertiary);
           }
           
-          .camera-streams {
-            margin-top: 0.5rem;
+          .camera-card-content {
+            padding: 16px;
           }
           
-          .camera-streams h5 {
-            font-size: 0.95rem;
+          .stream-select-label {
+            font-size: 14px;
             font-weight: 500;
             color: var(--text-primary);
-            margin: 0 0 0.75rem 0;
+            margin-bottom: 12px;
           }
           
-          .rtsp-list {
+          .stream-options {
             display: flex;
             flex-wrap: wrap;
-            gap: 0.5rem;
+            gap: 8px;
           }
           
-          .rtsp-url-btn {
+          .stream-select-btn {
             background: var(--background-primary);
             border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 0.5rem 1rem;
-            font-size: 0.9rem;
+            border-radius: 6px;
+            padding: 8px 14px;
+            font-size: 13px;
             color: var(--text-primary);
             cursor: pointer;
             transition: all 0.2s ease;
           }
           
-          .rtsp-url-btn:hover {
+          .stream-select-btn:hover {
             background: var(--accent-color);
             color: white;
             border-color: var(--accent-color);
           }
-
-          :root {
-            --text-primary: #1d1d1f;
-            --text-secondary: #86868b;
-            --text-tertiary: #aaa;
-            --background-primary: #ffffff;
-            --background-secondary: #f5f5f7;
-            --background-hover: #e5e5ea;
-            --border-color: #d2d2d7;
-            --accent-color: #0071e3;
-            --accent-hover: #0077ed;
-            --accent-disabled: #76b6ee;
-            --accent-shadow: rgba(0, 113, 227, 0.1);
-            --accent-bg: rgba(0, 113, 227, 0.05);
-            --button-hover: rgba(0, 0, 0, 0.1);
-            --hover-bg: rgba(0, 0, 0, 0.05);
-            --shadow-color: rgba(0, 0, 0, 0.04);
-            --error-bg: rgba(255, 59, 48, 0.08);
-            --error-color: #ff3b30;
-            --input-bg: #ffffff;
+          
+          /* Dark mode specific adjustments */
+          :root[data-theme="dark"] .modal-container {
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
           }
-
-          :root[data-theme="dark"] {
-            --text-primary: #ffffff;
-            --text-secondary: #98989d;
-            --text-tertiary: #666;
-            --background-primary: #1c1c1e;
-            --background-secondary: #2c2c2e;
-            --background-hover: #3a3a3c;
-            --border-color: #38383a;
-            --accent-color: #0a84ff;
-            --accent-hover: #0591ff;
-            --accent-disabled: #0a84ff80;
-            --accent-shadow: rgba(10, 132, 255, 0.15);
-            --accent-bg: rgba(10, 132, 255, 0.1);
-            --button-hover: rgba(255, 255, 255, 0.1);
-            --hover-bg: rgba(255, 255, 255, 0.05);
-            --shadow-color: rgba(0, 0, 0, 0.2);
-            --error-bg: rgba(255, 69, 58, 0.15);
-            --error-color: #ff453a;
-            --input-bg: #1c1c1e;
+          
+          :root[data-theme="dark"] .camera-card:hover {
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+          }
+          
+          :root[data-theme="dark"] .spinner-container::before {
+            background: rgba(10, 132, 255, 0.15);
           }
         `}
       </style>
