@@ -1624,7 +1624,7 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
   const [cameraFeedNode, setCameraFeedNode] = useState<PipelineNode | null>(null);
   
   // Add new state for preset selector
-  const [showPresetSelector, setShowPresetSelector] = useState(!initialPipeline);
+  const [showPresetSelector, setShowPresetSelector] = useState(!initialPipeline && !pipeline.nodes.some(node => node.componentId !== 'camera_feed'));
   
   // Add state for pipeline processing status
   const [processingState, setProcessingState] = useState<'idle' | 'processing' | 'error'>('idle');
@@ -3299,31 +3299,17 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
               </button>
               <button 
                 onClick={handleSavePipelineDebounced} 
-                className={`save-button ${isSaving || isSavingPipeline ? 'saving' : ''}`}
+                className="save-button"
                 disabled={isSaving || isSavingPipeline}
               >
-                {isSaving || isSavingPipeline ? (
-                  <>
-                    <span className="spinner"></span>
-                    <span className="button-text">Saving...</span>
-                  </>
-                ) : (
-                  <span className="button-text">Save Pipeline</span>
-                )}
+                Save Pipeline
               </button>
               <button 
                 onClick={() => setShowDeletePipelineConfirmation(true)}
-                className={`delete-button ${actionLoading || isDeletingPipeline ? 'loading' : ''}`}
+                className="delete-button"
                 disabled={actionLoading || isDeletingPipeline}
               >
-                {actionLoading || isDeletingPipeline ? (
-                  <>
-                    <span className="spinner"></span>
-                    <span className="button-text">Deleting...</span>
-                  </>
-                ) : (
-                  <span className="button-text">Delete Pipeline</span>
-                )}
+                Delete Pipeline
               </button>
             </div>
           </div>
@@ -3647,50 +3633,29 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
                               <div className="stream-actions">
                                 {streamStatus !== 'running' && onStartStream && (
                                   <button 
-                                    className={`btn ${actionLoading || isStartingStream ? 'loading' : ''}`}
+                                    className="btn"
                                     onClick={handleStartStreamDebounced}
                                     disabled={actionLoading || isStartingStream}
                                   >
-                                    {actionLoading || isStartingStream ? (
-                                      <>
-                                        <span className="spinner"></span>
-                                        <span className="button-text">Starting...</span>
-                                      </>
-                                    ) : (
-                                      <span className="button-text">Start Stream</span>
-                                    )}
+                                    Start Stream
                                   </button>
                                 )}
                                 {streamStatus === 'running' && onStopStream && (
                                   <button 
-                                    className={`btn btn-secondary ${actionLoading || isStoppingStream ? 'loading' : ''}`}
+                                    className="btn btn-secondary"
                                     onClick={handleStopStreamDebounced}
                                     disabled={actionLoading || isStoppingStream}
                                   >
-                                    {actionLoading || isStoppingStream ? (
-                                      <>
-                                        <span className="spinner"></span>
-                                        <span className="button-text">Stopping...</span>
-                                      </>
-                                    ) : (
-                                      <span className="button-text">Stop Stream</span>
-                                    )}
+                                    Stop Stream
                                   </button>
                                 )}
                                 {onDeleteStream && (
                                   <button 
-                                    className={`btn btn-danger ${actionLoading || isDeletingStream ? 'loading' : ''}`}
+                                    className="btn btn-danger"
                                     onClick={() => setShowDeleteConfirmation(true)}
                                     disabled={actionLoading || isDeletingStream}
                                   >
-                                    {actionLoading || isDeletingStream ? (
-                                      <>
-                                        <span className="spinner"></span>
-                                        <span className="button-text">Deleting...</span>
-                                      </>
-                                    ) : (
-                                      <span className="button-text">Delete Stream</span>
-                                    )}
+                                    Delete Stream
                                   </button>
                                 )}
                               </div>
