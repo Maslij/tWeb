@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import '../styles/VisionPipelineBuilder.css';
 import LineZoneConfigModal from './LineZoneConfigModal';
 import ConfigurableProperties from './ConfigurableProperties';
-import { isPipelineProcessing, waitForPipelineProcessing } from '../services/api';
+import { isPipelineProcessing, waitForPipelineProcessing, getVisionModels } from '../services/api';
 
 // Add a declaration for the global window property
 declare global {
@@ -24,6 +24,7 @@ interface VisionComponent {
   requiresParent?: string[];
   config?: Record<string, any>;
   model_classes?: Record<string, string[]>;
+  available_models?: {id: string, name: string}[];
 }
 
 // Add a utility function to normalize component formats from the API
@@ -39,7 +40,8 @@ const normalizeComponent = (component: any): VisionComponent => {
     outputs: component.outputs || [],
     requiresParent: component.requiresParent || [],
     config: component.config || {},
-    model_classes: component.model_classes || {}
+    model_classes: component.model_classes || {},
+    available_models: component.available_models || []
   };
   
   // Special handling for annotated stream components to ensure they have all the config options
@@ -76,6 +78,66 @@ const normalizeComponent = (component: any): VisionComponent => {
     };
   }
   
+  // Special handling for detector components - ensure they have proper model data
+  if (normalizedComponent.category === 'detector' || 
+      normalizedComponent.id === 'object_detector' || 
+      normalizedComponent.id === 'face_detector' ||
+      normalizedComponent.id === 'image_classifier') {
+    
+    // Check for available_models in component data and ensure it's handled properly
+    if (component.available_models && Array.isArray(component.available_models)) {
+      normalizedComponent.available_models = component.available_models;
+      
+      // If the component has available_models but no model set, use the first one as default
+      if (!normalizedComponent.config.model && normalizedComponent.available_models.length > 0) {
+        const defaultModel = normalizedComponent.available_models[0].id || normalizedComponent.available_models[0];
+        normalizedComponent.config.model = defaultModel;
+      }
+    }
+    
+    // Initialize model_classes if not present but there's model information
+    if (!normalizedComponent.model_classes || Object.keys(normalizedComponent.model_classes).length === 0) {
+      if (window.__COMPONENT_DEFS__) {
+        // Try to get model_classes from global definitions
+        const globalModelClasses = window.__COMPONENT_DEFS__.find(def => 
+          def.id === normalizedComponent.id
+        )?.model_classes;
+        
+        if (globalModelClasses) {
+          normalizedComponent.model_classes = globalModelClasses;
+        }
+        // No default fallback - if no model classes available, leave empty
+      }
+    }
+    
+    // Ensure the config contains a model field, but don't set a default value if no models available
+    if (!normalizedComponent.config.model) {
+      const modelKeys = Object.keys(normalizedComponent.model_classes || {});
+      if (modelKeys.length > 0) {
+        normalizedComponent.config.model = modelKeys[0];
+      }
+      // Otherwise leave model unset - UI will show "no models available"
+    }
+    
+    // Initialize classes array if not set, but only if we have available classes
+    if (!normalizedComponent.config.classes) {
+      const modelId = normalizedComponent.config.model;
+      if (modelId && normalizedComponent.model_classes && normalizedComponent.model_classes[modelId]) {
+        const availableClasses = normalizedComponent.model_classes[modelId];
+        if (availableClasses && availableClasses.length > 0) {
+          // Default to first 5 classes or fewer if not enough available
+          normalizedComponent.config.classes = availableClasses.slice(0, Math.min(5, availableClasses.length));
+          
+          // Ensure "person" is included if available in this model
+          if (availableClasses.includes("person") && !normalizedComponent.config.classes.includes("person")) {
+            normalizedComponent.config.classes.push("person");
+          }
+        }
+        // Otherwise leave classes empty - UI will show "no classes available"
+      }
+    }
+  }
+  
   // Special handling for event alarm components
   if (normalizedComponent.id === 'event_alarm') {
     normalizedComponent.config = {
@@ -83,16 +145,16 @@ const normalizeComponent = (component: any): VisionComponent => {
       trigger_delay: 5,
       cool_down_period: 30,
       notify_on_alarm: true,
-      allowed_classes: ["person"],  // Initialize with "person" by default instead of empty array
+      allowed_classes: [], // Start with empty array - will be populated when connected to a detector
       ...normalizedComponent.config // Keep any existing config values
     };
     
-    // Extra validation to ensure allowed_classes is always an array
+    // If allowed_classes is set in the existing config, ensure it's properly formatted
     if (normalizedComponent.config && normalizedComponent.config.allowed_classes) {
       if (typeof normalizedComponent.config.allowed_classes === 'string') {
-        // If it's the string "allowed_classes", convert to array with "person"
+        // If it's the string "allowed_classes", convert to empty array
         if (normalizedComponent.config.allowed_classes === "allowed_classes") {
-          normalizedComponent.config.allowed_classes = ["person"];
+          normalizedComponent.config.allowed_classes = [];
         } else {
           // Try to parse it as JSON if it looks like an array
           try {
@@ -109,8 +171,8 @@ const normalizeComponent = (component: any): VisionComponent => {
           }
         }
       } else if (!Array.isArray(normalizedComponent.config.allowed_classes)) {
-        // If it's not a string or array, initialize with default
-        normalizedComponent.config.allowed_classes = ["person"];
+        // If it's not a string or array, initialize as empty array
+        normalizedComponent.config.allowed_classes = [];
       }
     }
   }
@@ -508,26 +570,35 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
     
     // Use state to ensure component re-renders when models are loaded
     const [availableModels, setAvailableModels] = useState<any[]>([]);
+    const [isLoadingModels, setIsLoadingModels] = useState<boolean>(true);
     
     // Effect to load available models when component mounts or changes
     useEffect(() => {
       const loadModelData = () => {
         console.log("Loading model data for component:", nodeId, componentType);
+        setIsLoadingModels(true);
         let modelList: any[] = [];
         
         // First check for model_classes in the global component definitions
         const componentDef = window.__COMPONENT_DEFS__?.find(c => c.id === componentType);
         
-        if (componentDef && componentDef.model_classes) {
+        // Try to get models from available_models property first (preferred)
+        if (componentDef && componentDef.available_models && Array.isArray(componentDef.available_models)) {
+          console.log("Found available_models in component definition:", componentDef.available_models);
+          modelList = componentDef.available_models;
+        }
+        // Then try to extract from model_classes object
+        else if (componentDef && componentDef.model_classes) {
           console.log("Found model_classes in component definition:", componentDef.model_classes);
           const modelClasses = componentDef.model_classes;
           
           if (typeof modelClasses === 'object' && !Array.isArray(modelClasses)) {
+            // Extract model IDs from model_classes object
             modelList = Object.keys(modelClasses).map(id => ({ 
               id, 
               name: id.toUpperCase() // Uppercase for better display
             }));
-            console.log("Extracted models from component definition:", modelList);
+            console.log("Extracted models from model_classes:", modelList);
           }
         }
         
@@ -540,8 +611,13 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
               try {
                 const config = JSON.parse(configData);
                 
-                // Check model_classes in config
-                if (config.model_classes) {
+                // Check available_models property first
+                if (config.available_models && Array.isArray(config.available_models)) {
+                  console.log("Found available_models in component config:", config.available_models);
+                  modelList = config.available_models;
+                }
+                // Otherwise check model_classes
+                else if (config.model_classes) {
                   console.log("Found model_classes in component config:", config.model_classes);
                   let modelClasses = config.model_classes;
                   
@@ -558,7 +634,7 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
                       id, 
                       name: id.toUpperCase() // Uppercase for better display
                     }));
-                    console.log("Extracted models from config:", modelList);
+                    console.log("Extracted models from config model_classes:", modelList);
                   }
                 }
               } catch (e) {
@@ -568,22 +644,17 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
           }
         }
         
-        // Last resort - provide default models if nothing found
-        if (modelList.length === 0) {
-          console.log("No models found in component or config, using defaults");
-          modelList = [
-            { id: 'yolov4', name: 'YOLOV4' },
-            { id: 'yolov8', name: 'YOLOV8' }
-          ];
-          
-          // If the current model value is different, add it too
-          if (propValue && !modelList.some(m => m.id === propValue)) {
-            modelList.push({ id: propValue, name: propValue.toUpperCase() });
-          }
+        // If the current model value is different, add it too
+        if (propValue && !modelList.some(m => m.id === propValue)) {
+          modelList.push({ id: propValue, name: propValue.toUpperCase() });
         }
+        
+        // Log the final model list for debugging
+        console.log("Final model list for dropdown:", modelList);
         
         // Update state with the found models
         setAvailableModels(modelList);
+        setIsLoadingModels(false);
       };
       
       // Load model data initially
@@ -596,8 +667,40 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
         observer.observe(nodeConfig, { attributes: true, attributeFilter: ['data-config'] });
       }
       
-      return () => observer.disconnect();
+      // Add event listener for models-updated event
+      const handleModelsUpdated = () => {
+        console.log("Received models-updated event, reloading model data");
+        loadModelData();
+      };
+      document.addEventListener('models-updated', handleModelsUpdated);
+      
+      return () => {
+        observer.disconnect();
+        document.removeEventListener('models-updated', handleModelsUpdated);
+      };
     }, [nodeId, componentType, propValue]);
+    
+    // Show loading state
+    if (isLoadingModels) {
+      return (
+        <div className="config-item model-select">
+          <label>{formatPropName(propKey)}:</label>
+          <div className="loading-models">Loading available models...</div>
+        </div>
+      );
+    }
+    
+    // No models available
+    if (availableModels.length === 0) {
+      return (
+        <div className="config-item model-select">
+          <label>{formatPropName(propKey)}:</label>
+          <div className="no-models-available">
+            No models available for this component.
+          </div>
+        </div>
+      );
+    }
     
     return (
       <div className="config-item model-select">
@@ -618,12 +721,13 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
             }, 50);
           }}
         >
-          {availableModels.map((model) => (
+          {availableModels.length > 0 && availableModels.map((model) => (
             <option key={model.id} value={model.id}>
-              {model.name}
+              {model.name || model.id.toUpperCase()}
             </option>
           ))}
         </select>
+        <div className="model-count">{availableModels.length} models available</div>
       </div>
     );
   }
@@ -638,6 +742,7 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
     // State to track available classes and current model
     const [availableClasses, setAvailableClasses] = useState<string[]>([]);
     const [currentModel, setCurrentModel] = useState<string>("");
+    const [isLoadingClasses, setIsLoadingClasses] = useState<boolean>(true);
     
     // Use state to track selected classes
     const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
@@ -645,6 +750,7 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
     // Effect to load available classes for the current model
     useEffect(() => {
       const loadClassData = () => {
+        setIsLoadingClasses(true);
         console.log("Loading class data for component:", nodeId, componentType);
         
         // Check if this component has model_classes property (first in config then globally)
@@ -691,17 +797,6 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
             console.log("Using model_classes from global component definitions:", componentDef.model_classes);
             modelClassesMap = componentDef.model_classes;
           }
-          
-          // If still no model_classes, use default
-          if (Object.keys(modelClassesMap).length === 0) {
-            console.log("Using default model_classes");
-            modelClassesMap = {
-              "yolov4": ["person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light", 
-                      "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow"],
-              "yolov8": ["person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light", 
-                      "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow"]
-            };
-          }
         }
         
         // Get classes for the current model
@@ -724,6 +819,7 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
         // Update state with found data
         setCurrentModel(model);
         setAvailableClasses(classes || []);
+        setIsLoadingClasses(false);
       };
       
       // Load class data initially
@@ -769,15 +865,35 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
       setSelectedClasses(validClasses);
     }, [JSON.stringify(availableClasses), propValue]);
     
-    // No classes available, show a message
+    // Show loading state
+    if (isLoadingClasses) {
+      return (
+        <div className="config-item classes-selection">
+          <label>{formatPropName(propKey)}:</label>
+          <div className="loading-classes">Loading available classes...</div>
+        </div>
+      );
+    }
+    
+    // No model selected
+    if (!currentModel) {
+      return (
+        <div className="config-item classes-selection">
+          <label>{formatPropName(propKey)}:</label>
+          <div className="no-model-selected">
+            Please select a model first to see available classes.
+          </div>
+        </div>
+      );
+    }
+    
+    // No classes available for this model
     if (availableClasses.length === 0) {
       return (
         <div className="config-item">
           <label>{formatPropName(propKey)}:</label>
           <div className="classes-empty">
-            {currentModel ? 
-              `No classes available for model "${currentModel}"` : 
-              "No classes available for this model"}
+            No classes available for model "{currentModel}"
           </div>
         </div>
       );
@@ -863,9 +979,11 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
     const [availableClasses, setAvailableClasses] = useState<string[]>([]);
     const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
     const [isConnectedToDetector, setIsConnectedToDetector] = useState<boolean>(false);
+    const [isLoadingDetectorClasses, setIsLoadingDetectorClasses] = useState<boolean>(true);
     
     // Function to load detector classes
     const loadClassData = useCallback(() => {
+      setIsLoadingDetectorClasses(true);
       console.log("🔍 Loading class data for event_alarm:", nodeId);
       
       // Check if this alarm node is connected to any detectors (directly or indirectly)
@@ -878,6 +996,7 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
         if (!alarmNode) {
           console.log("Alarm node not found in pipeline data");
           setIsConnectedToDetector(false);
+          setIsLoadingDetectorClasses(false);
           return;
         }
         
@@ -994,18 +1113,9 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
       // Remove duplicates
       detectorClasses = Array.from(new Set(detectorClasses));
       
-      // If detector is connected but no classes were found, provide "person" as default
-      if (detectorFound && detectorClasses.length === 0) {
-        detectorClasses = ["person"];
-        console.log("Detector connected but no classes found, using default 'person' class");
-      }
-      
-      // Always ensure we have at least "person" class available if connected
-      if (detectorFound && !detectorClasses.includes("person")) {
-        detectorClasses.push("person");
-      }
-      
+      // Set available classes from detector
       setAvailableClasses(detectorFound ? detectorClasses : []);
+      setIsLoadingDetectorClasses(false);
     }, [nodeId]);
     
     // Effect to set up listeners and load initial data
@@ -1032,6 +1142,7 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
             Array.isArray(event.detail.classes) && event.detail.classes.length > 0) {
           setAvailableClasses(Array.from(new Set(event.detail.classes)));
           setIsConnectedToDetector(true);
+          setIsLoadingDetectorClasses(false);
         }
       };
       
@@ -1068,12 +1179,8 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
         initialSelectedClasses = propValue;
       }
       
-      // If no classes are selected but we have available classes, default to all available classes
-      if (initialSelectedClasses.length === 0 && availableClasses.length > 0 && isConnectedToDetector) {
-        initialSelectedClasses = [...availableClasses];
-        // And update the configuration
-        onConfigUpdate(nodeId, propKey, availableClasses);
-      }
+      // If no classes are selected but we have available classes, don't automatically select them all
+      // The user needs to specifically choose which classes to use for alarms
       
       // Filter selected classes to only include those available
       const validClasses = initialSelectedClasses.filter(cls => 
@@ -1083,6 +1190,18 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
       // Update selected classes state
       setSelectedClasses(validClasses);
     }, [JSON.stringify(availableClasses), propValue, nodeId, propKey, onConfigUpdate, isConnectedToDetector]);
+    
+    // Loading state
+    if (isLoadingDetectorClasses) {
+      return (
+        <div className="config-item">
+          <label>Allowed Classes:</label>
+          <div className="loading-detector-classes">
+            Checking for connected detectors...
+          </div>
+        </div>
+      );
+    }
     
     // No detector connected yet - show message
     if (!isConnectedToDetector) {
@@ -1555,7 +1674,7 @@ const logPipelineConnections = (pipeline: Pipeline, label: string) => {
 };
 
 // Add the Promise to the return type of the function component
-const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({ 
+const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps> = ({
   streamId, 
   streamName, 
   streamSource, 
@@ -1626,7 +1745,105 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
   const [processingState, setProcessingState] = useState<'idle' | 'processing' | 'error'>('idle');
   const [processingMessage, setProcessingMessage] = useState<string>('');
   
+  // Add state for loading models from API
+  const [loadingModels, setLoadingModels] = useState<boolean>(false);
+  
   const builderRef = useRef<HTMLDivElement>(null);
+
+  // Fetch models data from API when component mounts
+  useEffect(() => {
+    const fetchModelsData = async (): Promise<void> => {
+      try {
+        setLoadingModels(true);
+        console.log("Fetching vision models from API...");
+        
+        const modelsData = await getVisionModels();
+        console.log("Received models data:", modelsData);
+        
+        // Only continue if we got valid model data
+        if (!modelsData) {
+          console.warn("No models data received from API");
+          setLoadingModels(false);
+          return;
+        }
+
+        // Update global component definitions with model data
+        if (window.__COMPONENT_DEFS__ && Array.isArray(window.__COMPONENT_DEFS__)) {
+          const updatedDefs = [...window.__COMPONENT_DEFS__];
+          
+          // Process object detection models
+          if (modelsData.model_classes) {
+            // Map components to appropriate model data
+            updatedDefs.forEach(comp => {
+              // Object detector components
+              if (comp.id === 'object_detector') {
+                comp.model_classes = modelsData.model_classes;
+                console.log("Updated object_detector with model classes:", comp.model_classes);
+                
+                // Create models list for dropdown
+                comp.available_models = Object.keys(modelsData.model_classes).map(id => ({
+                  id,
+                  name: id.toUpperCase()
+                }));
+                console.log("Created models list for object_detector:", comp.available_models);
+              }
+              
+              // Face detector components
+              else if (comp.id === 'face_detector') {
+                // For face detectors, we can use available models but without class labels
+                if (modelsData.model_types && modelsData.model_types.face_detection) {
+                  comp.available_models = modelsData.model_types.face_detection;
+                  console.log("Updated face_detector with available models:", comp.available_models);
+                }
+              }
+              
+              // Image classifier components
+              else if (comp.id === 'image_classifier') {
+                // For classifiers, use available models and their classes
+                if (modelTypes['image_classification']) {
+                  comp.available_models = modelTypes['image_classification'];
+                  
+                  // If model_classes has entries for these models, add them
+                  if (modelsData.model_classes) {
+                    comp.model_classes = {};
+                    
+                    // Filter model_classes to only include classification models
+                    Object.keys(modelsData.model_classes).forEach(modelId => {
+                      const isClassificationModel = modelTypes['image_classification'].some(
+                        (m: any) => m.id === modelId
+                      );
+                      
+                      if (isClassificationModel) {
+                        comp.model_classes![modelId] = modelsData.model_classes[modelId];
+                      }
+                    });
+                    
+                    console.log("Updated image_classifier with model classes:", comp.model_classes);
+                  }
+                }
+              }
+            });
+            
+            window.__COMPONENT_DEFS__ = updatedDefs;
+            console.log("Updated window.__COMPONENT_DEFS__ with API model data");
+            
+            // Trigger a change event to refresh any components that might be listening
+            const event = new CustomEvent('models-updated', { 
+              detail: { modelsData } 
+            });
+            document.dispatchEvent(event);
+          }
+        }
+        
+        setLoadingModels(false);
+      } catch (error) {
+        console.error("Error fetching models data:", error);
+        setLoadingModels(false);
+      }
+    };
+    
+    fetchModelsData();
+  }, []);
 
   // Modify the componentsList definition to ensure there's a source component
   const componentsList: VisionComponent[] = useMemo(() => {
@@ -1656,17 +1873,21 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     // Ensure detector components have model_classes
     components.forEach(component => {
       if (component.category === 'detector' && (!component.model_classes || Object.keys(component.model_classes || {}).length === 0)) {
-        console.log(`Adding default model_classes to ${component.id}`);
-        component.model_classes = {
-          "yolov4": ["person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light", 
-                   "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow"],
-          "yolov8": ["person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light", 
-                   "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow"]
-        };
+        console.log(`Checking for model_classes for ${component.id}`);
+        
+        // Look for model classes from window.__COMPONENT_DEFS__ first
+        const globalDef = window.__COMPONENT_DEFS__?.find(def => def.id === component.id);
+        if (globalDef && globalDef.model_classes) {
+          component.model_classes = globalDef.model_classes;
+          console.log(`Using model_classes from global definition for ${component.id}`);
+        }
+        // No hardcoded defaults - if no model classes are available, leave empty
       }
       
       if (component.model_classes) {
         console.log(`Component ${component.id} has model_classes:`, component.model_classes);
+      } else {
+        console.log(`Component ${component.id} has no model_classes available`);
       }
     });
     
