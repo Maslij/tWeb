@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import '../styles/VisionPipelineBuilder.css';
 import LineZoneConfigModal from './LineZoneConfigModal';
-import PresetPipelines, { PipelinePreset } from './PresetPipelines';
 import ConfigurableProperties from './ConfigurableProperties';
 import { isPipelineProcessing, waitForPipelineProcessing } from '../services/api';
 
@@ -1623,9 +1622,6 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
   const [currentLineZoneNode, setCurrentLineZoneNode] = useState<PipelineNode | null>(null);
   const [cameraFeedNode, setCameraFeedNode] = useState<PipelineNode | null>(null);
   
-  // Add new state for preset selector
-  const [showPresetSelector, setShowPresetSelector] = useState(!initialPipeline && !pipeline.nodes.some(node => node.componentId !== 'camera_feed'));
-  
   // Add state for pipeline processing status
   const [processingState, setProcessingState] = useState<'idle' | 'processing' | 'error'>('idle');
   const [processingMessage, setProcessingMessage] = useState<string>('');
@@ -1782,21 +1778,6 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
       setSelectedCategory(availableCategories[0]);
     }
   }, [availableCategories, selectedCategory]);
-
-  // Add a new effect to cleanup state when showing preset selector
-  useEffect(() => {
-    if (showPresetSelector) {
-      // Clean up all connection-related state when showing preset selector
-      setIsDrawingConnection(false);
-      setConnectionStart(null);
-      setConnectionEnd(null);
-      setPossibleConnectionTargets([]);
-      setSelectedNode(null);
-      setDraggingNode(null);
-      setActiveComponent(null);
-      setSelectedComponent(null);
-    }
-  }, [showPresetSelector]);
 
   // Filter components based on selected category
   const filteredComponents = componentsList.filter(
@@ -2876,329 +2857,7 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
     setIsLineZoneModalOpen(false);
   };
 
-  // Add method to apply a preset pipeline
-  const applyPresetPipeline = (preset: PipelinePreset) => {
-    setProcessingState('processing');
-    setProcessingMessage('Setting up preset pipeline...');
-    
-    console.log("Applying preset pipeline:", preset);
-    
-    // Define an async function to handle the actual work
-    const processPreset = async () => {
-      try {
-        // Fetch the latest vision components to ensure we have all available model_classes
-        let visionComponentsData = componentsList;
-        try {
-          // Import the getVisionComponents function from the API service
-          const { getVisionComponents } = await import('../services/api');
-          const components = await getVisionComponents();
-          if (components && components.length > 0) {
-            console.log("Successfully fetched vision components from API");
-            visionComponentsData = components.map(comp => normalizeComponent(comp));
-          }
-        } catch (error) {
-          console.error("Error fetching vision components:", error);
-          // Continue with the existing componentsList if API fetch fails
-        }
-        
-        // Generate unique IDs for each node
-        const timestamp = Date.now();
-        const nodeMap: Record<string, string> = {};
-      
-        // Calculate layout grid parameters
-        const nodeWidth = 180; // Approximate width of a node
-        const nodeHeight = 120; // Approximate height of a node
-        const horizontalGap = 220; // Gap between nodes horizontally
-        const verticalGap = 250; // Increased vertical gap to prevent overlapping
-        const nodesPerRow = 3; // Maximum number of nodes per row
-        const startX = 50; // Starting X position
-        const startY = 50; // Starting Y position
-      
-        // First pass: Create all nodes with unique IDs
-        const newNodes = preset.nodes.map((presetNode, index) => {
-          // Generate a unique ID for this node that maintains its original ID pattern
-          // This is critical for maintaining connection references
-          const uniqueId = `${presetNode.componentId}_${timestamp}_${index}`;
-          
-          // Calculate grid position
-          const row = Math.floor(index / nodesPerRow);
-          const col = index % nodesPerRow;
-          const posX = startX + (col * horizontalGap);
-          const posY = startY + (row * verticalGap);
-          
-          // For camera_feed (source) components, handle specially
-          if (presetNode.componentId === 'camera_feed') {
-            const sourceNode: PipelineNode = {
-              id: uniqueId,
-              componentId: 'camera_feed',
-              position: { x: posX, y: posY }, 
-              connections: [], // Start with empty connections, we'll fill them in the second pass
-              config: presetNode.config ? { ...presetNode.config } : {},
-              sourceDetails: {
-                name: streamName,
-                source: streamSource,
-                type: streamType
-              }
-            };
-            
-            // Store mapping from preset ID to actual node ID
-            nodeMap[presetNode.id] = uniqueId;
-            console.log(`Mapping preset node ${presetNode.id} to ${uniqueId}`);
-            
-            return sourceNode;
-          }
-          
-          // For other components, create with the preset config
-          const newNode: PipelineNode = {
-            id: uniqueId,
-            componentId: presetNode.componentId,
-            position: { x: posX, y: posY },
-            connections: [], // Start with empty connections, we'll fill them in the second pass
-            config: presetNode.config ? { ...presetNode.config } : {}
-          };
-          
-          // For object detector nodes, ensure we include all available model_classes from the API
-          if (presetNode.componentId === 'object_detector' || presetNode.componentId.includes('detector')) {
-            // Find this component type in our fetched components list
-            const detectorComponent = visionComponentsData.find(comp => 
-              comp.id === presetNode.componentId
-            );
-            
-            if (detectorComponent && detectorComponent.model_classes) {
-              console.log(`Found model_classes for ${presetNode.componentId}:`, detectorComponent.model_classes);
-              
-              // Ensure we're not overwriting any existing configuration
-              if (!newNode.config) {
-                newNode.config = {};
-              }
-              
-              // Save the model and selected classes from the preset
-              const presetModel = presetNode.config?.model;
-              const presetSelectedClasses = presetNode.config?.classes || [];
-              
-              // Use the complete model_classes data from the API
-              newNode.config.model_classes = detectorComponent.model_classes;
-              
-              // Keep the preset's selected model and classes
-              if (presetModel) {
-                newNode.config.model = presetModel;
-              }
-              
-              // Keep the preset's selected classes
-              if (Array.isArray(presetSelectedClasses) && presetSelectedClasses.length > 0) {
-                newNode.config.classes = presetSelectedClasses;
-              }
-            }
-          }
-          
-          // Store mapping from preset ID to actual node ID
-          nodeMap[presetNode.id] = uniqueId;
-          console.log(`Mapping preset node ${presetNode.id} to ${uniqueId}`);
-          
-          return newNode;
-        });
-        
-        // Second pass: Add connections using the ID mapping
-        preset.nodes.forEach((presetNode, index) => {
-          if (presetNode.connections && presetNode.connections.length > 0) {
-            // Find the corresponding node in our new nodes array
-            const presetNodeId = presetNode.id || `${presetNode.componentId}_${index}`;
-            const uniqueNodeId = nodeMap[presetNodeId];
-            const sourceNode = newNodes.find(node => node.id === uniqueNodeId);
-            
-            if (sourceNode) {
-              // Map the preset connection IDs to our unique IDs
-              sourceNode.connections = presetNode.connections.map((targetId: string) => {
-                const mappedId = nodeMap[targetId];
-                console.log(`Mapping connection from ${sourceNode.id} to target ${targetId} -> ${mappedId}`);
-                return mappedId || targetId;
-              });
-              
-              console.log(`Set connections for node ${sourceNode.id}:`, sourceNode.connections);
-            }
-          }
-        });
-        
-        // Second pass: Add connections using the ID mapping and ensure correct ordering for alarm/annotation
-        preset.nodes.forEach((presetNode, index) => {
-          if (presetNode.connections && presetNode.connections.length > 0) {
-            // Find the corresponding node in our new nodes array
-            const presetNodeId = presetNode.id || `${presetNode.componentId}_${index}`;
-            const uniqueNodeId = nodeMap[presetNodeId];
-            const sourceNode = newNodes.find(node => node.id === uniqueNodeId);
-            
-            if (sourceNode) {
-              // Map the preset connection IDs to our unique IDs
-              sourceNode.connections = presetNode.connections.map((targetId: string) => {
-                const mappedId = nodeMap[targetId];
-                console.log(`Mapping connection from ${sourceNode.id} to target ${targetId} -> ${mappedId}`);
-                return mappedId || targetId;
-              });
-              
-              console.log(`Set connections for node ${sourceNode.id}:`, sourceNode.connections);
-            }
-          }
-        });
-        
-        // Third pass: Ensure correct ordering for alarm and annotation components
-        // First, identify if we have both an alarm and annotation component
-        const alarmNodes = newNodes.filter(node => node.componentId === 'event_alarm');
-        const annotationNodes = newNodes.filter(node => 
-          node.componentId === 'annotated_stream' || 
-          node.componentId === 'annotated_video_sink'
-        );
-        
-        // If we have both alarm and annotation components
-        if (alarmNodes.length > 0 && annotationNodes.length > 0) {
-          console.log("Found both alarm and annotation nodes, ensuring correct connection order");
-          
-          // Find detector or tracker nodes (sources for the alarm)
-          const detectorNodes = newNodes.filter(node => 
-            node.componentId.includes('detector') || 
-            node.componentId.includes('tracker')
-          );
-          
-          if (detectorNodes.length > 0) {
-            // For each detector/tracker node, check if it connects directly to an annotation
-            detectorNodes.forEach(detectorNode => {
-              // Get the IDs of nodes this detector connects to
-              const connectedToIds = detectorNode.connections;
-              
-              // Check if any of these connections are to annotation nodes
-              const connectsToAnnotation = connectedToIds.some(id => 
-                annotationNodes.some(anno => anno.id === id)
-              );
-              
-              if (connectsToAnnotation) {
-                // If detector connects directly to annotation but we have alarm nodes,
-                // we should insert the alarm in between
-                console.log("Detector connects directly to annotation, reordering to include alarm");
-                
-                // Remove direct connections from detector to annotation
-                detectorNode.connections = detectorNode.connections.filter(id => 
-                  !annotationNodes.some(anno => anno.id === id)
-                );
-                
-                // Connect detector to first alarm instead
-                if (alarmNodes.length > 0) {
-                  detectorNode.connections.push(alarmNodes[0].id);
-                  
-                  // Now connect the alarm to annotation
-                  const alarmNode = alarmNodes[0];
-                  // Clear existing connections from alarm
-                  alarmNode.connections = [];
-                  // Connect to annotation
-                  if (annotationNodes.length > 0) {
-                    alarmNode.connections.push(annotationNodes[0].id);
-                  }
-                }
-              }
-            });
-          }
-          
-          // Find any alarm node that's not connected to anything yet
-          const unconnectedAlarms = alarmNodes.filter(alarm => 
-            !newNodes.some(node => node.connections.includes(alarm.id))
-          );
-          
-          if (unconnectedAlarms.length > 0) {
-            console.log("Found unconnected alarms, attempting to insert into pipeline");
-            
-            // Find detectors that connect directly to annotations
-            const detectorToAnnotationConnections = newNodes.filter(node =>
-              node.connections.some(id => annotationNodes.some(anno => anno.id === id))
-            );
-            
-            if (detectorToAnnotationConnections.length > 0) {
-              // Take the first detector->annotation connection and reroute through alarm
-              const sourceNode = detectorToAnnotationConnections[0];
-              const annotationId = sourceNode.connections.find(id => 
-                annotationNodes.some(anno => anno.id === id)
-              );
-              
-              if (annotationId) {
-                // Remove direct connection
-                sourceNode.connections = sourceNode.connections.filter(id => id !== annotationId);
-                
-                // Connect to alarm instead
-                sourceNode.connections.push(unconnectedAlarms[0].id);
-                
-                // Connect alarm to annotation
-                unconnectedAlarms[0].connections = [annotationId];
-                console.log("Rerouted connection through alarm:", sourceNode.id, "->", unconnectedAlarms[0].id, "->", annotationId);
-              }
-            }
-          }
-        }
-        
-        // Create the new pipeline
-        const newPipeline: Pipeline = {
-          id: `pipeline_${timestamp}`,
-          name: `${streamName || 'New'} ${preset.name} Pipeline`,
-          nodes: newNodes
-        };
-        
-        console.log("Created new pipeline from preset:", newPipeline);
-        
-        // Log pipeline connections before setting state
-        logPipelineConnections(newPipeline, "Before setState");
-        
-        // Apply the pipeline
-        setPipeline(newPipeline);
-        resetPipelineState(); 
-        setShowPresetSelector(false);
-        
-        // On next render cycle, check if connections are still intact
-        setTimeout(() => {
-          logPipelineConnections(newPipeline, "After setState (before save)");
-        }, 100);
-        
-        // Save the pipeline after a delay to ensure the UI is updated
-        setTimeout(() => {
-          console.log("Saving new preset pipeline");
-          // Create a deep copy to avoid any reference issues
-          const pipelineToSave = JSON.parse(JSON.stringify(newPipeline));
-          pipelineToSave.streamId = streamId;
-          pipelineToSave.active = true;
-          
-          // Log pipeline connections before saving
-          logPipelineConnections(pipelineToSave, "Before saving");
-          
-          try {
-            onSave(pipelineToSave);
-            setFlashMessage({
-              message: 'Pipeline created from preset successfully!',
-              type: 'success'
-            });
-            
-            // Check pipeline connections after save attempt
-            setTimeout(() => {
-              const currentPipeline = JSON.parse(JSON.stringify(pipeline));
-              logPipelineConnections(currentPipeline, "After save");
-            }, 500);
-            
-          } catch (error) {
-            console.error("Error saving preset pipeline:", error);
-            setFlashMessage({
-              message: 'Error creating pipeline from preset.',
-              type: 'error'
-            });
-          }
-        }, 500);
-      } catch (error) {
-        console.error("Error applying preset pipeline:", error);
-        setFlashMessage({
-          message: 'Error creating pipeline from preset.',
-          type: 'error'
-        });
-      }
-    };
-    
-    // Launch the async process
-    processPreset();
-  };
-
-  // Add a function to reset the pipeline state when switching to presets
+  // Function to reset the pipeline state
   const resetPipelineState = () => {
     // Reset connection and selection states
     setIsDrawingConnection(false);
@@ -3262,478 +2921,454 @@ const VisionPipelineBuilder: React.FC<VisionPipelineBuilderProps> = ({
         />
       )}
       
-      {/* Show preset selector if enabled */}
-      {showPresetSelector ? (
-        <div className="preset-selector-container">
-          <PresetPipelines onSelectPreset={applyPresetPipeline} />
-          
-          <div className="preset-footer">
-            <button 
-              className="btn-create-custom" 
-              onClick={() => setShowPresetSelector(false)}
-            >
-              Create Custom Pipeline
-            </button>
-          </div>
+      <div className="pipeline-controls">
+        <div className="pipeline-name">
+          <input 
+            type="text" 
+            value={pipeline.name}
+            onChange={(e) => setPipeline(prev => ({ ...prev, name: e.target.value }))}
+            placeholder="Pipeline Name"
+          />
         </div>
-      ) : (
-        <>
-          <div className="pipeline-controls">
-            <div className="pipeline-name">
-              <input 
-                type="text" 
-                value={pipeline.name}
-                onChange={(e) => setPipeline(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="Pipeline Name"
-              />
+        <div className="control-buttons">
+          <button onClick={() => setShowComponentList(!showComponentList)}>
+            {showComponentList ? 'Hide Components' : 'Show Components'}
+          </button>
+          <button 
+            onClick={handleSavePipelineDebounced} 
+            className="save-button"
+            disabled={isSaving || isSavingPipeline}
+          >
+            Save Pipeline
+          </button>
+          <button 
+            onClick={() => setShowDeletePipelineConfirmation(true)}
+            className="delete-button"
+            disabled={actionLoading || isDeletingPipeline}
+          >
+            Delete Pipeline
+          </button>
+        </div>
+      </div>
+      
+      <div className="pipeline-builder-container">
+        {showComponentList && (
+          <div className="component-palette">
+            <div className="component-categories">
+              {componentCategories.map(category => (
+                <button 
+                  key={category}
+                  className={`category-button ${selectedCategory === category ? 'active' : ''}`}
+                  onClick={() => setSelectedCategory(category)}
+                >
+                  {category.charAt(0).toUpperCase() + category.slice(1)}
+                </button>
+              ))}
             </div>
-            <div className="control-buttons">
-              <button onClick={() => setShowComponentList(!showComponentList)}>
-                {showComponentList ? 'Hide Components' : 'Show Components'}
-              </button>
-              <button onClick={() => {
-                resetPipelineState();
-                setShowPresetSelector(true);
-              }} className="preset-button">
-                Use Preset Pipeline
-              </button>
-              <button 
-                onClick={handleSavePipelineDebounced} 
-                className="save-button"
-                disabled={isSaving || isSavingPipeline}
-              >
-                Save Pipeline
-              </button>
-              <button 
-                onClick={() => setShowDeletePipelineConfirmation(true)}
-                className="delete-button"
-                disabled={actionLoading || isDeletingPipeline}
-              >
-                Delete Pipeline
-              </button>
+            
+            <div className="component-list">
+              {filteredComponents.map(component => (
+                <div 
+                  key={component.id}
+                  className={`component-item ${selectedComponent === component.id ? 'selected' : ''} ${!canAddComponent(component) ? 'disabled' : ''}`}
+                  draggable={canAddComponent(component)}
+                  onDragStart={(e) => {
+                    if (canAddComponent(component)) {
+                      setActiveComponent(component);
+                      setSelectedComponent(component.id);
+                      if (builderRef.current) {
+                        const rect = builderRef.current.getBoundingClientRect();
+                        setDragOffset({
+                          x: 90, // Half the component width for centered placement
+                          y: 40  // Half the component height for centered placement
+                        });
+                      }
+                    }
+                  }}
+                  onMouseDown={(e) => handleDragStart(component, e)}
+                  onClick={() => canAddComponent(component) && setSelectedComponent(component.id)}
+                >
+                  <div className="component-name">{component.name}</div>
+                  <div className="component-description">{component.description}</div>
+                  {!canAddComponent(component) && (
+                    <div className="component-disabled-reason">
+                      {component.category === 'source' ? 
+                        'Only one source allowed' : 
+                        component.category === 'tracker' ?
+                        'Only one tracker allowed' :
+                        pipeline.nodes.some(node => node.componentId === component.id) ?
+                        'Component already in use' :
+                        'Requires compatible parent component'}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
-          
-          <div className="pipeline-builder-container">
-            {showComponentList && (
-              <div className="component-palette">
-                <div className="component-categories">
-                  {componentCategories.map(category => (
-                    <button 
-                      key={category}
-                      className={`category-button ${selectedCategory === category ? 'active' : ''}`}
-                      onClick={() => setSelectedCategory(category)}
-                    >
-                      {category.charAt(0).toUpperCase() + category.slice(1)}
-                    </button>
-                  ))}
-                </div>
+        )}
+        
+        <div 
+          ref={builderRef}
+          className="builder-canvas"
+          onMouseMove={isUIDisabled ? undefined : handleMouseMove}
+          onMouseUp={isUIDisabled ? undefined : handleMouseUp}
+          onDragOver={isUIDisabled ? undefined : handleDragOver}
+          onDrop={isUIDisabled ? undefined : handleDrop}
+          onClick={(e) => {
+            // If a component is selected, place it at the click position
+            if (selectedComponent && builderRef.current) {
+              const component = componentsList.find(c => c.id === selectedComponent);
+              if (component && canAddComponent(component)) {
+                const rect = builderRef.current.getBoundingClientRect();
+                const x = e.clientX - rect.left + builderRef.current.scrollLeft;
+                const y = e.clientY - rect.top + builderRef.current.scrollTop;
                 
-                <div className="component-list">
-                  {filteredComponents.map(component => (
-                    <div 
-                      key={component.id}
-                      className={`component-item ${selectedComponent === component.id ? 'selected' : ''} ${!canAddComponent(component) ? 'disabled' : ''}`}
-                      draggable={canAddComponent(component)}
-                      onDragStart={(e) => {
-                        if (canAddComponent(component)) {
-                          setActiveComponent(component);
-                          setSelectedComponent(component.id);
-                          if (builderRef.current) {
-                            const rect = builderRef.current.getBoundingClientRect();
-                            setDragOffset({
-                              x: 90, // Half the component width for centered placement
-                              y: 40  // Half the component height for centered placement
-                            });
-                          }
-                        }
-                      }}
-                      onMouseDown={(e) => handleDragStart(component, e)}
-                      onClick={() => canAddComponent(component) && setSelectedComponent(component.id)}
-                    >
-                      <div className="component-name">{component.name}</div>
-                      <div className="component-description">{component.description}</div>
-                      {!canAddComponent(component) && (
-                        <div className="component-disabled-reason">
-                          {component.category === 'source' ? 
-                            'Only one source allowed' : 
-                            component.category === 'tracker' ?
-                            'Only one tracker allowed' :
-                            pipeline.nodes.some(node => node.componentId === component.id) ?
-                            'Component already in use' :
-                            'Requires compatible parent component'}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            <div 
-              ref={builderRef}
-              className="builder-canvas"
-              onMouseMove={isUIDisabled ? undefined : handleMouseMove}
-              onMouseUp={isUIDisabled ? undefined : handleMouseUp}
-              onDragOver={isUIDisabled ? undefined : handleDragOver}
-              onDrop={isUIDisabled ? undefined : handleDrop}
-              onClick={(e) => {
-                // If a component is selected, place it at the click position
-                if (selectedComponent && builderRef.current) {
-                  const component = componentsList.find(c => c.id === selectedComponent);
-                  if (component && canAddComponent(component)) {
-                    const rect = builderRef.current.getBoundingClientRect();
-                    const x = e.clientX - rect.left + builderRef.current.scrollLeft;
-                    const y = e.clientY - rect.top + builderRef.current.scrollTop;
-                    
-                    // Add new component to pipeline
-                    const newNode: PipelineNode = {
-                      id: `${component.id}_${Date.now()}`,
-                      componentId: component.id,
-                      position: { 
-                        x: x - 90, // Center the component horizontally
-                        y: y - 40  // Center the component vertically
-                      },
-                      connections: [],
-                      config: component.config ? { ...component.config } : undefined
-                    };
-                    
-                    // If it's a source component, add stream details
-                    if (component.category === 'source') {
-                      newNode.sourceDetails = {
-                        name: streamName,
-                        source: streamSource,
-                        type: streamType
-                      };
-                    }
-                    
-                    setPipeline(prev => ({
-                      ...prev,
-                      nodes: [...prev.nodes, newNode]
-                    }));
-                    
-                    setActiveComponent(null);
-                    setSelectedComponent(null);
-                  }
-                } else {
-                  // If no component is selected and we clicked on empty space, unselect the current node
-                  setSelectedNode(null);
+                // Add new component to pipeline
+                const newNode: PipelineNode = {
+                  id: `${component.id}_${Date.now()}`,
+                  componentId: component.id,
+                  position: { 
+                    x: x - 90, // Center the component horizontally
+                    y: y - 40  // Center the component vertically
+                  },
+                  connections: [],
+                  config: component.config ? { ...component.config } : undefined
+                };
+                
+                // If it's a source component, add stream details
+                if (component.category === 'source') {
+                  newNode.sourceDetails = {
+                    name: streamName,
+                    source: streamSource,
+                    type: streamType
+                  };
                 }
-              }}
-            >
-              {/* Add this render element inside the builder-canvas div, just before the connections-layer svg */}
-              {pipeline.nodes.length === 0 && (
-                <div className="empty-pipeline-hint">
-                  <h3>Start Building Your Pipeline</h3>
-                  <p>Drag a source component here to begin.</p>
-                  <div className="arrow-hint">⟵ Select components from the panel</div>
-                </div>
-              )}
-              
-              {/* Draw connections between nodes */}
-              <svg className="connections-layer" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 1 }}>
-                {pipeline.nodes.map(node => 
-                  node.connections.map(targetId => {
-                    const targetNode = pipeline.nodes.find(n => n.id === targetId);
-                    if (!targetNode) return null;
-                    
-                    // Get the DOM elements for source and target nodes
-                    const sourceElement = document.getElementById(node.id);
-                    const targetElement = document.getElementById(targetId);
-                    if (!sourceElement || !targetElement) return null;
-
-                    // Get connection point positions
-                    const sourcePos = getConnectionPointPosition(sourceElement, false); // output point
-                    const targetPos = getConnectionPointPosition(targetElement, true);  // input point
-                    if (!sourcePos || !targetPos) return null;
-
-                    // Calculate absolute positions
-                    const sourceX = node.position.x + sourcePos.x;
-                    const sourceY = node.position.y + sourcePos.y;
-                    const targetX = targetNode.position.x + targetPos.x;
-                    const targetY = targetNode.position.y + targetPos.y;
-                    
-                    // Control points for curved line
-                    const cp1x = sourceX + Math.min(100, (targetX - sourceX) / 2);
-                    const cp1y = sourceY;
-                    const cp2x = targetX - Math.min(100, (targetX - sourceX) / 2);
-                    const cp2y = targetY;
-                    
-                    return (
-                      <path 
-                        key={`${node.id}-${targetId}`}
-                        d={`M ${sourceX} ${sourceY} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${targetX} ${targetY}`}
-                        fill="none"
-                        stroke="#666"
-                        strokeWidth="2"
-                        strokeDasharray="5,5"
-                        data-connection={`${node.id}-${targetId}`}
-                      />
-                    );
-                  })
-                )}
                 
-                {/* Drawing connection line */}
-                {isDrawingConnection && connectionStart && connectionEnd && (
+                setPipeline(prev => ({
+                  ...prev,
+                  nodes: [...prev.nodes, newNode]
+                }));
+                
+                setActiveComponent(null);
+                setSelectedComponent(null);
+              }
+            } else {
+              // If no component is selected and we clicked on empty space, unselect the current node
+              setSelectedNode(null);
+            }
+          }}
+        >
+          {/* Add this render element inside the builder-canvas div, just before the connections-layer svg */}
+          {pipeline.nodes.length === 0 && (
+            <div className="empty-pipeline-hint">
+              <h3>Start Building Your Pipeline</h3>
+              <p>Drag a source component here to begin.</p>
+              <div className="arrow-hint">⟵ Select components from the panel</div>
+            </div>
+          )}
+          
+          {/* Draw connections between nodes */}
+          <svg className="connections-layer" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 1 }}>
+            {pipeline.nodes.map(node => 
+              node.connections.map(targetId => {
+                const targetNode = pipeline.nodes.find(n => n.id === targetId);
+                if (!targetNode) return null;
+                
+                // Get the DOM elements for source and target nodes
+                const sourceElement = document.getElementById(node.id);
+                const targetElement = document.getElementById(targetId);
+                if (!sourceElement || !targetElement) return null;
+
+                // Get connection point positions
+                const sourcePos = getConnectionPointPosition(sourceElement, false); // output point
+                const targetPos = getConnectionPointPosition(targetElement, true);  // input point
+                if (!sourcePos || !targetPos) return null;
+
+                // Calculate absolute positions
+                const sourceX = node.position.x + sourcePos.x;
+                const sourceY = node.position.y + sourcePos.y;
+                const targetX = targetNode.position.x + targetPos.x;
+                const targetY = targetNode.position.y + targetPos.y;
+                
+                // Control points for curved line
+                const cp1x = sourceX + Math.min(100, (targetX - sourceX) / 2);
+                const cp1y = sourceY;
+                const cp2x = targetX - Math.min(100, (targetX - sourceX) / 2);
+                const cp2y = targetY;
+                
+                return (
                   <path 
-                    d={`M ${connectionStart.x} ${connectionStart.y} L ${connectionEnd.x} ${connectionEnd.y}`}
+                    key={`${node.id}-${targetId}`}
+                    d={`M ${sourceX} ${sourceY} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${targetX} ${targetY}`}
                     fill="none"
                     stroke="#666"
                     strokeWidth="2"
                     strokeDasharray="5,5"
+                    data-connection={`${node.id}-${targetId}`}
                   />
-                )}
-              </svg>
+                );
+              })
+            )}
+            
+            {/* Drawing connection line */}
+            {isDrawingConnection && connectionStart && connectionEnd && (
+              <path 
+                d={`M ${connectionStart.x} ${connectionStart.y} L ${connectionEnd.x} ${connectionEnd.y}`}
+                fill="none"
+                stroke="#666"
+                strokeWidth="2"
+                strokeDasharray="5,5"
+              />
+            )}
+          </svg>
+          
+          <div className="nodes-container" style={{ position: 'relative', zIndex: 2 }}>
+            {pipeline.nodes.map(node => {
+              const component = componentsList.find(c => c.id === node.componentId);
+              if (!component) return null;
               
-              <div className="nodes-container" style={{ position: 'relative', zIndex: 2 }}>
-                {pipeline.nodes.map(node => {
-                  const component = componentsList.find(c => c.id === node.componentId);
-                  if (!component) return null;
+              const isPossibleTarget = possibleConnectionTargets.includes(node.id);
+              
+              return (
+                <div 
+                  key={node.id}
+                  className={`pipeline-node ${component.category} ${selectedNode === node.id ? 'selected' : ''} ${isPossibleTarget ? 'possible-target' : ''} ${isDrawingConnection ? 'during-connection' : ''}`}
+                  style={{ 
+                    left: `${node.position.x}px`, 
+                    top: `${node.position.y}px`,
+                    cursor: isDrawingConnection && isPossibleTarget ? 'pointer' : 'default'
+                  }}
+                  id={node.id}
+                  data-node-id={node.id}
+                  data-component-id={component.id}
+                  onClick={(e) => {
+                    if (isDrawingConnection) {
+                      // Let the handleMouseUp handle the connection logic
+                      return;
+                    }
+                    handleNodeSelect(node.id, e);
+                  }}
+                  onMouseDown={(e) => {
+                    if (isDrawingConnection) {
+                      // Prevent dragging while drawing connections
+                      return;
+                    }
+                    handleNodeDragStart(node.id, e);
+                  }}
+                >
+                  <div className="node-header">
+                    <div className="node-name">{component.name}</div>
+                    <div className="node-controls">
+                      <button 
+                        className={`start-connection-btn ${node.connections.length > 0 ? 'is-connected' : ''}`}
+                        onClick={(e) => handleStartConnection(node.id, e)}
+                        title={node.connections.length > 0 ? "Disconnect node" : "Connect to another node"}
+                      >
+                        {node.connections.length > 0 ? '⊖' : '→'}
+                      </button>
+                      <button 
+                        className="delete-node-btn"
+                        onClick={() => handleDeleteNode(node.id)}
+                        title="Delete node"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                  <div className="node-body">
+                    <div className="node-type">{component.type}</div>
+                    
+                    {/* Show stream details for source nodes */}
+                    {component.category === 'source' && node.sourceDetails && (
+                      <div className="node-source-details">
+                        <div className="source-detail"><strong>Stream:</strong> {node.sourceDetails.name}</div>
+                        <div className="source-detail"><strong>Status:</strong> <span className={`status-indicator ${streamStatus}`}>{streamStatus}</span></div>
+                      </div>
+                    )}
+                    
+                    {component.inputs && component.inputs.length > 0 && (
+                      <div className="node-info">
+                        <small>Inputs: {component.inputs.join(', ')}</small>
+                      </div>
+                    )}
+                    {component.outputs && component.outputs.length > 0 && (
+                      <div className="node-info">
+                        <small>Outputs: {component.outputs.join(', ')}</small>
+                      </div>
+                    )}
+                  </div>
                   
-                  const isPossibleTarget = possibleConnectionTargets.includes(node.id);
-                  
-                  return (
-                    <div 
-                      key={node.id}
-                      className={`pipeline-node ${component.category} ${selectedNode === node.id ? 'selected' : ''} ${isPossibleTarget ? 'possible-target' : ''} ${isDrawingConnection ? 'during-connection' : ''}`}
-                      style={{ 
-                        left: `${node.position.x}px`, 
-                        top: `${node.position.y}px`,
-                        cursor: isDrawingConnection && isPossibleTarget ? 'pointer' : 'default'
-                      }}
-                      id={node.id}
-                      data-node-id={node.id}
-                      data-component-id={component.id}
-                      onClick={(e) => {
-                        if (isDrawingConnection) {
-                          // Let the handleMouseUp handle the connection logic
-                          return;
-                        }
-                        handleNodeSelect(node.id, e);
-                      }}
-                      onMouseDown={(e) => {
-                        if (isDrawingConnection) {
-                          // Prevent dragging while drawing connections
-                          return;
-                        }
-                        handleNodeDragStart(node.id, e);
-                      }}
-                    >
-                      <div className="node-header">
-                        <div className="node-name">{component.name}</div>
-                        <div className="node-controls">
-                          <button 
-                            className={`start-connection-btn ${node.connections.length > 0 ? 'is-connected' : ''}`}
-                            onClick={(e) => handleStartConnection(node.id, e)}
-                            title={node.connections.length > 0 ? "Disconnect node" : "Connect to another node"}
-                          >
-                            {node.connections.length > 0 ? '⊖' : '→'}
-                          </button>
-                          <button 
-                            className="delete-node-btn"
-                            onClick={() => handleDeleteNode(node.id)}
-                            title="Delete node"
-                          >
-                            ×
-                          </button>
+                  {/* Connection points */}
+                  {component.inputs && component.inputs.length > 0 && (
+                    <div className="connection-point input-point" title="Input"></div>
+                  )}
+                  {component.outputs && component.outputs.length > 0 && (
+                    <div className="connection-point output-point" title="Output"></div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        
+        {selectedNode && (
+          <div className="node-properties">
+            <h3>Node Properties</h3>
+            {(() => {
+              const node = pipeline.nodes.find(n => n.id === selectedNode);
+              if (!node) return null;
+              
+              const component = componentsList.find(c => c.id === node.componentId);
+              if (!component) return null;
+              
+              // Add special handling for source components to keep stream controls and details
+              if (component.category === 'source' && node.sourceDetails) {
+                return (
+                  <div>
+                    <h4>{component.name}</h4>
+                    <p>{component.description}</p>
+                    
+                    <div className="source-properties">
+                      <h5>Stream Details</h5>
+                      <div className="property-item">
+                        <label>ID:</label>
+                        <span>{streamId}</span>
+                      </div>
+                      <div className="property-item">
+                        <label>Name:</label>
+                        <span>{node.sourceDetails.name}</span>
+                      </div>
+                      <div className="property-item">
+                        <label>Source:</label>
+                        <span title={node.sourceDetails.source} className="source-url">{node.sourceDetails.source}</span>
+                      </div>
+                      <div className="property-item">
+                        <label>Type:</label>
+                        <span>{node.sourceDetails.type}</span>
+                      </div>
+                      <div className="property-item">
+                        <label>Status:</label>
+                        <span className={`status-indicator ${streamStatus}`}>{streamStatus}</span>
+                      </div>
+                      {streamResolution && (
+                        <div className="property-item">
+                          <label>Resolution:</label>
+                          <span>{streamResolution}</span>
                         </div>
-                      </div>
-                      <div className="node-body">
-                        <div className="node-type">{component.type}</div>
-                        
-                        {/* Show stream details for source nodes */}
-                        {component.category === 'source' && node.sourceDetails && (
-                          <div className="node-source-details">
-                            <div className="source-detail"><strong>Stream:</strong> {node.sourceDetails.name}</div>
-                            <div className="source-detail"><strong>Status:</strong> <span className={`status-indicator ${streamStatus}`}>{streamStatus}</span></div>
-                          </div>
-                        )}
-                        
-                        {component.inputs && component.inputs.length > 0 && (
-                          <div className="node-info">
-                            <small>Inputs: {component.inputs.join(', ')}</small>
-                          </div>
-                        )}
-                        {component.outputs && component.outputs.length > 0 && (
-                          <div className="node-info">
-                            <small>Outputs: {component.outputs.join(', ')}</small>
-                          </div>
-                        )}
-                      </div>
-                      
-                      {/* Connection points */}
-                      {component.inputs && component.inputs.length > 0 && (
-                        <div className="connection-point input-point" title="Input"></div>
                       )}
-                      {component.outputs && component.outputs.length > 0 && (
-                        <div className="connection-point output-point" title="Output"></div>
+                      {streamFps && (
+                        <div className="property-item">
+                          <label>FPS:</label>
+                          <span>{streamFps}</span>
+                        </div>
+                      )}
+                      
+                      {/* Stream Controls */}
+                      {component.id === 'camera_feed' && (
+                        <div className="stream-controls">
+                          <h5>Stream Controls</h5>
+                          <div className="stream-actions">
+                            {streamStatus !== 'running' && onStartStream && (
+                              <button 
+                                className="btn"
+                                onClick={handleStartStreamDebounced}
+                                disabled={actionLoading || isStartingStream}
+                              >
+                                Start Stream
+                              </button>
+                            )}
+                            {streamStatus === 'running' && onStopStream && (
+                              <button 
+                                className="btn btn-secondary"
+                                onClick={handleStopStreamDebounced}
+                                disabled={actionLoading || isStoppingStream}
+                              >
+                                Stop Stream
+                              </button>
+                            )}
+                            {onDeleteStream && (
+                              <button 
+                                className="btn btn-danger"
+                                onClick={() => setShowDeleteConfirmation(true)}
+                                disabled={actionLoading || isDeletingStream}
+                              >
+                                Delete Stream
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Camera feed preview */}
+                      {component.id === 'camera_feed' && renderCameraFeedPreview && (
+                        <div className="camera-feed-preview-container">
+                          <h5>Camera Feed Preview</h5>
+                          {renderCameraFeedPreview()}
+                        </div>
                       )}
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-            
-            {selectedNode && (
-              <div className="node-properties">
-                <h3>Node Properties</h3>
-                {(() => {
-                  const node = pipeline.nodes.find(n => n.id === selectedNode);
-                  if (!node) return null;
-                  
-                  const component = componentsList.find(c => c.id === node.componentId);
-                  if (!component) return null;
-                  
-                  // Add special handling for source components to keep stream controls and details
-                  if (component.category === 'source' && node.sourceDetails) {
-                    return (
-                      <div>
-                        <h4>{component.name}</h4>
-                        <p>{component.description}</p>
-                        
-                        <div className="source-properties">
-                          <h5>Stream Details</h5>
-                          <div className="property-item">
-                            <label>ID:</label>
-                            <span>{streamId}</span>
-                          </div>
-                          <div className="property-item">
-                            <label>Name:</label>
-                            <span>{node.sourceDetails.name}</span>
-                          </div>
-                          <div className="property-item">
-                            <label>Source:</label>
-                            <span title={node.sourceDetails.source} className="source-url">{node.sourceDetails.source}</span>
-                          </div>
-                          <div className="property-item">
-                            <label>Type:</label>
-                            <span>{node.sourceDetails.type}</span>
-                          </div>
-                          <div className="property-item">
-                            <label>Status:</label>
-                            <span className={`status-indicator ${streamStatus}`}>{streamStatus}</span>
-                          </div>
-                          {streamResolution && (
-                            <div className="property-item">
-                              <label>Resolution:</label>
-                              <span>{streamResolution}</span>
-                            </div>
-                          )}
-                          {streamFps && (
-                            <div className="property-item">
-                              <label>FPS:</label>
-                              <span>{streamFps}</span>
-                            </div>
-                          )}
-                          
-                          {/* Stream Controls */}
-                          {component.id === 'camera_feed' && (
-                            <div className="stream-controls">
-                              <h5>Stream Controls</h5>
-                              <div className="stream-actions">
-                                {streamStatus !== 'running' && onStartStream && (
-                                  <button 
-                                    className="btn"
-                                    onClick={handleStartStreamDebounced}
-                                    disabled={actionLoading || isStartingStream}
-                                  >
-                                    Start Stream
-                                  </button>
-                                )}
-                                {streamStatus === 'running' && onStopStream && (
-                                  <button 
-                                    className="btn btn-secondary"
-                                    onClick={handleStopStreamDebounced}
-                                    disabled={actionLoading || isStoppingStream}
-                                  >
-                                    Stop Stream
-                                  </button>
-                                )}
-                                {onDeleteStream && (
-                                  <button 
-                                    className="btn btn-danger"
-                                    onClick={() => setShowDeleteConfirmation(true)}
-                                    disabled={actionLoading || isDeletingStream}
-                                  >
-                                    Delete Stream
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                          
-                          {/* Camera feed preview */}
-                          {component.id === 'camera_feed' && renderCameraFeedPreview && (
-                            <div className="camera-feed-preview-container">
-                              <h5>Camera Feed Preview</h5>
-                              {renderCameraFeedPreview()}
-                            </div>
-                          )}
-                        </div>
-                        
-                        {/* Add configuration panel for any properties */}
-                        {node.config && Object.keys(node.config).length > 0 && (
-                          <NodePropertiesPanel
-                            node={node}
-                            component={component}
-                            onConfigUpdate={updateNodeConfig}
-                          />
-                        )}
-                      </div>
-                    );
-                  }
-                  
-                  // For non-source components, use the dynamic properties panel
-                  return (
-                    <NodePropertiesPanel
-                      node={node}
-                      component={component}
-                      onConfigUpdate={updateNodeConfig}
-                    />
-                  );
-                })()}
-              </div>
-            )}
+                    
+                    {/* Add configuration panel for any properties */}
+                    {node.config && Object.keys(node.config).length > 0 && (
+                      <NodePropertiesPanel
+                        node={node}
+                        component={component}
+                        onConfigUpdate={updateNodeConfig}
+                      />
+                    )}
+                  </div>
+                );
+              }
+              
+              // For non-source components, use the dynamic properties panel
+              return (
+                <NodePropertiesPanel
+                  node={node}
+                  component={component}
+                  onConfigUpdate={updateNodeConfig}
+                />
+              );
+            })()}
           </div>
-          
-          {/* Delete Confirmation Dialog */}
-          {showDeleteConfirmation && (
-            <ConfirmationDialog
-              isOpen={showDeleteConfirmation}
-              title="Delete Stream"
-              message="Are you sure you want to delete this stream? This action cannot be undone."
-              confirmText="Delete"
-              cancelText="Cancel"
-              onConfirm={handleDeleteStreamDebounced}
-              onCancel={() => setShowDeleteConfirmation(false)}
-            />
-          )}
+        )}
+      </div>
+      
+      {/* Delete Confirmation Dialog */}
+      {showDeleteConfirmation && (
+        <ConfirmationDialog
+          isOpen={showDeleteConfirmation}
+          title="Delete Stream"
+          message="Are you sure you want to delete this stream? This action cannot be undone."
+          confirmText="Delete"
+          cancelText="Cancel"
+          onConfirm={handleDeleteStreamDebounced}
+          onCancel={() => setShowDeleteConfirmation(false)}
+        />
+      )}
 
-          {/* Delete Pipeline Confirmation Dialog */}
-          <ConfirmationDialog
-            isOpen={showDeletePipelineConfirmation}
-            title="Delete Pipeline"
-            message="Are you sure you want to delete this pipeline? This action cannot be undone. If the pipeline is currently running, it will be stopped before deletion."
-            confirmText="Delete"
-            cancelText="Cancel"
-            onConfirm={() => {
-              setShowDeletePipelineConfirmation(false);
-              handleDeletePipelineDebounced();
-            }}
-            onCancel={() => setShowDeletePipelineConfirmation(false)}
-          />
-          
-          {/* Add the LineZoneConfigModal */}
-          {isLineZoneModalOpen && currentLineZoneNode && (
-            <LineZoneConfigModal 
-              isOpen={isLineZoneModalOpen}
-              onClose={() => setIsLineZoneModalOpen(false)}
-              streamId={streamId}
-              lines={currentLineZoneNode.config?.lines || []}
-              onSave={handleSaveLineZones}
-            />
-          )}
-        </>
+      {/* Delete Pipeline Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={showDeletePipelineConfirmation}
+        title="Delete Pipeline"
+        message="Are you sure you want to delete this pipeline? This action cannot be undone. If the pipeline is currently running, it will be stopped before deletion."
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={() => {
+          setShowDeletePipelineConfirmation(false);
+          handleDeletePipelineDebounced();
+        }}
+        onCancel={() => setShowDeletePipelineConfirmation(false)}
+      />
+      
+      {/* Add the LineZoneConfigModal */}
+      {isLineZoneModalOpen && currentLineZoneNode && (
+        <LineZoneConfigModal 
+          isOpen={isLineZoneModalOpen}
+          onClose={() => setIsLineZoneModalOpen(false)}
+          streamId={streamId}
+          lines={currentLineZoneNode.config?.lines || []}
+          onSave={handleSaveLineZones}
+        />
       )}
     </div>
   );
