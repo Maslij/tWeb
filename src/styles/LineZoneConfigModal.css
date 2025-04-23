@@ -50,6 +50,19 @@
   object-fit: contain;
 }
 
+.camera-feed-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-height: 300px;
+  color: var(--text-secondary);
+  font-style: italic;
+  background-color: var(--background-secondary);
+  border-radius: 8px;
+}
+
 .line-zone-canvas {
   position: absolute;
   top: 50%;

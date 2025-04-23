@@ -150,23 +150,13 @@ const StreamDetails = () => {
     
     try {
       setLoadingVisionData(true);
-      console.log("Fetching vision components...");
       const components = await getVisionComponents();
-      console.log("Received components:", components);
       
-      // Explicitly check and log model classes if available
-      const hasModelClasses = components.some(c => c.model_classes || c.available_models);
-      if (hasModelClasses) {
-        console.log("Found model classes in component data");
-      } else {
-        console.warn("No model classes found in component data - adding defaults");
-      }
-      
+
       // Check if we have detector components and ensure they have model_classes
       const enhancedComponents = components.map(component => {
         // Ensure detector components have model_classes
         if (component.category === 'detector' && !component.model_classes) {
-          console.log(`Adding default model_classes to ${component.id}`);
           return {
             ...component,
             model_classes: {
@@ -230,33 +220,15 @@ const StreamDetails = () => {
     
     try {
       setLoadingVisionData(true);
-      console.log("Fetching pipelines for stream:", id);
       
       try {
         const pipelineData = await getPipelinesForStream(id);
-        console.log("Received pipelines:", pipelineData);
-        
-        // Check that pipelines have connections
-        if (pipelineData.length > 0) {
-          pipelineData.forEach((pipeline: any) => {
-            console.log(`Pipeline ${pipeline.id} has ${pipeline.nodes.length} nodes`);
-            
-            // Log all connections for debugging
-            pipeline.nodes.forEach((node: any) => {
-              if (node.connections && node.connections.length > 0) {
-                console.log(`Node ${node.id} (${node.componentId}) connects to:`, node.connections);
-              } else {
-                console.log(`Node ${node.id} (${node.componentId}) has NO connections`);
-              }
-            });
-          });
-        }
+
         
         setPipelines(pipelineData);
         
         // If there are pipelines and no active pipeline is set yet, use the first one
         if (pipelineData.length > 0 && !activePipeline) {
-          console.log("Setting initial pipeline from list:", pipelineData[0]);
           setActivePipeline(pipelineData[0]);
         }
       } catch (err) {
@@ -266,36 +238,21 @@ const StreamDetails = () => {
       }
       
       // Also get the active pipeline
-      console.log("Fetching active pipeline...");
       try {
         const activePipelineData = await getActivePipeline(id);
-        console.log("Received active pipeline data:", activePipelineData);
         
         // Only update active pipeline if one was returned as active
         if (activePipelineData.active && activePipelineData.pipeline) {
-          console.log("Setting active pipeline from API:", activePipelineData.pipeline);
-          
-          // Check that pipeline has connections
-          const pipeline = activePipelineData.pipeline;
-          pipeline.nodes.forEach((node: any) => {
-            if (node.connections && node.connections.length > 0) {
-              console.log(`Node ${node.id} (${node.componentId}) connects to:`, node.connections);
-            } else {
-              console.log(`Node ${node.id} (${node.componentId}) has NO connections`);
-            }
-          });
           
           setActivePipeline(activePipelineData.pipeline);
         } else if (pipelines.length > 0 && !activePipeline) {
           // If no active pipeline but we have pipelines, use the first one
-          console.log("No active pipeline returned, using first from list:", pipelines[0]);
           setActivePipeline(pipelines[0]);
         }
       } catch (err) {
         console.error('Error fetching active pipeline:', err);
         // If we have pipelines but no active pipeline, use the first one
         if (pipelines.length > 0 && !activePipeline) {
-          console.log("Error getting active pipeline, using first from list:", pipelines[0]);
           setActivePipeline(pipelines[0]);
         }
       }
@@ -348,7 +305,6 @@ const StreamDetails = () => {
   useEffect(() => {
     // If we have both components and an active pipeline, enhance the pipeline with model classes
     if (visionComponents.length > 0 && activePipeline) {
-      console.log("Enhancing active pipeline with model classes from components");
       
       // Create a map of component IDs to model_classes
       const componentModelClasses: Record<string, any> = {};
@@ -372,7 +328,6 @@ const StreamDetails = () => {
           
           // Only update if the node doesn't already have model_classes
           if (!node.config.model_classes) {
-            console.log(`Adding model_classes to node ${node.id} (${node.componentId})`);
             node.config.model_classes = componentModelClasses[node.componentId];
             needsUpdate = true;
             
@@ -381,7 +336,6 @@ const StreamDetails = () => {
               const model = node.config.model;
               const classes = node.config.model_classes[model];
               if (classes && classes.length > 0) {
-                console.log(`Setting default classes for model ${model} in node ${node.id}`);
                 node.config.classes = classes.slice(0, 5); // Take first 5 classes as default
                 needsUpdate = true;
               }
@@ -392,7 +346,6 @@ const StreamDetails = () => {
       
       // Only update if changes were made
       if (needsUpdate) {
-        console.log("Updating active pipeline with enhanced model classes");
         setActivePipeline(enhancedPipeline);
       }
     }
@@ -451,38 +404,26 @@ const StreamDetails = () => {
       setActionLoading(true);
       
       let savedPipeline;
-      
-      console.log("Saving pipeline:", pipeline);
-      console.log("Checking connections before save:");
       pipeline.nodes.forEach((node: any) => {
         if (node.connections && node.connections.length > 0) {
-          console.log(`Node ${node.id} (${node.componentId}) connects to:`, node.connections);
         } else {
-          console.log(`Node ${node.id} (${node.componentId}) has NO connections`);
         }
       });
       
       // Check if this pipeline already exists in our known pipelines list
       const existingPipeline = pipelines.find(p => p.id === pipeline.id);
       
-      console.log("Existing pipelines:", pipelines);
-      console.log("Is existing pipeline:", !!existingPipeline);
-      
       // Make a deep copy of the pipeline to avoid reference issues
       const pipelineToSave = JSON.parse(JSON.stringify(pipeline));
       
       if (existingPipeline) {
         // Update existing pipeline
-        console.log("Updating existing pipeline:", pipeline.id);
         savedPipeline = await updatePipeline(id, pipeline.id, pipelineToSave);
       } else {
         // Create new pipeline - don't use the client-generated ID
-        console.log("Creating new pipeline");
         const { id: generatedId, ...pipelineWithoutId } = pipelineToSave;
         savedPipeline = await createPipeline(id, pipelineWithoutId);
       }
-      
-      console.log('Pipeline saved:', savedPipeline);
       
       // If the pipeline should be activated
       if (pipeline.active) {
@@ -492,21 +433,7 @@ const StreamDetails = () => {
       // Explicitly force complete refresh of all pipeline data
       // First fetching the list, then setting the active pipeline directly
       const updatedPipelines = await getPipelinesForStream(id);
-      
-      // Check connections in the updated pipelines
-      if (updatedPipelines.length > 0) {
-        console.log("Checking connections in updated pipelines:");
-        updatedPipelines.forEach((pipeline: any) => {
-          console.log(`Pipeline ${pipeline.id} has ${pipeline.nodes.length} nodes`);
-          pipeline.nodes.forEach((node: any) => {
-            if (node.connections && node.connections.length > 0) {
-              console.log(`Node ${node.id} (${node.componentId}) connects to:`, node.connections);
-            } else {
-              console.log(`Node ${node.id} (${node.componentId}) has NO connections`);
-            }
-          });
-        });
-      }
+
       
       setPipelines(updatedPipelines);
       
@@ -515,18 +442,6 @@ const StreamDetails = () => {
       if (pipeline.active) {
         const matchingPipeline = updatedPipelines.find(p => p.id === savedPipeline.id);
         if (matchingPipeline) {
-          console.log("Setting active pipeline after save:", matchingPipeline);
-          
-          // Check connections in active pipeline
-          console.log("Checking connections in active pipeline:");
-          matchingPipeline.nodes.forEach((node: any) => {
-            if (node.connections && node.connections.length > 0) {
-              console.log(`Node ${node.id} (${node.componentId}) connects to:`, node.connections);
-            } else {
-              console.log(`Node ${node.id} (${node.componentId}) has NO connections`);
-            }
-          });
-          
           setActivePipeline(matchingPipeline);
         }
       }
@@ -570,20 +485,12 @@ const StreamDetails = () => {
   useEffect(() => {
     // Make componentsList accessible to the VisionPipelineBuilder
     setComponentsList(visionComponents);
-    console.log("Updated componentsList with fetched components:", visionComponents);
-    
     // Add a debug log to check the model_classes
     const detectorsWithClasses = visionComponents.filter(c => 
       c.category === 'detector' && c.model_classes
     );
     
     if (detectorsWithClasses.length > 0) {
-      console.log("Detectors with model classes:", 
-        detectorsWithClasses.map(d => ({
-          id: d.id,
-          models: Object.keys(d.model_classes || {})
-        }))
-      );
     }
   }, [visionComponents]);
 

@@ -45,7 +45,6 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
   // Only set lines from initialLines once on mount, not during updates
   useEffect(() => {
     if (!initializedRef.current && initialLines.length > 0) {
-      console.log("Initial lines setup:", initialLines);
       setLines(initialLines);
       initializedRef.current = true;
     }
@@ -129,12 +128,6 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
       width: img.naturalWidth,
       height: img.naturalHeight
     });
-
-    console.log("Image loaded with dimensions:", {
-      natural: { width: img.naturalWidth, height: img.naturalHeight },
-      display: { width: displayWidth, height: displayHeight }
-    });
-    console.log("Current lines to draw:", lines);
     
     // Force redraw after a short delay to ensure the dimensions are all set
     setTimeout(() => {
@@ -152,7 +145,6 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
   // Ensure lines are drawn initially after canvas is ready
   useEffect(() => {
     if (imageDimensions.width > 0 && imageDimensions.height > 0 && !initializedRef.current) {
-      console.log("Canvas ready, drawing initial lines");
       forceRedraw();
       initializedRef.current = true;
     }
@@ -161,7 +153,6 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
   // Add a separate effect to redraw lines when image dimensions change or lines change
   useEffect(() => {
     if (imageDimensions.width > 0 && imageDimensions.height > 0 && !isDragging) {
-      console.log("Drawing lines after image dimensions set:", lines);
       drawLines();
     }
   }, [imageDimensions, lines, selectedLineId, selectedPoint, isDragging]);
@@ -183,12 +174,7 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
 
     const x = Math.round(canvasX * scaleX);
     const y = Math.round(canvasY * scaleY);
-    
-    console.log("Canvas coordinates:", { 
-      canvasPos: { x: canvasX, y: canvasY },
-      imagePos: { x, y }, 
-      scaling: { x: scaleX, y: scaleY }
-    });
+
 
     return { x, y };
   };
@@ -198,7 +184,6 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
     if (!canvasRef.current) return;
     
     const { x, y } = getCanvasCoordinates(e);
-    console.log("Mouse down at:", { x, y });
     
     // Check if the user clicked on a point of the selected line
     if (selectedLineId) {
@@ -220,7 +205,6 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
         const tolerance = 20; // Increase tolerance for easier selection
         
         if (startDistance < tolerance) {
-          console.log("Selected start point of line:", selectedLineId);
           setSelectedPoint('start');
           setIsDragging(true);
           // Set flag to prevent updates from initial lines
@@ -229,7 +213,6 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
         }
         
         if (endDistance < tolerance) {
-          console.log("Selected end point of line:", selectedLineId);
           setSelectedPoint('end');
           setIsDragging(true);
           // Set flag to prevent updates from initial lines
@@ -248,13 +231,11 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
       );
       
       if (lineDistance < 15) { // Increase tolerance for line selection
-        console.log("Selected line:", line.id);
         selectLine(line.id);
         return;
       }
     }
     
-    console.log("No line or point selected");
     setSelectedLineId(null);
     setSelectedPoint(null);
   };
@@ -267,9 +248,7 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
     e.preventDefault();
     
     const { x, y } = getCanvasCoordinates(e);
-    
-    console.log(`Dragging ${selectedPoint} point of line ${selectedLineId} to:`, { x, y });
-    
+        
     // Create a copy of the current lines to avoid state mutation issues
     const updatedLines = lines.map(line => {
       if (line.id === selectedLineId) {
@@ -372,11 +351,9 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
     
     // If no image dimensions yet, we can't draw properly scaled lines
     if (imageDimensions.width === 0 || imageDimensions.height === 0) {
-      console.log("Cannot draw lines: image dimensions not available yet");
       return;
     }
     
-    console.log("Drawing lines:", lines.length, "with image dimensions:", imageDimensions);
     
     // Scale factor for drawing
     const scaleX = canvas.width / imageDimensions.width;
@@ -391,15 +368,6 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
       const startY = line.start_y * scaleY;
       const endX = line.end_x * scaleX;
       const endY = line.end_y * scaleY;
-      
-      // Skip excessive logging for better performance during frequent redraws
-      if (!isDragging) {
-        console.log(`Drawing line ${line.id}:`, {
-          original: { start: { x: line.start_x, y: line.start_y }, end: { x: line.end_x, y: line.end_y } },
-          scaled: { start: { x: startX, y: startY }, end: { x: endX, y: endY } },
-          scaling: { x: scaleX, y: scaleY }
-        });
-      }
       
       // Line style
       ctx.lineWidth = isSelected ? 3 : 2;
@@ -515,7 +483,6 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
   // Handle canvas mouse up to end dragging
   const handleCanvasMouseUp = () => {
     if (isDragging) {
-      console.log("Drag ended");
       setIsDragging(false);
       
       // Force a complete redraw after dragging ends
@@ -578,13 +545,19 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
         <div className="line-zone-config-container">
           <div className="main-content">
             <div className="camera-view-container">
-              <img 
-                ref={imageRef}
-                src={imageUrl} 
-                alt="Camera Feed"
-                className="camera-feed-image"
-                onLoad={() => setImageLoaded(true)}
-              />
+              {imageUrl ? (
+                <img 
+                  ref={imageRef}
+                  src={imageUrl} 
+                  alt="Camera Feed"
+                  className="camera-feed-image"
+                  onLoad={() => setImageLoaded(true)}
+                />
+              ) : (
+                <div className="camera-feed-placeholder">
+                  Loading camera feed...
+                </div>
+              )}
               <canvas
                 ref={canvasRef}
                 className="line-zone-canvas"

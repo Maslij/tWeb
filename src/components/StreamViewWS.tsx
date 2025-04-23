@@ -48,13 +48,10 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
 
   // Log component initialization
   useEffect(() => {
-    console.log(`[StreamViewWS] Initializing with streamId: ${streamId}`);
-    console.log(`[StreamViewWS] API server host: ${apiService.getWebSocketHost()}`);
     
     // Perform a health check immediately
     apiService.checkServerHealth()
       .then(isHealthy => {
-        console.log(`[StreamViewWS] API server health check: ${isHealthy ? 'HEALTHY' : 'UNHEALTHY'}`);
       })
       .catch(err => {
         console.error('[StreamViewWS] API server health check failed:', err);
@@ -71,7 +68,6 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
         };
         const currentState = stateMap[wsRef.current.readyState] || 'UNKNOWN';
         
-        console.log(`[StreamViewWS] WebSocket connection status: ${currentState}`);
         
         // If the connection is in CLOSING state for too long, force close it
         if (wsRef.current.readyState === WebSocket.CLOSING) {
@@ -99,14 +95,12 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
     
     // Handle window unload event to properly close WebSocket connection
     const handleBeforeUnload = () => {
-      console.log('[StreamViewWS] Window is being unloaded, closing WebSocket');
       cleanupWebSocketConnection();
     };
     
     // Handle visibility change to cleanup when tab is hidden or page changes
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
-        console.log('[StreamViewWS] Page visibility changed to hidden, cleaning up WebSocket');
         cleanupWebSocketConnection();
       }
     };
@@ -115,7 +109,6 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
     document.addEventListener('visibilitychange', handleVisibilityChange);
       
     return () => {
-      console.log(`[StreamViewWS] Component unmounting for streamId: ${streamId}`);
       window.removeEventListener('beforeunload', handleBeforeUnload);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       clearInterval(connectionStatusInterval);
@@ -188,7 +181,6 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
           [WebSocket.CLOSING]: 'CLOSING',
           [WebSocket.CLOSED]: 'CLOSED'
         };
-        console.log(`[StreamViewWS] Cleaning up WebSocket connection (current state: ${stateMap[state]})`);
         
         // First send a disconnect message to tell the server we're leaving
         if (wsRef.current.readyState === WebSocket.OPEN) {
@@ -201,7 +193,6 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
               timestamp: Date.now() 
             }));
             
-            console.log('[StreamViewWS] Sent termination signal to server');
           } catch (e) {
             console.error('[StreamViewWS] Error sending disconnect message:', e);
           }
@@ -266,11 +257,9 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
 
   // Modify the cleanup effect to be more aggressive
   useEffect(() => {
-    console.log('[StreamViewWS] Component mounted/remounted');
     
     // Cleanup function that will run when component unmounts
     return () => {
-      console.log('[StreamViewWS] Component unmounting, performing cleanup');
       
       // First try normal cleanup
       cleanupWebSocketConnection();
@@ -311,7 +300,6 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
       return;
     }
 
-    console.log('[StreamViewWS] Setting up new WebSocket connection');
     
     // First, clean up any existing connection
     cleanupWebSocketConnection();
@@ -328,7 +316,6 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
         }
         
         ws.onopen = () => {
-          console.log('[WS] WebSocket connection opened');
           setConnected(true);
           setError(null);
           
@@ -341,7 +328,6 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
         };
         
         ws.onclose = (event) => {
-          console.log(`[WS] WebSocket connection closed: ${event.code} ${event.reason || ''}`);
           setConnected(false);
           
           // Unregister from global registry
@@ -362,30 +348,10 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
           const shouldLog = !ws.lastLogTime || now - ws.lastLogTime > 2000;
           
           if (shouldLog) {
-            console.log('[WS] Received message');
             ws.lastLogTime = now;
           }
           
           try {
-            // For RTSP debugging, log the raw data occasionally to see the message structure
-            if (isRtspStream && shouldLog) {
-              try {
-                const debugData = JSON.parse(event.data);
-                console.log('[WS RTSP Debug] Message structure:', JSON.stringify(debugData, null, 2));
-                console.log('[WS RTSP Debug] Message type:', debugData.type);
-                if (debugData.frame) {
-                  console.log('[WS RTSP Debug] Has frame data of length:', debugData.frame?.length || 0);
-                } else {
-                  console.log('[WS RTSP Debug] No frame data found in message');
-                  // Check if data might be in a different property
-                  const keys = Object.keys(debugData);
-                  console.log('[WS RTSP Debug] Available keys:', keys);
-                }
-              } catch (e) {
-                console.log('[WS RTSP Debug] Raw data (not JSON):', typeof event.data, event.data.length);
-              }
-            }
-            
             const message = JSON.parse(event.data);
             
             if (message.type === 'ping') {
@@ -393,9 +359,7 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
               if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
                 try {
                   wsRef.current.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
-                  if (shouldLog) {
-                    console.log('[WS] Sent pong response');
-                  }
+
                 } catch (err) {
                   console.error('[WS] Error sending pong:', err);
                 }
@@ -404,19 +368,12 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
             }
             
             if (message.type === 'frame') {
-              // Add RTSP debugging
-              if (isRtspStream && shouldLog) {
-                console.log('[WS RTSP Debug] Processing frame message:', 
-                           'has frame property:', !!message.frame,
-                           'frame length:', message.frame?.length || 0);
-              }
-              
+
               // Make sure we're using the correct property for the frame data
               if (message.frame) {
                 setFrameData(message.frame);
               } else if (message.data) {
                 // Some implementations might use 'data' instead of 'frame'
-                console.log('[WS] Using message.data instead of message.frame');
                 setFrameData(message.data);
               } else {
                 console.error('[WS] Frame message missing both frame and data properties:', message);
@@ -446,7 +403,6 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
               return;
             }
             
-            console.log('[WS] Unknown message type:', message.type);
           } catch (err) {
             console.error('[WS] Error parsing message:', err);
           }
@@ -454,7 +410,6 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
         
         // Special handling for RTSP streams
         if (isRtspStream) {
-          console.log('[WS] Setting up RTSP-specific WebSocket handling');
           
           // Add more aggressive ping interval for RTSP streams to keep connection alive
           const pingInterval = setInterval(() => {
@@ -483,15 +438,11 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${protocol}//${wsHost}/api/streams/${streamId}/ws?fps=${fps}`;
         
-        console.log(`[WS] Connecting to WebSocket: ${wsUrl}`);
-        
         // For RTSP streams, we may need additional connection parameters
         // Check if this is an RTSP stream to set appropriate timeouts and retry logic
         apiService.getStreamById(streamId)
           .then((streamData: any) => {
-            const isRtspStream = streamData?.type === 'rtsp';
-            console.log(`[WS] Stream type: ${streamData?.type}, applying ${isRtspStream ? 'RTSP-specific' : 'standard'} handling`);
-            
+            const isRtspStream = streamData?.type === 'rtsp';            
             // Start WebSocket connection with stream-type specific settings
             startWebSocketConnection(wsUrl, isRtspStream);
           })
@@ -511,7 +462,6 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
     
     // Cleanup function
     return () => {
-      console.log('[StreamViewWS] WebSocket effect cleanup - ensuring connection is closed');
       cleanupWebSocketConnection();
       
       // Clear any pending timeouts and intervals
@@ -553,7 +503,6 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
   // Draw frame data on canvas
   useEffect(() => {
     if (!frameData || !canvasRef.current) {
-      console.log('[Canvas] No frame data or canvas ref available');
       return;
     }
     
@@ -566,7 +515,6 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
     
     // Log the first 50 chars of frame data to help with debugging
     const framePreview = frameData.substring(0, 50) + '...';
-    console.log(`[Canvas] Processing frame data, length: ${frameData.length}, preview: ${framePreview}`);
     
     if (frameData.length < 100) {
       console.error('[Canvas] Frame data too short to be valid:', frameData);
@@ -578,7 +526,6 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
     
     // Add detailed error handling and debugging for image loading
     img.onload = () => {
-      console.log('[Canvas] Image loaded successfully, dimensions:', img.width, 'x', img.height);
       
       if (img.width === 0 || img.height === 0) {
         console.error('[Canvas] Image has invalid dimensions:', img.width, 'x', img.height);
@@ -595,7 +542,6 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
       // Draw the image on the canvas
       try {
         ctx.drawImage(img, 0, 0);
-        console.log('[Canvas] Image drawn on canvas successfully');
       } catch (err) {
         console.error('[Canvas] Error drawing image on canvas:', err);
       }
@@ -628,7 +574,6 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
     try {
       // Set the source to load the image
       img.src = `data:image/jpeg;base64,${frameData}`;
-      console.log('[Canvas] Set image source with base64 data');
       
       // Set a timeout to detect if the image fails to load but doesn't trigger onerror
       const loadTimeout = setTimeout(() => {
@@ -675,7 +620,6 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
       
       // Add global event handler
       window.addEventListener('beforeunload', () => {
-        console.log('[Global] Window unloading, closing all WebSockets');
         // Close all registered WebSockets
         if (window.__wsRegistry) {
           window.__wsRegistry.forEach(ws => {
@@ -696,7 +640,6 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
     const registerWs = (ws: WebSocket) => {
       if (window.__wsRegistry && ws) {
         window.__wsRegistry.push(ws);
-        console.log(`[Global] Registered WebSocket, registry size: ${window.__wsRegistry.length}`);
       }
     };
     
@@ -704,7 +647,6 @@ const StreamViewWS = ({ streamId, width = '100%', height = 'auto', fps = 15 }: S
     const unregisterWs = (ws: WebSocket) => {
       if (window.__wsRegistry && ws) {
         window.__wsRegistry = window.__wsRegistry.filter(registered => registered !== ws);
-        console.log(`[Global] Unregistered WebSocket, registry size: ${window.__wsRegistry.length}`);
       }
     };
     
