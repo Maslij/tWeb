@@ -38,6 +38,25 @@ export interface CreateStreamPayload {
   type: 'camera' | 'file' | 'rtsp';
   name: string;
   autoStart?: boolean;
+  username?: string;
+  password?: string;
+}
+
+export interface ValidateStreamPayload {
+  source: string;
+  type: 'camera' | 'file' | 'rtsp';
+  username?: string;
+  password?: string;
+}
+
+export interface ValidationResult {
+  valid: boolean;
+  error?: string;
+  details?: {
+    width?: number;
+    height?: number;
+    fps?: number;
+  };
 }
 
 // Polygon type definitions
@@ -175,6 +194,25 @@ const apiService = {
     } catch (error) {
       console.error('Error creating stream:', error);
       throw error;
+    }
+  },
+
+  validateStream: async (payload: ValidateStreamPayload): Promise<ValidationResult> => {
+    try {
+      const response = await axios.post(getFullUrl(`/api/validate-stream`), payload);
+      return response.data;
+    } catch (error) {
+      console.error('Error validating stream:', error);
+      if (axios.isAxiosError(error) && error.response) {
+        return {
+          valid: false,
+          error: error.response.data.error || 'Failed to validate stream'
+        };
+      }
+      return {
+        valid: false,
+        error: 'Connection error, please check your network'
+      };
     }
   },
 

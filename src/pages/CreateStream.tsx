@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import apiService, { OnvifCamera } from '../services/api';
+import apiService, { OnvifCamera, ValidationResult } from '../services/api';
 
 const CreateStream = () => {
   const navigate = useNavigate();
@@ -8,23 +8,49 @@ const CreateStream = () => {
     name: '',
     source: '',
     type: 'file' as 'camera' | 'file' | 'rtsp',
-    autoStart: true
+    autoStart: true,
+    username: '',
+    password: ''
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTemplate, setActiveTemplate] = useState<string | null>(null);
   const [formValid, setFormValid] = useState(false);
   
+  // Validation state
+  const [validating, setValidating] = useState(false);
+  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
+  const [showCredentials, setShowCredentials] = useState(false);
+  
   // Camera scanning state
   const [showScanModal, setShowScanModal] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [discoveredCameras, setDiscoveredCameras] = useState<OnvifCamera[]>([]);
   const [scanError, setScanError] = useState<string | null>(null);
+  
+  // Track whether validation is required before submission
+  const [validationRequired, setValidationRequired] = useState(false);
+
+  // Add local state for camera login
+  const [cameraCredentials, setCameraCredentials] = useState({
+    username: '',
+    password: ''
+  });
 
   useEffect(() => {
     // Validate form to enable/disable submit button
     const isValid = formData.name.trim() !== '' && formData.source.trim() !== '';
     setFormValid(isValid);
+    
+    // Show credential fields for RTSP streams
+    setShowCredentials(formData.type === 'rtsp');
+    
+    // Validation is required for RTSP streams and remote file URLs
+    const needsValidation = 
+      formData.type === 'rtsp' || 
+      (formData.type === 'file' && formData.source.trim().startsWith('http'));
+    
+    setValidationRequired(needsValidation);
   }, [formData]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -42,6 +68,9 @@ const CreateStream = () => {
         [name]: value
       });
     }
+    
+    // Reset validation result when inputs change
+    setValidationResult(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -52,16 +81,27 @@ const CreateStream = () => {
       return;
     }
     
+    // Check if validation is required but not yet performed or failed
+    if (validationRequired && (!validationResult || !validationResult.valid)) {
+      setError('Please validate the stream before creating it');
+      return;
+    }
+    
     try {
       setLoading(true);
       setError(null);
       
-      const response = await apiService.createStream({
+      // Create the payload, only including credentials if they're provided
+      const payload = {
         name: formData.name,
         source: formData.source,
         type: formData.type,
-        autoStart: formData.autoStart
-      });
+        autoStart: formData.autoStart,
+        ...(formData.username ? { username: formData.username } : {}),
+        ...(formData.password ? { password: formData.password } : {})
+      };
+      
+      const response = await apiService.createStream(payload);
       
       navigate(`/streams/${response.id}`);
     } catch (err) {
@@ -71,12 +111,51 @@ const CreateStream = () => {
     }
   };
 
+  const handleValidateStream = async () => {
+    if (!formData.source) {
+      setError('Source URL is required for validation');
+      return;
+    }
+    
+    try {
+      setValidating(true);
+      setError(null);
+      setValidationResult(null);
+      
+      // Create validation payload
+      const payload = {
+        source: formData.source,
+        type: formData.type as 'camera' | 'file' | 'rtsp',
+        ...(formData.username ? { username: formData.username } : {}),
+        ...(formData.password ? { password: formData.password } : {})
+      };
+      
+      const result = await apiService.validateStream(payload);
+      setValidationResult(result);
+      
+      if (!result.valid && result.error) {
+        setError(result.error);
+      }
+    } catch (err) {
+      console.error('Error validating stream:', err);
+      setError('Failed to validate stream connection');
+    } finally {
+      setValidating(false);
+    }
+  };
+
   const handleSelectTemplate = (template: { id: string; name: string; source: string; type: 'camera' | 'file' | 'rtsp'; description: string }) => {
+    // Reset validation when template changes
+    setValidationResult(null);
+    
     setFormData({
       ...formData,
       name: template.name,
       source: template.source,
-      type: template.type
+      type: template.type,
+      // Clear credentials when template changes
+      username: '',
+      password: ''
     });
     setActiveTemplate(template.id);
     
@@ -108,14 +187,58 @@ const CreateStream = () => {
     }
   };
   
-  const handleSelectCamera = (camera: OnvifCamera, rtspUrl: string) => {
+  const handleCredentialsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setCameraCredentials({
+      ...cameraCredentials,
+      [name]: value
+    });
+  };
+
+  const handleSelectCameraWithCredentials = async (camera: OnvifCamera, rtspUrl: string) => {
+    // Update form data first
     setFormData({
       ...formData,
       name: camera.name,
       source: rtspUrl,
-      type: 'rtsp'
+      type: 'rtsp',
+      // Use the credentials entered in the modal
+      username: cameraCredentials.username,
+      password: cameraCredentials.password
     });
+    
+    // Close the scan modal
     setShowScanModal(false);
+    
+    // Automatically validate the selected camera after a short delay 
+    // to allow state updates to complete
+    setTimeout(async () => {
+      try {
+        setValidating(true);
+        setError(null);
+        setValidationResult(null);
+        
+        // Create validation payload with the selected camera details
+        const payload = {
+          source: rtspUrl,
+          type: 'rtsp' as const,
+          ...(cameraCredentials.username ? { username: cameraCredentials.username } : {}),
+          ...(cameraCredentials.password ? { password: cameraCredentials.password } : {})
+        };
+        
+        const result = await apiService.validateStream(payload);
+        setValidationResult(result);
+        
+        if (!result.valid && result.error) {
+          setError(result.error);
+        }
+      } catch (err) {
+        console.error('Error validating camera stream:', err);
+        setError('Failed to validate camera connection');
+      } finally {
+        setValidating(false);
+      }
+    }, 100);
   };
 
   const templates = [
@@ -282,6 +405,43 @@ const CreateStream = () => {
                   </button>
                 </div>
                 
+                {/* Camera credentials form */}
+                <div className="camera-credentials-container">
+                  <h4>Camera Credentials (Optional)</h4>
+                  <p className="credentials-description">
+                    Many IP cameras require authentication. Enter credentials if needed.
+                  </p>
+                  <div className="camera-credentials-form">
+                    <div className="credential-group">
+                      <div className="form-group">
+                        <label htmlFor="camera-username">Username</label>
+                        <input
+                          type="text"
+                          id="camera-username"
+                          name="username"
+                          className="form-control"
+                          value={cameraCredentials.username}
+                          onChange={handleCredentialsChange}
+                          placeholder="admin"
+                        />
+                      </div>
+                      
+                      <div className="form-group">
+                        <label htmlFor="camera-password">Password</label>
+                        <input
+                          type="password"
+                          id="camera-password"
+                          name="password"
+                          className="form-control"
+                          value={cameraCredentials.password}
+                          onChange={handleCredentialsChange}
+                          placeholder="•••••••••"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
                 <div className="cameras-list">
                   {discoveredCameras.map((camera, cIndex) => (
                     <div key={camera.ip_address + cIndex} className="camera-card">
@@ -313,7 +473,7 @@ const CreateStream = () => {
                             <button 
                               key={index} 
                               className="stream-select-btn"
-                              onClick={() => handleSelectCamera(camera, url)}
+                              onClick={() => handleSelectCameraWithCredentials(camera, url)}
                               title={url}
                             >
                               Stream {index + 1}
@@ -1112,6 +1272,148 @@ const CreateStream = () => {
           :root[data-theme="dark"] .spinner-container::before {
             background: rgba(10, 132, 255, 0.15);
           }
+
+          /* Validation Styles */
+          .validation-bar {
+            display: flex;
+            margin-top: 1rem;
+            gap: 1rem;
+            align-items: center;
+          }
+          
+          .validation-result {
+            margin-top: 1rem;
+            padding: 1rem;
+            border-radius: 12px;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+          }
+          
+          .validation-result.valid {
+            background: var(--success-bg, rgba(52, 199, 89, 0.1));
+            color: var(--success-color, rgb(52, 199, 89));
+          }
+          
+          .validation-result.invalid {
+            background: var(--error-bg, rgba(255, 59, 48, 0.1));
+            color: var(--error-color, rgb(255, 59, 48));
+          }
+          
+          .validation-icon {
+            width: 24px;
+            height: 24px;
+            flex-shrink: 0;
+          }
+          
+          .validation-details {
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+          }
+          
+          .validation-details span {
+            display: inline-block;
+            margin-right: 1rem;
+          }
+          
+          .btn-validate {
+            background: var(--background-secondary);
+            color: var(--text-primary);
+          }
+          
+          .btn-validate:hover:not(:disabled) {
+            background: var(--hover-bg);
+          }
+          
+          .btn-validate:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+          }
+
+          .credential-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+          }
+
+          .camera-credentials-container {
+            background: var(--background-secondary);
+            border-radius: 12px;
+            padding: 16px;
+            margin: 16px 24px;
+          }
+          
+          .camera-credentials-container h4 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0 0 8px 0;
+          }
+          
+          .credentials-description {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-bottom: 16px;
+          }
+          
+          .camera-credentials-form .credential-group {
+            margin-bottom: 0;
+          }
+
+          /* Validation indicator in submit button */
+          .validation-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-right: 8px;
+          }
+          
+          .validation-indicator.required {
+            color: var(--error-color, rgb(255, 59, 48));
+          }
+          
+          .validation-indicator.passed {
+            color: var(--success-color, rgb(52, 199, 89));
+          }
+          
+          .validation-indicator-icon {
+            width: 16px;
+            height: 16px;
+          }
+          
+          /* Validation notice */
+          .validation-notice {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            background-color: var(--warning-bg, rgba(255, 204, 0, 0.1));
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 24px;
+            color: var(--warning-color, rgb(255, 159, 10));
+          }
+          
+          .validation-notice-icon {
+            width: 24px;
+            height: 24px;
+            flex-shrink: 0;
+            color: var(--warning-color, rgb(255, 159, 10));
+          }
+          
+          .validation-notice strong {
+            font-weight: 600;
+            margin-bottom: 4px;
+            display: block;
+          }
+          
+          .validation-notice p {
+            margin: 0;
+            color: var(--text-secondary);
+            font-size: 14px;
+            line-height: 1.4;
+          }
         `}
       </style>
 
@@ -1160,6 +1462,42 @@ const CreateStream = () => {
               <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" strokeWidth="2"/>
             </svg>
             {error}
+          </div>
+        )}
+        
+        {validationRequired && !validationResult && !error && (
+          <div className="validation-notice">
+            <svg className="validation-notice-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" strokeWidth="2"/>
+              <path d="M12 8V12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+              <path d="M12 16.01L12.01 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+            <div>
+              <strong>Validation Required</strong>
+              <p>This stream source requires validation before creation. Please click "Test Connection" to verify it works properly.</p>
+            </div>
+          </div>
+        )}
+        
+        {validationResult && validationResult.valid && (
+          <div className="validation-result valid">
+            <svg className="validation-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z" stroke="currentColor" strokeWidth="2"/>
+              <path d="M8 12L11 15L16 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <div>
+              <strong>Stream validated successfully!</strong>
+              {validationResult.details && (
+                <div className="validation-details">
+                  {validationResult.details.width && validationResult.details.height && (
+                    <span>Resolution: {validationResult.details.width}×{validationResult.details.height}</span>
+                  )}
+                  {validationResult.details.fps && validationResult.details.fps > 0 && (
+                    <span>FPS: {validationResult.details.fps.toFixed(1)}</span>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
         
@@ -1251,7 +1589,61 @@ const CreateStream = () => {
                   </span>
                 </div>
               )}
+              
+              <div className="validation-bar">
+                <button
+                  type="button"
+                  className="btn btn-validate"
+                  onClick={handleValidateStream}
+                  disabled={!formData.source || validating}
+                >
+                  {validating ? (
+                    <>
+                      <span className="loading-indicator"></span>
+                      Validating...
+                    </>
+                  ) : (
+                    <>
+                      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z" stroke="currentColor" strokeWidth="2"/>
+                        <path d="M8 12L11 15L16 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                      Test Connection
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
+            
+            {showCredentials && (
+              <div className="credential-group">
+                <div className="form-group">
+                  <label htmlFor="username">Username (Optional)</label>
+                  <input
+                    type="text"
+                    id="username"
+                    name="username"
+                    className="form-control"
+                    value={formData.username}
+                    onChange={handleChange}
+                    placeholder="Camera username"
+                  />
+                </div>
+                
+                <div className="form-group">
+                  <label htmlFor="password">Password (Optional)</label>
+                  <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    className="form-control"
+                    value={formData.password}
+                    onChange={handleChange}
+                    placeholder="Camera password"
+                  />
+                </div>
+              </div>
+            )}
           </div>
           
           <div className="form-section">
@@ -1287,7 +1679,7 @@ const CreateStream = () => {
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={!formValid || loading}
+              disabled={!formValid || loading || (validationRequired && (!validationResult || !validationResult.valid))}
             >
               {loading ? (
                 <>
@@ -1296,6 +1688,23 @@ const CreateStream = () => {
                 </>
               ) : (
                 <>
+                  {validationRequired && (
+                    <span className={`validation-indicator ${validationResult && validationResult.valid ? 'passed' : 'required'}`}>
+                      {validationResult && validationResult.valid ? (
+                        <svg className="validation-indicator-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z" stroke="currentColor" strokeWidth="2"/>
+                          <path d="M8 12L11 15L16 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      ) : (
+                        <svg className="validation-indicator-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" strokeWidth="2"/>
+                          <path d="M12 8V12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                          <path d="M12 16.01L12.01 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                        </svg>
+                      )}
+                      {validationResult && validationResult.valid ? 'Validated' : 'Validation Required'}
+                    </span>
+                  )}
                   <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M12 5V19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     <path d="M5 12H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
