@@ -308,6 +308,20 @@ export const getVisionComponents = async (): Promise<any[]> => {
   }
 };
 
+// Vision models API methods
+export const getVisionModels = async (): Promise<any> => {
+  try {
+    const response = await fetch(getFullUrl(`/api/vision/models`));
+    if (!response.ok) {
+      throw new Error(`Failed to fetch vision models: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching vision models:', error);
+    throw error;
+  }
+};
+
 // Pipeline API methods
 export const getPipelinesForStream = async (streamId: string): Promise<any[]> => {
   try {

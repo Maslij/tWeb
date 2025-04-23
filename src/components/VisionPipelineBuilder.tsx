@@ -566,8 +566,7 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
       componentType === 'face_detector' || 
       componentType === 'image_classifier')) {
     
-    console.log(`Handling model dropdown for ${nodeId}, component ${componentType}`);
-    
+
     // Use state to ensure component re-renders when models are loaded
     const [availableModels, setAvailableModels] = useState<any[]>([]);
     const [isLoadingModels, setIsLoadingModels] = useState<boolean>(true);
@@ -575,7 +574,6 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
     // Effect to load available models when component mounts or changes
     useEffect(() => {
       const loadModelData = () => {
-        console.log("Loading model data for component:", nodeId, componentType);
         setIsLoadingModels(true);
         let modelList: any[] = [];
         
@@ -584,12 +582,10 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
         
         // Try to get models from available_models property first (preferred)
         if (componentDef && componentDef.available_models && Array.isArray(componentDef.available_models)) {
-          console.log("Found available_models in component definition:", componentDef.available_models);
           modelList = componentDef.available_models;
         }
         // Then try to extract from model_classes object
         else if (componentDef && componentDef.model_classes) {
-          console.log("Found model_classes in component definition:", componentDef.model_classes);
           const modelClasses = componentDef.model_classes;
           
           if (typeof modelClasses === 'object' && !Array.isArray(modelClasses)) {
@@ -598,7 +594,6 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
               id, 
               name: id.toUpperCase() // Uppercase for better display
             }));
-            console.log("Extracted models from model_classes:", modelList);
           }
         }
         
@@ -613,12 +608,10 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
                 
                 // Check available_models property first
                 if (config.available_models && Array.isArray(config.available_models)) {
-                  console.log("Found available_models in component config:", config.available_models);
                   modelList = config.available_models;
                 }
                 // Otherwise check model_classes
                 else if (config.model_classes) {
-                  console.log("Found model_classes in component config:", config.model_classes);
                   let modelClasses = config.model_classes;
                   
                   if (typeof modelClasses === 'string') {
@@ -634,7 +627,6 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
                       id, 
                       name: id.toUpperCase() // Uppercase for better display
                     }));
-                    console.log("Extracted models from config model_classes:", modelList);
                   }
                 }
               } catch (e) {
@@ -648,9 +640,6 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
         if (propValue && !modelList.some(m => m.id === propValue)) {
           modelList.push({ id: propValue, name: propValue.toUpperCase() });
         }
-        
-        // Log the final model list for debugging
-        console.log("Final model list for dropdown:", modelList);
         
         // Update state with the found models
         setAvailableModels(modelList);
@@ -669,7 +658,6 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
       
       // Add event listener for models-updated event
       const handleModelsUpdated = () => {
-        console.log("Received models-updated event, reloading model data");
         loadModelData();
       };
       document.addEventListener('models-updated', handleModelsUpdated);
@@ -737,8 +725,6 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
       componentType === 'object_detector' || 
       componentType === 'image_classifier')) {
     
-    console.log(`Handling classes for ${nodeId}, component ${componentType}`);
-    
     // State to track available classes and current model
     const [availableClasses, setAvailableClasses] = useState<string[]>([]);
     const [currentModel, setCurrentModel] = useState<string>("");
@@ -751,7 +737,6 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
     useEffect(() => {
       const loadClassData = () => {
         setIsLoadingClasses(true);
-        console.log("Loading class data for component:", nodeId, componentType);
         
         // Check if this component has model_classes property (first in config then globally)
         const nodeConfig = document.getElementById(`node-config-${nodeId}`);
@@ -763,7 +748,6 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
           if (configData) {
             try {
               const config = JSON.parse(configData);
-              console.log("Config for class selection:", config);
               
               if (config.model && typeof config.model === 'string') {
                 model = config.model;
@@ -781,9 +765,6 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
                   modelClassesMap = config.model_classes;
                 }
               }
-              
-              console.log("From node config - Current model:", model);
-              console.log("From node config - Model classes map:", modelClassesMap);
             } catch (e) {
               console.error("Failed to parse config data:", e);
             }
@@ -794,7 +775,6 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
         if (Object.keys(modelClassesMap).length === 0) {
           const componentDef = window.__COMPONENT_DEFS__?.find(c => c.id === componentType);
           if (componentDef && componentDef.model_classes) {
-            console.log("Using model_classes from global component definitions:", componentDef.model_classes);
             modelClassesMap = componentDef.model_classes;
           }
         }
@@ -809,13 +789,10 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
         // Otherwise if we have any model with classes, use the first one
         else if (Object.keys(modelClassesMap).length > 0) {
           const firstModel = Object.keys(modelClassesMap)[0];
-          console.log(`No model selected, using classes from first available model: ${firstModel}`);
           model = firstModel;
           classes = modelClassesMap[firstModel];
         }
-        
-        console.log("Available classes for model:", classes);
-        
+                
         // Update state with found data
         setCurrentModel(model);
         setAvailableClasses(classes || []);
@@ -973,8 +950,6 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
   
   // Special handling for classes in alarm components
   if (propKey === 'allowed_classes' && componentType === 'event_alarm') {
-    console.log(`Handling allowed_classes for ${nodeId}, component ${componentType}`);
-    
     // State to track available classes and allowed classes
     const [availableClasses, setAvailableClasses] = useState<string[]>([]);
     const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
@@ -984,7 +959,6 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
     // Function to load detector classes
     const loadClassData = useCallback(() => {
       setIsLoadingDetectorClasses(true);
-      console.log("🔍 Loading class data for event_alarm:", nodeId);
       
       // Check if this alarm node is connected to any detectors (directly or indirectly)
       const pipelineData = (window as any).__PIPELINE_DATA__;
@@ -994,7 +968,6 @@ const ConfigPropertyControl: React.FC<ConfigPropertyControlProps> = ({
       if (pipelineData && pipelineData.nodes) {
         const alarmNode = pipelineData.nodes.find((n: any) => n.id === nodeId);
         if (!alarmNode) {
-          console.log("Alarm node not found in pipeline data");
           setIsConnectedToDetector(false);
           setIsLoadingDetectorClasses(false);
           return;
@@ -1655,24 +1628,6 @@ const getConnectionPointPosition = (nodeElement: HTMLElement, isInput: boolean):
   };
 };
 
-// Add a debug function to log connections
-const logPipelineConnections = (pipeline: Pipeline, label: string) => {
-  console.group(`Pipeline Connections Debug (${label})`);
-  console.log("Pipeline:", JSON.stringify(pipeline, null, 2));
-  console.log("Connections:");
-  pipeline.nodes.forEach(node => {
-    console.log(`Node ${node.id} (${node.componentId}) connects to:`, node.connections);
-    // Check if these connection targets actually exist
-    const missingTargets = node.connections.filter(
-      targetId => !pipeline.nodes.some(n => n.id === targetId)
-    );
-    if (missingTargets.length > 0) {
-      console.error(`WARNING: Node ${node.id} has connections to non-existent nodes:`, missingTargets);
-    }
-  });
-  console.groupEnd();
-};
-
 // Add the Promise to the return type of the function component
 const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps> = ({
   streamId, 
@@ -1694,7 +1649,6 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
   const [pipeline, setPipeline] = useState<Pipeline>(() => {
     // If initialPipeline is provided, use it
     if (initialPipeline) {
-      console.log("Using initial pipeline:", initialPipeline);
       return initialPipeline;
     }
     
@@ -1755,10 +1709,8 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
     const fetchModelsData = async (): Promise<void> => {
       try {
         setLoadingModels(true);
-        console.log("Fetching vision models from API...");
         
         const modelsData = await getVisionModels();
-        console.log("Received models data:", modelsData);
         
         // Only continue if we got valid model data
         if (!modelsData) {
@@ -1778,14 +1730,12 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
               // Object detector components
               if (comp.id === 'object_detector') {
                 comp.model_classes = modelsData.model_classes;
-                console.log("Updated object_detector with model classes:", comp.model_classes);
                 
                 // Create models list for dropdown
                 comp.available_models = Object.keys(modelsData.model_classes).map(id => ({
                   id,
                   name: id.toUpperCase()
                 }));
-                console.log("Created models list for object_detector:", comp.available_models);
               }
               
               // Face detector components
@@ -1793,15 +1743,14 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
                 // For face detectors, we can use available models but without class labels
                 if (modelsData.model_types && modelsData.model_types.face_detection) {
                   comp.available_models = modelsData.model_types.face_detection;
-                  console.log("Updated face_detector with available models:", comp.available_models);
                 }
               }
               
               // Image classifier components
               else if (comp.id === 'image_classifier') {
                 // For classifiers, use available models and their classes
-                if (modelTypes['image_classification']) {
-                  comp.available_models = modelTypes['image_classification'];
+                if (modelsData.model_types && modelsData.model_types.image_classification) {
+                  comp.available_models = modelsData.model_types.image_classification;
                   
                   // If model_classes has entries for these models, add them
                   if (modelsData.model_classes) {
@@ -1809,7 +1758,7 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
                     
                     // Filter model_classes to only include classification models
                     Object.keys(modelsData.model_classes).forEach(modelId => {
-                      const isClassificationModel = modelTypes['image_classification'].some(
+                      const isClassificationModel = modelsData.model_types.image_classification.some(
                         (m: any) => m.id === modelId
                       );
                       
@@ -1818,14 +1767,12 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
                       }
                     });
                     
-                    console.log("Updated image_classifier with model classes:", comp.model_classes);
                   }
                 }
               }
             });
             
             window.__COMPONENT_DEFS__ = updatedDefs;
-            console.log("Updated window.__COMPONENT_DEFS__ with API model data");
             
             // Trigger a change event to refresh any components that might be listening
             const event = new CustomEvent('models-updated', { 
@@ -1873,21 +1820,17 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
     // Ensure detector components have model_classes
     components.forEach(component => {
       if (component.category === 'detector' && (!component.model_classes || Object.keys(component.model_classes || {}).length === 0)) {
-        console.log(`Checking for model_classes for ${component.id}`);
         
         // Look for model classes from window.__COMPONENT_DEFS__ first
         const globalDef = window.__COMPONENT_DEFS__?.find(def => def.id === component.id);
         if (globalDef && globalDef.model_classes) {
           component.model_classes = globalDef.model_classes;
-          console.log(`Using model_classes from global definition for ${component.id}`);
         }
         // No hardcoded defaults - if no model classes are available, leave empty
       }
       
       if (component.model_classes) {
-        console.log(`Component ${component.id} has model_classes:`, component.model_classes);
       } else {
-        console.log(`Component ${component.id} has no model_classes available`);
       }
     });
     
@@ -2119,7 +2062,6 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
       }
       // Always initialize with "person" by default - we'll update when connected
       newNode.config.allowed_classes = ["person"];
-      console.log(`Initialized event_alarm with default ["person"] class. Will update when connected to detector.`);
     }
     
     setPipeline(prev => ({
@@ -2337,7 +2279,6 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
               if (isDetectorToAlarm && sourceNode?.config?.classes) {
                 const detectorClasses = sourceNode.config.classes;
                 if (Array.isArray(detectorClasses) && detectorClasses.length > 0) {
-                  console.log(`Updating event_alarm ${targetNode.id} allowed_classes with detector's classes:`, detectorClasses);
                   
                   // Update the alarm node with the detector's selected classes
                   setPipeline(prev => {
@@ -2390,7 +2331,6 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
                 const uniqueClasses = Array.from(new Set(allClasses));
                 
                 if (uniqueClasses.length > 0) {
-                  console.log(`Updating event_alarm ${targetNode.id} with classes from path-connected detectors:`, uniqueClasses);
                   
                   // Update the alarm node with the collected classes
                   setPipeline(prev => {
@@ -2411,7 +2351,6 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
               const event = new CustomEvent('pipeline-data-updated', { 
                 detail: { sourceId: sourceNode?.id, targetId: targetNode.id }
               });
-              console.log(`🔄 Dispatching pipeline-data-updated event for connection ${sourceNode?.id} → ${targetNode.id}`);
               document.dispatchEvent(event);
               
               // Also fire a specific event for detector classes if we're dealing with a detector connection
@@ -2431,7 +2370,6 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
                   }
                 });
                 
-                console.log(`🎯 Dispatching detector-classes-updated event for alarm ${targetNode.id}:`, classesToPropagate);
                 document.dispatchEvent(detectorClassesEvent);
               }
             }, 100);
@@ -2608,7 +2546,6 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
   // Update the pipeline when initialPipeline prop changes
   useEffect(() => {
     if (initialPipeline) {
-      console.log("Updating pipeline from props:", initialPipeline);
       
       // Create a deep copy of the initialPipeline to avoid reference issues
       const newPipelineData = JSON.parse(JSON.stringify(initialPipeline));
@@ -2648,7 +2585,6 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
     apiPipeline.streamId = streamId;
     apiPipeline.active = true;  // Mark as active when saving
     
-    console.log("Saving pipeline with config:", apiPipeline);
     
     // Find all line zone components and annotated stream components
     const lineZoneNodes = apiPipeline.nodes.filter((node: PipelineNode) => 
@@ -2660,7 +2596,6 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
     
     // If we have both line zones and annotated stream components, update the configs
     if (lineZoneNodes.length > 0 && annotatedNodes.length > 0) {
-      console.log("Found line zone and annotated stream components, updating config...");
       
       // Create line zones configuration from line zone components
       const lineZones = lineZoneNodes.flatMap((node: PipelineNode) => {
@@ -2708,7 +2643,6 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
         node.config.line_zones = lineZones;
       });
       
-      console.log("Updated pipeline config with line zones:", lineZones);
     }
     
     // Final validation pass - ensure ALL event_alarm components have valid allowed_classes
@@ -2795,7 +2729,6 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
 
   // Update a node configuration property
   const updateNodeConfig = (nodeId: string, key: string, value: any) => {
-    console.log(`Updating node ${nodeId} config: ${key} = `, value);
     
     setPipeline(prev => {
       const node = prev.nodes.find(n => n.id === nodeId);
@@ -2987,7 +2920,6 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
     const node = pipeline.nodes.find(n => n.id === nodeId);
     if (!node) return;
     
-    console.log("Opening line zone config modal for node:", node);
     
     // Find the camera feed node to get the source URL
     const cameraNode = pipeline.nodes.find(n => n.componentId === 'camera_feed');
@@ -3039,7 +2971,6 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
       };
     }).filter(Boolean); // Remove any null entries
     
-    console.log("Passing lines to modal:", clonedNode.config.lines);
     
     setCurrentLineZoneNode(clonedNode);
     setIsLineZoneModalOpen(true);
@@ -3049,7 +2980,6 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
   const handleSaveLineZones = (lines: any[]) => {
     if (!currentLineZoneNode) return;
     
-    console.log("Saving lines from modal:", lines);
     
     // Process the lines to ensure we retain normalized coordinates
     const processedLines = lines.map(line => {
@@ -3071,7 +3001,6 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
       return processedLine;
     });
     
-    console.log("Processed lines with normalized coordinates:", processedLines);
     
     // Update the node configuration with the new lines
     updateNodeConfig(currentLineZoneNode.id, 'lines', processedLines);
@@ -3093,14 +3022,25 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
 
   // Add a function to check pipeline processing state
   const checkPipelineProcessingState = useCallback(async () => {
-    if (!pipeline || !pipeline.id || !streamId) return;
+    // Don't make the API call if pipeline ID doesn't exist or has a temporary ID
+    // (pipeline_TIMESTAMP format indicates it hasn't been saved to the server yet)
+    if (!pipeline || !pipeline.id || !streamId || pipeline.id.startsWith('pipeline_')) {
+      return;
+    }
     
     try {
       const isProcessing = await isPipelineProcessing(streamId, pipeline.id);
       setProcessingState(isProcessing ? 'processing' : 'idle');
     } catch (error) {
-      console.error('Error checking pipeline processing state:', error);
-      setProcessingState('error');
+      // Don't log 404 errors which are common for pipelines that haven't been saved yet
+      // Only log other types of errors that might indicate actual problems
+      const errorString = String(error);
+      if (!errorString.includes('404')) {
+        console.error('Error checking pipeline processing state:', error);
+      }
+      
+      // Always set the state to idle to allow user interaction
+      setProcessingState('idle');
     }
   }, [pipeline, streamId]);
   
@@ -3108,11 +3048,17 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
   useEffect(() => {
     checkPipelineProcessingState();
     
-    // Set up interval to check processing state
-    const intervalId = setInterval(checkPipelineProcessingState, 2000);
+    // Set up interval to check processing state, but only if we have a valid pipeline ID
+    // that's not a temporary ID (doesn't start with pipeline_)
+    let intervalId: number | undefined;
+    if (pipeline.id && !pipeline.id.startsWith('pipeline_')) {
+      intervalId = window.setInterval(checkPipelineProcessingState, 5000); // Reduced frequency to 5s
+    }
     
     return () => {
-      clearInterval(intervalId);
+      if (intervalId !== undefined) {
+        clearInterval(intervalId);
+      }
     };
   }, [pipeline.id, checkPipelineProcessingState]);
   
