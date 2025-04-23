@@ -26,7 +26,13 @@ const Dashboard = () => {
 
       // Race between the API call and the timeout
       const fetchedStreams = await Promise.race([
-        apiService.getStreams(),
+        apiService.getStreams().catch(err => {
+          // Handle 404 errors by returning empty array
+          if (err.response && err.response.status === 404) {
+            return [];
+          }
+          throw err; // Re-throw other errors
+        }),
         timeoutPromise
       ]);
 

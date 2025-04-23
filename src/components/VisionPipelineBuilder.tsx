@@ -290,8 +290,8 @@ interface VisionPipelineBuilderProps {
   streamResolution?: string;
   streamFps?: number;
   onSave: (pipeline: any) => void;
-  onStartStream?: () => void;
-  onStopStream?: () => void;
+  onStartStream?: () => void | Promise<void>;
+  onStopStream?: () => void | Promise<void>;
   onDeleteStream?: () => void;
   actionLoading?: boolean;
   availableComponents?: any[]; // Optional array of available components from API
@@ -2778,13 +2778,42 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
   const { debouncedCallback: handleDeletePipelineDebounced, isDebouncing: isDeletingPipeline } = 
     useDebounce(() => {
       setShowDeletePipelineConfirmation(false);
-      // Stop the stream if it's running
+      
+      // Set loading state to prevent further requests
+      setProcessingState('processing');
+      setProcessingMessage('Deleting stream...');
+      
+      // Combine stopping and deleting into a single operation
       if (streamStatus === 'running' && onStopStream) {
-        onStopStream();
-      }
-      // Delete the stream
-      if (onDeleteStream) {
-        onDeleteStream();
+        // If stream is running, stop it first, then delete
+        const stopResult = onStopStream();
+        
+        // Check if onStopStream returns a Promise
+        if (stopResult && typeof stopResult.then === 'function') {
+          stopResult
+            .then(() => {
+              // After successfully stopping, delete the stream
+              if (onDeleteStream) {
+                onDeleteStream();
+              }
+            })
+            .catch(() => {
+              // If stopping fails, try deleting anyway
+              if (onDeleteStream) {
+                onDeleteStream();
+              }
+            });
+        } else {
+          // If it doesn't return a Promise, just delete after stopping
+          if (onDeleteStream) {
+            onDeleteStream();
+          }
+        }
+      } else {
+        // If stream is not running, just delete it
+        if (onDeleteStream) {
+          onDeleteStream();
+        }
       }
     }, 300);
 
