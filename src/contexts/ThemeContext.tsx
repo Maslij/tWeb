@@ -26,7 +26,7 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
 
   // Set cookie when theme changes
   useEffect(() => {
-    document.cookie = `theme=${theme}; max-age=31536000; path=/`; // 1 year expiry
+    document.cookie = `theme=${theme}; max-age=31536000; path=/; SameSite=Lax; Secure`; // 1 year expiry
   }, [theme]);
 
   // Handle system theme detection and changes
