@@ -189,10 +189,10 @@ const CreateStream = () => {
   
   const handleCredentialsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setCameraCredentials({
-      ...cameraCredentials,
+    setCameraCredentials(prev => ({
+      ...prev,
       [name]: value
-    });
+    }));
   };
 
   const handleSelectCameraWithCredentials = async (camera: OnvifCamera, rtspUrl: string) => {
@@ -403,43 +403,6 @@ const CreateStream = () => {
                     </svg>
                     Scan Again
                   </button>
-                </div>
-                
-                {/* Camera credentials form */}
-                <div className="camera-credentials-container">
-                  <h4>Camera Credentials (Optional)</h4>
-                  <p className="credentials-description">
-                    Many IP cameras require authentication. Enter credentials if needed.
-                  </p>
-                  <div className="camera-credentials-form">
-                    <div className="credential-group">
-                      <div className="form-group">
-                        <label htmlFor="camera-username">Username</label>
-                        <input
-                          type="text"
-                          id="camera-username"
-                          name="username"
-                          className="form-control"
-                          value={cameraCredentials.username}
-                          onChange={handleCredentialsChange}
-                          placeholder="admin"
-                        />
-                      </div>
-                      
-                      <div className="form-group">
-                        <label htmlFor="camera-password">Password</label>
-                        <input
-                          type="password"
-                          id="camera-password"
-                          name="password"
-                          className="form-control"
-                          value={cameraCredentials.password}
-                          onChange={handleCredentialsChange}
-                          placeholder="•••••••••"
-                        />
-                      </div>
-                    </div>
-                  </div>
                 </div>
                 
                 <div className="cameras-list">
