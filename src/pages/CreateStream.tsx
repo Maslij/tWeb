@@ -645,7 +645,7 @@ const CreateStream = () => {
           }
 
           .form-section {
-            margin-bottom: 2rem;
+            margin-bottom: 2.5rem;
           }
           
           .form-heading {
@@ -653,7 +653,7 @@ const CreateStream = () => {
             font-weight: 600;
             color: var(--text-primary);
             margin: 0 0 1.5rem 0;
-            padding-bottom: 0.5rem;
+            padding-bottom: 0.75rem;
             border-bottom: 1px solid var(--border-color);
           }
 
@@ -695,11 +695,11 @@ const CreateStream = () => {
             color: var(--error-color);
             padding: 16px;
             border-radius: 12px;
-            margin: 24px;
+            margin: 1.5rem 0;
             display: flex;
             align-items: flex-start;
             gap: 12px;
-            width: calc(100% - 48px);
+            width: 100%;
             box-sizing: border-box;
           }
           
@@ -1245,7 +1245,7 @@ const CreateStream = () => {
           }
           
           .validation-result {
-            margin-top: 1rem;
+            margin: 1.5rem 0;
             padding: 1rem;
             border-radius: 12px;
             display: flex;
@@ -1270,7 +1270,7 @@ const CreateStream = () => {
           }
           
           .validation-details {
-            margin-top: 0.5rem;
+            margin-top: 0.75rem;
             font-size: 0.9rem;
             color: var(--text-secondary);
           }
@@ -1283,6 +1283,7 @@ const CreateStream = () => {
           .btn-validate {
             background: var(--background-secondary);
             color: var(--text-primary);
+            margin-top: 1rem;
           }
           
           .btn-validate:hover:not(:disabled) {
@@ -1298,54 +1299,33 @@ const CreateStream = () => {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 1rem;
-            margin-bottom: 1.5rem;
+            margin: 1.5rem 0;
           }
 
           .camera-credentials-container {
             background: var(--background-secondary);
             border-radius: 12px;
             padding: 16px;
-            margin: 16px 24px;
+            margin: 1.5rem 24px;
           }
           
           .camera-credentials-container h4 {
             font-size: 16px;
             font-weight: 600;
             color: var(--text-primary);
-            margin: 0 0 8px 0;
+            margin: 0 0 1rem 0;
           }
           
           .credentials-description {
             color: var(--text-secondary);
             font-size: 14px;
-            margin-bottom: 16px;
+            margin-bottom: 1.5rem;
           }
           
           .camera-credentials-form .credential-group {
             margin-bottom: 0;
           }
 
-          /* Validation indicator in submit button */
-          .validation-indicator {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            margin-right: 8px;
-          }
-          
-          .validation-indicator.required {
-            color: var(--error-color, rgb(255, 59, 48));
-          }
-          
-          .validation-indicator.passed {
-            color: var(--success-color, rgb(52, 199, 89));
-          }
-          
-          .validation-indicator-icon {
-            width: 16px;
-            height: 16px;
-          }
-          
           /* Validation notice */
           .validation-notice {
             display: flex;
@@ -1354,7 +1334,7 @@ const CreateStream = () => {
             background-color: var(--warning-bg, rgba(255, 204, 0, 0.1));
             border-radius: 12px;
             padding: 16px;
-            margin-bottom: 24px;
+            margin: 1.5rem 0;
             color: var(--warning-color, rgb(255, 159, 10));
           }
           
@@ -1367,7 +1347,7 @@ const CreateStream = () => {
           
           .validation-notice strong {
             font-weight: 600;
-            margin-bottom: 4px;
+            margin-bottom: 0.5rem;
             display: block;
           }
           
@@ -1651,23 +1631,6 @@ const CreateStream = () => {
                 </>
               ) : (
                 <>
-                  {validationRequired && (
-                    <span className={`validation-indicator ${validationResult && validationResult.valid ? 'passed' : 'required'}`}>
-                      {validationResult && validationResult.valid ? (
-                        <svg className="validation-indicator-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z" stroke="currentColor" strokeWidth="2"/>
-                          <path d="M8 12L11 15L16 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                      ) : (
-                        <svg className="validation-indicator-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" strokeWidth="2"/>
-                          <path d="M12 8V12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                          <path d="M12 16.01L12.01 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                        </svg>
-                      )}
-                      {validationResult && validationResult.valid ? 'Validated' : 'Validation Required'}
-                    </span>
-                  )}
                   <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M12 5V19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     <path d="M5 12H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
