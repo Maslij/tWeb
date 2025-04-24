@@ -1704,6 +1704,9 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
   
   const builderRef = useRef<HTMLDivElement>(null);
 
+  // At the top of the component, after state declarations, add a ref to track deleted pipeline IDs
+  const deletedPipelineIds = useRef<Set<string>>(new Set());
+
   // Fetch models data from API when component mounts
   useEffect(() => {
     const fetchModelsData = async (): Promise<void> => {
@@ -2580,6 +2583,9 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
     setProcessingState('processing');
     setProcessingMessage('Saving pipeline and applying changes...');
     
+    // Create an AbortController for cleanup
+    const abortController = new AbortController();
+    
     // Create a deep copy of the current pipeline for the API
     const apiPipeline = JSON.parse(JSON.stringify(pipeline));
     apiPipeline.streamId = streamId;
@@ -2689,7 +2695,13 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
               // Only check processing status if the ID is permanent (not a temp ID)
               if (!savedPipelineData.id.startsWith('pipeline_')) {
                 // Use the API to wait for pipeline processing to complete
-                waitForPipelineProcessing(streamId, savedPipelineData.id, 30000)
+                waitForPipelineProcessing(
+                  streamId, 
+                  savedPipelineData.id, 
+                  30000,
+                  500,
+                  abortController.signal
+                )
                   .then((finalState) => {
                     if (finalState === 'error') {
                       setFlashMessage({
@@ -2707,6 +2719,12 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
                     setIsSaving(false);
                   })
                   .catch((err) => {
+                    // Check if this was an abort error from cleanup
+                    if (err instanceof DOMException && err.name === 'AbortError') {
+                      console.log('Pipeline processing check was aborted - component may have unmounted');
+                      return; // Don't update state if unmounted
+                    }
+                    
                     console.error('Error waiting for pipeline processing:', err);
                     setFlashMessage({
                       message: 'Pipeline saved, but status update timed out.',
@@ -2736,7 +2754,7 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
               setProcessingMessage('');
               setIsSaving(false);
             }
-          }).catch((err) => {
+          }).catch((err: any) => {
             console.error('Error saving pipeline:', err);
             setFlashMessage({
               message: 'Failed to save pipeline. Please try again.',
@@ -2745,6 +2763,9 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
             setProcessingState('error');
             setProcessingMessage('');
             setIsSaving(false);
+            
+            // Clean up on error
+            abortController.abort();
           });
         } else {
           // Not a Promise, just show success
@@ -2755,6 +2776,9 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
           setProcessingState('idle');
           setProcessingMessage('');
           setIsSaving(false);
+          
+          // Clean up
+          abortController.abort();
         }
       } catch (error) {
         // Handle any errors during the save process
@@ -2766,6 +2790,9 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
         setProcessingState('error');
         setProcessingMessage('');
         setIsSaving(false);
+        
+        // Clean up on error
+        abortController.abort();
       }
     } catch (error) {
       // Handle any errors during the save process
@@ -2777,6 +2804,9 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
       setProcessingState('error');
       setProcessingMessage('');
       setIsSaving(false);
+      
+      // Clean up on error
+      abortController.abort();
     }
   };
 
@@ -2840,6 +2870,14 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
       // Set loading state to prevent further requests
       setProcessingState('processing');
       setProcessingMessage('Deleting stream...');
+      
+      // Add current pipeline ID to deleted set immediately
+      if (pipeline && pipeline.id) {
+        deletedPipelineIds.current.add(pipeline.id);
+      }
+      
+      // Reset pipeline state to avoid further requests after deletion
+      resetPipelineState();
       
       // Combine stopping and deleting into a single operation
       if (streamStatus === 'running' && onStopStream) {
@@ -3096,6 +3134,11 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
 
   // Function to reset the pipeline state
   const resetPipelineState = () => {
+    // If there's a current pipeline ID, add it to the deleted set
+    if (pipeline && pipeline.id) {
+      deletedPipelineIds.current.add(pipeline.id);
+    }
+    
     // Reset connection and selection states
     setIsDrawingConnection(false);
     setConnectionStart(null);
@@ -3108,43 +3151,96 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
   };
 
   // Add a function to check pipeline processing state
-  const checkPipelineProcessingState = useCallback(async () => {
+  const checkPipelineProcessingState = useCallback(async (signal?: AbortSignal) => {
     // Don't make the API call if pipeline ID doesn't exist or has a temporary ID
     // (pipeline_TIMESTAMP format indicates it hasn't been saved to the server yet)
     if (!pipeline || !pipeline.id || !streamId || pipeline.id.startsWith('pipeline_')) {
       return;
     }
     
+    // Skip API calls for deleted pipelines
+    if (deletedPipelineIds.current.has(pipeline.id)) {
+      setProcessingState('idle');
+      return;
+    }
+    
     try {
-      const isProcessing = await isPipelineProcessing(streamId, pipeline.id);
+      // Pass the signal to the API call
+      const isProcessing = await isPipelineProcessing(streamId, pipeline.id, signal);
       setProcessingState(isProcessing ? 'processing' : 'idle');
-    } catch (error) {
-      // Don't log 404 errors which are common for pipelines that haven't been saved yet
-      // Only log other types of errors that might indicate actual problems
-      const errorString = String(error);
-      if (!errorString.includes('404')) {
-        console.error('Error checking pipeline processing state:', error);
+    } catch (error: any) {
+      // Skip handling AbortError - this is expected during cleanup
+      if (error.name === 'AbortError') {
+        return;
       }
       
-      // Always set the state to idle to allow user interaction
-      setProcessingState('idle');
+      // Check if this is a 404 error, which is expected for deleted pipelines
+      const errorString = String(error);
+      const isNotFoundError = errorString.includes('404');
+      
+      if (isNotFoundError) {
+        // For 404 errors, add the pipeline ID to deleted set and don't log errors
+        deletedPipelineIds.current.add(pipeline.id);
+        setProcessingState('idle');
+      } else {
+        // Only log unexpected errors
+        console.error('Error checking pipeline processing state:', error);
+        setProcessingState('idle');
+      }
     }
   }, [pipeline, streamId]);
   
   // Check processing state when component mounts and when pipeline ID changes
   useEffect(() => {
-    checkPipelineProcessingState();
+    // Don't check if component is being unmounted or pipeline is deleted
+    let isActive = true;
+    // Track any in-flight controller for aborting requests
+    const abortController = new AbortController();
+    
+    const checkState = async () => {
+      if (!isActive) return;
+      try {
+        // Pass the abort controller signal to the API call
+        await checkPipelineProcessingState(abortController.signal);
+      } catch (error: any) {
+        // Ignore errors during cleanup or aborted requests
+        if (error.name !== 'AbortError') {
+          console.error('Error checking pipeline state:', error);
+        }
+      }
+    };
+    
+    // Initial check
+    checkState();
     
     // Set up interval to check processing state, but only if we have a valid pipeline ID
     // that's not a temporary ID (doesn't start with pipeline_)
     let intervalId: number | undefined;
     if (pipeline.id && !pipeline.id.startsWith('pipeline_')) {
-      intervalId = window.setInterval(checkPipelineProcessingState, 5000); // Reduced frequency to 5s
+      intervalId = window.setInterval(() => {
+        if (isActive) {
+          checkState();
+        } else if (intervalId) {
+          clearInterval(intervalId);
+        }
+      }, 5000); // Reduced frequency to 5s
     }
     
     return () => {
+      // Mark component as inactive to prevent state updates after unmount
+      isActive = false;
+      
+      // Clear interval when component unmounts or dependencies change
       if (intervalId !== undefined) {
         clearInterval(intervalId);
+      }
+      
+      // Abort any in-flight requests
+      abortController.abort();
+      
+      // Add this pipeline ID to deleted set to prevent future requests
+      if (pipeline && pipeline.id) {
+        deletedPipelineIds.current.add(pipeline.id);
       }
     };
   }, [pipeline.id, checkPipelineProcessingState]);

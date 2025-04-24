@@ -374,18 +374,45 @@ export const getPipelinesForStream = async (streamId: string): Promise<any[]> =>
   }
 };
 
+// Create a cache for deleted pipeline IDs
+const deletedPipelineIds = new Set<string>();
+
 // Add function to get pipeline processing state
-export const getPipelineProcessingState = async (streamId: string, pipelineId: string): Promise<string> => {
+export const getPipelineProcessingState = async (streamId: string, pipelineId: string, signal?: AbortSignal): Promise<string> => {
+  // Check cache first - if we know this pipeline is deleted, don't even make the request
+  if (deletedPipelineIds.has(pipelineId)) {
+    return 'idle';
+  }
+  
   try {
-    const response = await fetch(getFullUrl(`/api/streams/${streamId}/pipelines/${pipelineId}/state`));
+    const response = await fetch(getFullUrl(`/api/streams/${streamId}/pipelines/${pipelineId}/state`), { signal });
+    
+    // If the pipeline doesn't exist (404), cache and return 'idle' instead of throwing an error
+    if (response.status === 404) {
+      deletedPipelineIds.add(pipelineId);
+      return 'idle';
+    }
+    
     if (!response.ok) {
       throw new Error(`Failed to fetch pipeline state: ${response.status}`);
     }
+    
     const data = await response.json();
     return data.processing_state || 'idle';
   } catch (error) {
-    console.error('Error fetching pipeline processing state:', error);
-    return 'error'; // Return error state if we can't determine the actual state
+    // Skip handling AbortError - this is expected during cleanup
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw error; // Re-throw abort errors
+    }
+    
+    // Only log errors that aren't 404s
+    if (error instanceof Error && !error.message.includes('404')) {
+      console.error('Error fetching pipeline processing state:', error);
+    } else if (error instanceof Error && error.message.includes('404')) {
+      // If we got a 404, cache the pipeline ID as deleted
+      deletedPipelineIds.add(pipelineId);
+    }
+    return 'idle'; // Return idle state if we can't determine the actual state
   }
 };
 
@@ -454,8 +481,34 @@ export const deletePipeline = async (streamId: string, pipelineId: string): Prom
   }
 };
 
+// Function to reset deleted pipeline status (useful if a deleted pipeline is recreated)
+export const resetDeletedPipelineStatus = (pipelineId: string): void => {
+  if (deletedPipelineIds.has(pipelineId)) {
+    deletedPipelineIds.delete(pipelineId);
+  }
+};
+
+// Check if a pipeline is being processed
+export const isPipelineProcessing = async (streamId: string, pipelineId: string, signal?: AbortSignal): Promise<boolean> => {
+  try {
+    const state = await getPipelineProcessingState(streamId, pipelineId, signal);
+    return state === 'processing';
+  } catch (error) {
+    // Handle abort error
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw error; // Re-throw abort errors
+    }
+    // This should never happen now that getPipelineProcessingState handles 404s gracefully
+    return false;
+  }
+};
+
 export const activatePipeline = async (streamId: string, pipelineId: string): Promise<void> => {
   console.log(`Activating pipeline ${pipelineId} for stream ${streamId}`);
+  
+  // Clear any deleted status for this pipeline, since we're activating it
+  resetDeletedPipelineStatus(pipelineId);
+  
   try {
     const response = await fetch(getFullUrl(`/api/streams/${streamId}/pipelines/${pipelineId}/activate`), {
       method: 'POST',
@@ -473,30 +526,34 @@ export const activatePipeline = async (streamId: string, pipelineId: string): Pr
   }
 };
 
-// Check if a pipeline is being processed
-export const isPipelineProcessing = async (streamId: string, pipelineId: string): Promise<boolean> => {
-  try {
-    const state = await getPipelineProcessingState(streamId, pipelineId);
-    return state === 'processing';
-  } catch (error) {
-    console.error('Error checking pipeline processing state:', error);
-    return false;
-  }
-};
-
 // Wait for pipeline processing to complete
 export const waitForPipelineProcessing = async (
   streamId: string, 
   pipelineId: string, 
   timeoutMs: number = 30000, // Default 30 second timeout
-  intervalMs: number = 500    // Check every 500ms
+  intervalMs: number = 500,   // Check every 500ms
+  signal?: AbortSignal        // Optional AbortSignal
 ): Promise<string> => {
   return new Promise((resolve, reject) => {
     const startTime = Date.now();
     
+    // Set up abort handler
+    if (signal) {
+      signal.addEventListener('abort', () => {
+        reject(new DOMException('Pipeline processing aborted', 'AbortError'));
+      });
+      
+      // If signal is already aborted, reject immediately
+      if (signal.aborted) {
+        reject(new DOMException('Pipeline processing aborted', 'AbortError'));
+        return;
+      }
+    }
+    
     const checkState = async () => {
       try {
-        const state = await getPipelineProcessingState(streamId, pipelineId);
+        // Pass the signal to the getPipelineProcessingState function
+        const state = await getPipelineProcessingState(streamId, pipelineId, signal);
         
         // If the state is not 'processing', we're done
         if (state !== 'processing') {
@@ -511,6 +568,12 @@ export const waitForPipelineProcessing = async (
         // Check again after the interval
         setTimeout(checkState, intervalMs);
       } catch (error) {
+        // If the error is an AbortError, reject with that
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          return reject(error);
+        }
+        
+        // For other errors, reject with the error
         reject(error);
       }
     };
