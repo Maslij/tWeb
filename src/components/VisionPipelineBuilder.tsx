@@ -2585,7 +2585,6 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
     apiPipeline.streamId = streamId;
     apiPipeline.active = true;  // Mark as active when saving
     
-    
     // Find all line zone components and annotated stream components
     const lineZoneNodes = apiPipeline.nodes.filter((node: PipelineNode) => 
       node.componentId === 'line_zone' || node.componentId === 'line_zone_manager'
@@ -2596,7 +2595,6 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
     
     // If we have both line zones and annotated stream components, update the configs
     if (lineZoneNodes.length > 0 && annotatedNodes.length > 0) {
-      
       // Create line zones configuration from line zone components
       const lineZones = lineZoneNodes.flatMap((node: PipelineNode) => {
         // Check if we have the new lines array format
@@ -2642,11 +2640,9 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
         node.config.show_line_zones = true;
         node.config.line_zones = lineZones;
       });
-      
     }
     
     // Final validation pass - ensure ALL event_alarm components have valid allowed_classes
-    // Keep this validation logic
     apiPipeline.nodes.forEach((node: PipelineNode) => {
       if (node.componentId === 'event_alarm') {
         if (!node.config || !node.config.allowed_classes) {
@@ -2665,57 +2661,119 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
     });
     
     try {
-      // Call the onSave handler passed from parent
-      onSave(apiPipeline);
+      // Save the pipeline using the onSave callback from props
+      // First check if it's a function to avoid TypeScript errors
+      if (typeof onSave !== 'function') {
+        throw new Error('onSave is not a function');
+      }
       
-      // Wait for processing to complete
-      if (pipeline.id) {
-        waitForPipelineProcessing(streamId, pipeline.id, 30000)
-          .then((finalState) => {
-            if (finalState === 'error') {
-              // Show error message if save fails
-              setFlashMessage({
-                message: 'Error applying pipeline changes',
-                type: 'error'
-              });
+      // Call onSave with the pipeline data and check the return type
+      try {
+        const result = onSave(apiPipeline);
+        
+        // Cast to any to avoid TypeScript errors with void type
+        const saveResult = result as any;
+        
+        // If the result has a then method, treat it as a Promise
+        if (saveResult && typeof saveResult === 'object' && typeof saveResult.then === 'function') {
+          // It's a Promise, wait for it to resolve
+          saveResult.then((savedPipelineData: any) => {
+            // If we have a valid saved pipeline with an ID
+            if (savedPipelineData && savedPipelineData.id) {
+              // Update our local state with the new ID
+              setPipeline(prev => ({
+                ...prev,
+                id: savedPipelineData.id
+              }));
+              
+              // Only check processing status if the ID is permanent (not a temp ID)
+              if (!savedPipelineData.id.startsWith('pipeline_')) {
+                // Use the API to wait for pipeline processing to complete
+                waitForPipelineProcessing(streamId, savedPipelineData.id, 30000)
+                  .then((finalState) => {
+                    if (finalState === 'error') {
+                      setFlashMessage({
+                        message: 'Error applying pipeline changes',
+                        type: 'error'
+                      });
+                    } else {
+                      setFlashMessage({
+                        message: 'Pipeline saved successfully!',
+                        type: 'success'
+                      });
+                    }
+                    setProcessingState('idle');
+                    setProcessingMessage('');
+                    setIsSaving(false);
+                  })
+                  .catch((err) => {
+                    console.error('Error waiting for pipeline processing:', err);
+                    setFlashMessage({
+                      message: 'Pipeline saved, but status update timed out.',
+                      type: 'info'
+                    });
+                    setProcessingState('idle');
+                    setProcessingMessage('');
+                    setIsSaving(false);
+                  });
+              } else {
+                // Can't check status for temporary IDs
+                setFlashMessage({
+                  message: 'Pipeline saved successfully!',
+                  type: 'success'
+                });
+                setProcessingState('idle');
+                setProcessingMessage('');
+                setIsSaving(false);
+              }
             } else {
-              // Show success message
+              // No ID in response, can't check processing
               setFlashMessage({
                 message: 'Pipeline saved successfully!',
                 type: 'success'
               });
+              setProcessingState('idle');
+              setProcessingMessage('');
+              setIsSaving(false);
             }
-            setProcessingState('idle');
-            setProcessingMessage('');
-            setIsSaving(false);
-          })
-          .catch(error => {
-            console.error('Error waiting for pipeline processing:', error);
+          }).catch((err) => {
+            console.error('Error saving pipeline:', err);
             setFlashMessage({
-              message: 'Operation timed out. Pipeline status unknown.',
+              message: 'Failed to save pipeline. Please try again.',
               type: 'error'
             });
             setProcessingState('error');
             setProcessingMessage('');
             setIsSaving(false);
           });
-      } else {
-        // No pipeline ID yet, just show success and reset state
+        } else {
+          // Not a Promise, just show success
+          setFlashMessage({
+            message: 'Pipeline saved successfully!',
+            type: 'success'
+          });
+          setProcessingState('idle');
+          setProcessingMessage('');
+          setIsSaving(false);
+        }
+      } catch (error) {
+        // Handle any errors during the save process
+        console.error('Error saving pipeline:', error);
         setFlashMessage({
-          message: 'Pipeline saved successfully!',
-          type: 'success'
+          message: 'Failed to save pipeline. Please try again.',
+          type: 'error'
         });
-        setProcessingState('idle');
+        setProcessingState('error');
         setProcessingMessage('');
         setIsSaving(false);
       }
     } catch (error) {
-      // Show error message if save fails
+      // Handle any errors during the save process
+      console.error('Error saving pipeline:', error);
       setFlashMessage({
         message: 'Failed to save pipeline. Please try again.',
         type: 'error'
       });
-      console.error('Error saving pipeline:', error);
       setProcessingState('error');
       setProcessingMessage('');
       setIsSaving(false);
