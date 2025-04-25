@@ -16,12 +16,12 @@
 }
 
 .toggle-button {
-  background-color: #f8f9fa;
-  border: 1px solid #dee2e6;
+  background-color: var(--background-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 4px;
   padding: 8px 16px;
   font-size: 0.9rem;
-  color: #495057;
+  color: var(--text-primary);
   cursor: pointer;
   transition: all 0.2s ease;
   display: inline-flex;
@@ -30,32 +30,59 @@
 }
 
 .toggle-button:hover {
-  background-color: #e9ecef;
+  background-color: var(--hover-bg);
 }
 
 .toggle-button.active {
-  background-color: #e9ecef;
-  border-color: #ced4da;
+  background-color: var(--hover-bg);
+  border-color: var(--border-color);
 }
 
 .toggle-icon {
   margin-left: 6px;
   font-size: 0.7rem;
+  color: var(--text-secondary);
 }
 
 .advanced-properties {
-  background-color: #f8f9fa;
+  background-color: var(--background-secondary);
   border-radius: 6px;
   padding: 15px;
   margin-top: 10px;
-  border: 1px solid #e9ecef;
+  border: 1px solid var(--border-color);
 }
 
 .advanced-header {
   font-weight: bold;
   margin-bottom: 12px;
-  color: #495057;
+  color: var(--text-primary);
   font-size: 0.95rem;
   padding-bottom: 8px;
-  border-bottom: 1px solid #dee2e6;
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* Dark mode specific overrides */
+[data-theme="dark"] .toggle-button {
+  background-color: var(--background-secondary);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .toggle-button:hover {
+  background-color: var(--hover-bg);
+}
+
+[data-theme="dark"] .toggle-button.active {
+  background-color: var(--hover-bg);
+  border-color: var(--accent-color);
+}
+
+[data-theme="dark"] .advanced-properties {
+  background-color: var(--background-secondary);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .advanced-header {
+  color: var(--text-primary);
+  border-color: var(--border-color);
 } 
