@@ -1649,7 +1649,10 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
   const [pipeline, setPipeline] = useState<Pipeline>(() => {
     // If initialPipeline is provided, use it
     if (initialPipeline) {
-      return initialPipeline;
+      return {
+        ...initialPipeline,  // This preserves the original ID and other properties
+        nodes: [...initialPipeline.nodes]  // Create a new array of nodes to avoid reference issues
+      };
     }
     
     // Otherwise create a new pipeline with a pre-populated source component
