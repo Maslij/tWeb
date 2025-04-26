@@ -2608,14 +2608,32 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
       const lineZones = lineZoneNodes.flatMap((node: PipelineNode) => {
         // Check if we have the new lines array format
         if (node.config?.lines && Array.isArray(node.config.lines)) {
-          // Use the lines array, adding node ID as identifier
-          return node.config.lines.map((line: any) => ({
-            ...line,
-            id: line.id || `${node.id}_${Date.now()}`,
+          // Use the lines array, adding node ID as identifier to ensure uniqueness
+          return node.config.lines.map((line: any, index: number) => {
+            // Create a new object to avoid mutating the original
+            const processedLine = { ...line };
+            
+            // Ensure each line has a valid unique ID
+            processedLine.id = line.id || `${node.id}_${Date.now()}_${index}`;
+            
+            // Ensure all required properties exist with proper types
+            processedLine.start_x = Number(processedLine.start_x || 50);
+            processedLine.start_y = Number(processedLine.start_y || 200);
+            processedLine.end_x = Number(processedLine.end_x || 1000);
+            processedLine.end_y = Number(processedLine.end_y || 200);
+            processedLine.in_count = Number(processedLine.in_count || 0);
+            processedLine.out_count = Number(processedLine.out_count || 0);
+            
             // For line_zone_manager, ensure we have these properties
-            minimum_crossing_threshold: line.minimum_crossing_threshold || 1,
-            triggering_anchors: line.triggering_anchors || ["TOP_LEFT", "TOP_RIGHT", "BOTTOM_LEFT", "BOTTOM_RIGHT"]
-          }));
+            processedLine.minimum_crossing_threshold = Number(processedLine.minimum_crossing_threshold || 1);
+            
+            // Ensure triggering_anchors is an array
+            if (!processedLine.triggering_anchors || !Array.isArray(processedLine.triggering_anchors) || processedLine.triggering_anchors.length === 0) {
+              processedLine.triggering_anchors = ["TOP_LEFT", "TOP_RIGHT", "BOTTOM_LEFT", "BOTTOM_RIGHT"];
+            }
+            
+            return processedLine;
+          });
         } else {
           // Fallback to legacy format
           const startX = node.config?.start_x ?? 50;
@@ -2625,10 +2643,10 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
           
           return [{
             id: node.id,
-            start_x: startX,
-            start_y: startY,
-            end_x: endX,
-            end_y: endY,
+            start_x: Number(startX),
+            start_y: Number(startY),
+            end_x: Number(endX),
+            end_y: Number(endY),
             in_count: 0,
             out_count: 0,
             // Add these fields for line_zone_manager compatibility
@@ -2637,6 +2655,9 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
           }];
         }
       });
+      
+      // Log the total line zones for debugging
+      console.log(`Adding ${lineZones.length} line zones to ${annotatedNodes.length} annotated nodes`);
       
       // Update each annotated stream component
       annotatedNodes.forEach((node: PipelineNode) => {
@@ -3108,11 +3129,29 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
   const handleSaveLineZones = (lines: any[]) => {
     if (!currentLineZoneNode) return;
     
-    
     // Process the lines to ensure we retain normalized coordinates
-    const processedLines = lines.map(line => {
+    const processedLines = lines.map((line, index) => {
       // Create a new object to avoid mutating the original
       const processedLine = { ...line };
+      
+      // Ensure each line has a valid ID, use index in fallback to prevent duplicates
+      if (!processedLine.id) {
+        processedLine.id = `line_${Date.now()}_${index}`;
+      }
+      
+      // Ensure all numeric fields are properly parsed as numbers
+      processedLine.start_x = Number(processedLine.start_x || 100);
+      processedLine.start_y = Number(processedLine.start_y || 200);
+      processedLine.end_x = Number(processedLine.end_x || 800);
+      processedLine.end_y = Number(processedLine.end_y || 200);
+      processedLine.in_count = Number(processedLine.in_count || 0);
+      processedLine.out_count = Number(processedLine.out_count || 0);
+      processedLine.minimum_crossing_threshold = Number(processedLine.minimum_crossing_threshold || 1);
+      
+      // Ensure triggering anchors is an array
+      if (!processedLine.triggering_anchors || !Array.isArray(processedLine.triggering_anchors) || processedLine.triggering_anchors.length === 0) {
+        processedLine.triggering_anchors = ["TOP_LEFT", "TOP_RIGHT", "BOTTOM_LEFT", "BOTTOM_RIGHT"];
+      }
       
       // If for some reason norm coordinates are missing, calculate them
       if (processedLine.norm_start_x === undefined) {
@@ -3120,15 +3159,17 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
         const width = 1920;
         const height = 1080;
         
-        processedLine.norm_start_x = line.start_x / width;
-        processedLine.norm_start_y = line.start_y / height;
-        processedLine.norm_end_x = line.end_x / width;
-        processedLine.norm_end_y = line.end_y / height;
+        processedLine.norm_start_x = processedLine.start_x / width;
+        processedLine.norm_start_y = processedLine.start_y / height;
+        processedLine.norm_end_x = processedLine.end_x / width;
+        processedLine.norm_end_y = processedLine.end_y / height;
       }
       
       return processedLine;
     });
     
+    // Log the processed lines for debugging
+    console.log("Updating line zones:", processedLines);
     
     // Update the node configuration with the new lines
     updateNodeConfig(currentLineZoneNode.id, 'lines', processedLines);
