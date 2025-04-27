@@ -39,6 +39,17 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
   // State for storing lines with proper coordinates
   const [lines, setLines] = useState<Line[]>(initialLines);
   
+  // Add CSS styles for the camera view container to ensure proper sizing
+  const containerStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative' as const,
+    width: '100%',
+    height: '100%',
+    overflow: 'hidden'
+  };
+  
   // Add a ref to track if we've already initialized from props
   const initializedRef = useRef(false);
 
@@ -91,22 +102,24 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
     if (!imageRef.current || !imageLoaded) return;
     
     const img = imageRef.current;
-    const container = img.parentElement;
+    const container = img.parentElement?.parentElement;
     if (!container) return;
 
-    // Calculate the displayed image dimensions while maintaining aspect ratio
-    const containerAspectRatio = container.clientWidth / container.clientHeight;
+    // Calculate the displayed image dimensions with object-fit: contain
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight;
     const imageAspectRatio = img.naturalWidth / img.naturalHeight;
+    const containerAspectRatio = containerWidth / containerHeight;
     
     let displayWidth, displayHeight;
     
     if (containerAspectRatio > imageAspectRatio) {
-      // Container is wider than image aspect ratio - height is limiting factor
-      displayHeight = container.clientHeight;
+      // Container is wider than image - height is limiting factor
+      displayHeight = containerHeight;
       displayWidth = displayHeight * imageAspectRatio;
     } else {
-      // Container is taller than image aspect ratio - width is limiting factor
-      displayWidth = container.clientWidth;
+      // Container is taller than image - width is limiting factor
+      displayWidth = containerWidth;
       displayHeight = displayWidth / imageAspectRatio;
     }
 
@@ -168,14 +181,14 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
     const canvasX = e.clientX - rect.left;
     const canvasY = e.clientY - rect.top;
     
-    // Apply scaling to get the actual coordinates in the image
+    // Calculate the scale based on the ratio of image dimensions to display dimensions
     const scaleX = imageDimensions.width / canvas.width;
     const scaleY = imageDimensions.height / canvas.height;
-
+    
+    // Convert canvas coordinates to original image coordinates
     const x = Math.round(canvasX * scaleX);
     const y = Math.round(canvasY * scaleY);
-
-
+    
     return { x, y };
   };
 
@@ -272,70 +285,8 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
     // Update state with the new line positions
     setLines(updatedLines);
     
-    // Always draw directly to canvas during drag for responsiveness
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      // Clear the canvas and redraw all lines
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
-      // Scale factor for drawing
-      const scaleX = canvas.width / imageDimensions.width;
-      const scaleY = canvas.height / imageDimensions.height;
-      
-      // Draw all updated lines
-      updatedLines.forEach(line => {
-        const isSelected = line.id === selectedLineId;
-        
-        // Scale coordinates for display
-        const startX = line.start_x * scaleX;
-        const startY = line.start_y * scaleY;
-        const endX = line.end_x * scaleX;
-        const endY = line.end_y * scaleY;
-        
-        // Line style
-        ctx.lineWidth = isSelected ? 3 : 2;
-        ctx.strokeStyle = isSelected ? '#00ff00' : '#ffffff';
-        
-        // Draw the line
-        ctx.beginPath();
-        ctx.moveTo(startX, startY);
-        ctx.lineTo(endX, endY);
-        ctx.stroke();
-        
-        // Draw endpoints (circles)
-        const startPointSelected = isSelected && selectedPoint === 'start';
-        const endPointSelected = isSelected && selectedPoint === 'end';
-        
-        // Increase size of points during dragging for better visibility
-        const startPointSize = startPointSelected ? 12 : 6;
-        const endPointSize = endPointSelected ? 12 : 6;
-        
-        // Start point
-        ctx.beginPath();
-        ctx.arc(startX, startY, startPointSize, 0, 2 * Math.PI);
-        ctx.fillStyle = startPointSelected ? '#00ff00' : '#ffffff';
-        ctx.fill();
-        
-        // End point
-        ctx.beginPath();
-        ctx.arc(endX, endY, endPointSize, 0, 2 * Math.PI);
-        ctx.fillStyle = endPointSelected ? '#00ff00' : '#ffffff';
-        ctx.fill();
-        
-        // Draw line name if available
-        if (line.name) {
-          const midX = (startX + endX) / 2;
-          const midY = (startY + endY) / 2;
-          
-          ctx.font = isSelected ? 'bold 14px Arial' : '12px Arial';
-          ctx.fillStyle = isSelected ? '#00ff00' : '#ffffff';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(line.name, midX, midY - 15);
-        }
-      });
-    }
+    // Redraw using our updated drawLines function which handles scaling correctly
+    drawLines();
   };
 
   // Draw lines on the canvas
@@ -354,8 +305,7 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
       return;
     }
     
-    
-    // Scale factor for drawing
+    // Calculate the scale based on the ratio of image dimensions to display dimensions
     const scaleX = canvas.width / imageDimensions.width;
     const scaleY = canvas.height / imageDimensions.height;
     
@@ -363,7 +313,7 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
     lines.forEach(line => {
       const isSelected = line.id === selectedLineId;
       
-      // Scale coordinates for display
+      // Convert original image coordinates to display coordinates
       const startX = line.start_x * scaleX;
       const startY = line.start_y * scaleY;
       const endX = line.end_x * scaleX;
@@ -544,28 +494,47 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
         
         <div className="line-zone-config-container">
           <div className="main-content">
-            <div className="camera-view-container">
+            <div className="camera-view-container" style={containerStyle}>
               {imageUrl ? (
-                <img 
-                  ref={imageRef}
-                  src={imageUrl} 
-                  alt="Camera Feed"
-                  className="camera-feed-image"
-                  onLoad={() => setImageLoaded(true)}
-                />
+                <div className="camera-feed-wrapper" style={{ 
+                  position: 'relative',
+                  width: '100%', 
+                  height: '100%' 
+                }}>
+                  <img 
+                    ref={imageRef}
+                    src={imageUrl} 
+                    alt="Camera Feed"
+                    className="camera-feed-image"
+                    onLoad={() => setImageLoaded(true)}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'contain',
+                      display: 'block'
+                    }}
+                  />
+                  <canvas
+                    ref={canvasRef}
+                    className="line-zone-canvas"
+                    onMouseDown={handleCanvasMouseDown}
+                    onMouseMove={handleCanvasMouseMove}
+                    onMouseUp={handleCanvasMouseUp}
+                    onMouseLeave={handleCanvasMouseUp}
+                    style={{
+                      position: 'absolute',
+                      top: '50%',
+                      left: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      pointerEvents: 'auto'
+                    }}
+                  />
+                </div>
               ) : (
                 <div className="camera-feed-placeholder">
                   Loading camera feed...
                 </div>
               )}
-              <canvas
-                ref={canvasRef}
-                className="line-zone-canvas"
-                onMouseDown={handleCanvasMouseDown}
-                onMouseMove={handleCanvasMouseMove}
-                onMouseUp={handleCanvasMouseUp}
-                onMouseLeave={handleCanvasMouseUp}
-              />
             </div>
           </div>
           
