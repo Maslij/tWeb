@@ -1,9 +1,9 @@
 .line-zone-config-modal {
-  display: flex;
-  flex-direction: column;
   width: 100%;
   height: 100%;
   max-height: 90vh;
+  display: flex;
+  flex-direction: column;
   color: var(--text-primary);
   background-color: var(--background-primary);
   padding: 24px;
@@ -19,6 +19,7 @@
   display: flex;
   gap: 24px;
   min-height: 0;
+  overflow: hidden;
 }
 
 .main-content {
@@ -26,19 +27,17 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  height: 100%;
 }
 
 .camera-view-container {
   position: relative;
-  width: fit-content;
-  min-width: 100%;
+  width: 100%;
   height: 100%;
   background-color: #000;
   border-radius: 8px;
   border: 1px solid var(--border-color);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  overflow: hidden;
 }
 
 .camera-feed-image {
@@ -59,8 +58,6 @@
   min-height: 300px;
   color: var(--text-secondary);
   font-style: italic;
-  background-color: var(--background-secondary);
-  border-radius: 8px;
 }
 
 .line-zone-canvas {
@@ -82,6 +79,7 @@
   border-radius: 8px;
   background-color: var(--line-list-bg);
   height: 100%;
+  overflow: hidden;
 }
 
 .line-list-container h3 {
@@ -100,6 +98,135 @@
   gap: 8px;
   padding: 8px 16px;
   min-height: 0;
+}
+
+.line-item-wrapper {
+  margin-bottom: 8px;
+}
+
+.line-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background-color: var(--line-item-bg);
+  transition: background-color 0.2s;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.line-item:hover {
+  background-color: var(--line-item-hover-bg);
+}
+
+.line-item.selected {
+  background-color: var(--line-item-selected-bg);
+  border: 1px solid var(--line-item-selected-border);
+}
+
+.line-info {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  flex: 1;
+  margin-right: 8px;
+  overflow: hidden;
+}
+
+.line-name {
+  font-weight: bold;
+  color: var(--line-name-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 5px;
+}
+
+.line-name-edit input {
+  width: 100%;
+  background-color: var(--input-bg);
+  border: 1px solid var(--input-border);
+  color: var(--input-color);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.line-counts {
+  font-size: 12px;
+  color: var(--line-counts-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 3px;
+}
+
+.line-coords-info {
+  font-size: 12px;
+  color: var(--line-coords-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.line-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.edit-button, .save-button, .delete-button, .settings-button {
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.edit-button {
+  background-color: var(--edit-button-bg);
+  border: 1px solid var(--edit-button-border);
+  color: var(--edit-button-color);
+}
+
+.edit-button:hover {
+  background-color: var(--edit-button-hover-bg);
+  border-color: var(--edit-button-hover-border);
+}
+
+.save-button {
+  background-color: var(--save-button-bg);
+  color: var(--save-button-color);
+  border: 1px solid var(--save-button-border);
+}
+
+.save-button:hover {
+  background-color: var(--save-button-hover-bg);
+  border-color: var(--save-button-hover-border);
+}
+
+.settings-button {
+  background-color: #ff9800;
+  color: white;
+  border: 1px solid #e65100;
+}
+
+.settings-button:hover, .settings-button.active {
+  background-color: #f57c00;
+  border-color: #e65100;
+}
+
+.delete-button {
+  background-color: var(--delete-button-bg);
+  color: var(--delete-button-color);
+  border: 1px solid var(--delete-button-border);
+}
+
+.delete-button:hover {
+  background-color: var(--delete-button-hover-bg);
+  border-color: var(--delete-button-hover-border);
+  color: var(--delete-button-hover-color);
 }
 
 .no-lines-message {
@@ -150,166 +277,7 @@
   margin-top: auto;
 }
 
-.line-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  padding: 8px 12px;
-  border-radius: 8px;
-  background-color: var(--line-item-bg);
-  transition: background-color 0.2s;
-  cursor: pointer;
-  border: 1px solid transparent;
-  width: 100%;
-  text-align: center;
-}
-
-.line-item:hover {
-  background-color: var(--line-item-hover-bg);
-}
-
-.line-item.selected {
-  background-color: var(--line-item-selected-bg);
-  border: 1px solid var(--line-item-selected-border);
-}
-
-.line-info {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  min-width: 0;
-  flex: 1;
-  margin-right: 8px;
-}
-
-.line-name {
-  font-weight: bold;
-  color: var(--line-name-color);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.line-counts {
-  font-size: 12px;
-  color: var(--line-counts-color);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.line-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.edit-button,
-.delete-button,
-.save-button {
-  border-radius: 4px;
-  padding: 4px 8px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  width: 45px;
-  text-align: center;
-  height: 24px;
-  line-height: 14px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.edit-button {
-  background-color: var(--edit-button-bg);
-  border: 1px solid var(--edit-button-border);
-  color: var(--edit-button-color);
-}
-
-.edit-button:hover {
-  background-color: var(--edit-button-hover-bg);
-  border-color: var(--edit-button-hover-border);
-}
-
-.delete-button {
-  background-color: var(--delete-button-bg);
-  color: var(--delete-button-color);
-  border-color: var(--delete-button-border);
-}
-
-.delete-button:hover {
-  background-color: var(--delete-button-hover-bg);
-  border-color: var(--delete-button-hover-border);
-  color: var(--delete-button-hover-color);
-}
-
-.save-button {
-  background-color: var(--save-button-bg);
-  color: var(--save-button-color);
-  border-color: var(--save-button-border);
-  padding: 4px 8px;
-  font-size: 12px;
-}
-
-.save-button:hover {
-  background-color: var(--save-button-hover-bg);
-  border-color: var(--save-button-hover-border);
-}
-
-.line-name-edit {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  width: 100%;
-  min-width: 0;
-}
-
-.line-name-edit input {
-  padding: 4px 8px;
-  border: 1px solid var(--input-border);
-  border-radius: 4px;
-  font-size: 14px;
-  background-color: var(--input-bg);
-  color: var(--input-color);
-  transition: all 0.2s ease;
-  flex: 1;
-  min-width: 0;
-}
-
-.line-name-edit input:focus {
-  border-color: var(--input-focus-border);
-  outline: none;
-  box-shadow: 0 0 0 2px var(--input-focus-shadow);
-}
-
-.line-name-edit button {
-  background-color: var(--accent-color);
-  color: var(--text-on-accent);
-  border: none;
-  border-radius: 4px;
-  padding: 4px 8px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-
-.line-name-edit button:hover {
-  background-color: var(--accent-hover);
-  transform: translateY(-1px);
-}
-
-.line-name-edit button:active {
-  transform: translateY(0);
-}
-
-.modal-content {
-  max-width: 100%;
-}
-
-.button {
+.cancel-button, .apply-button {
   padding: 10px 16px;
   border-radius: 8px;
   font-size: 14px;
@@ -352,6 +320,78 @@
   box-shadow: 0 2px 4px var(--shadow-color, rgba(0, 0, 0, 0.1));
 }
 
+/* New styles for line settings panel */
+.line-settings-panel {
+  background-color: var(--background-secondary);
+  border-radius: 0 0 8px 8px;
+  padding: 12px 16px;
+  margin-top: -1px;
+  border: 1px solid var(--line-item-selected-border);
+  border-top: none;
+  margin-bottom: 12px;
+}
+
+.settings-section {
+  margin-bottom: 15px;
+}
+
+.settings-section h4 {
+  margin-top: 5px;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.threshold-control {
+  display: flex;
+  align-items: center;
+}
+
+.threshold-control input {
+  width: 60px;
+  padding: 5px;
+  background-color: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  color: var(--input-color);
+  margin-right: 10px;
+}
+
+.threshold-help {
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex: 1;
+}
+
+.anchors-description {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+.anchors-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.anchor-checkbox {
+  display: flex;
+  align-items: center;
+}
+
+.anchor-checkbox label {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.anchor-checkbox input {
+  margin-right: 5px;
+}
+
 /* Add focus styles for accessibility */
 .add-line-button:focus,
 .edit-button:focus,
@@ -383,19 +423,6 @@
   border-radius: 8px;
   border-left: 3px solid var(--accent-color);
   margin-bottom: 16px;
-}
-
-.line-coords-info {
-  font-size: 12px;
-  color: var(--line-coords-color);
-  background-color: var(--line-coords-bg);
-  padding: 4px 6px;
-  border-radius: 4px;
-  margin-top: 4px;
-  font-family: monospace;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* Add these CSS variables to your theme: */

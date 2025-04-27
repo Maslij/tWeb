@@ -29,6 +29,19 @@ interface LineZoneConfigModalProps {
   onSave: (lines: Line[]) => void;
 }
 
+// Available anchors for line crossing detection
+const AVAILABLE_ANCHORS = [
+  { id: "TOP_LEFT", label: "Top Left" },
+  { id: "TOP_RIGHT", label: "Top Right" },
+  { id: "BOTTOM_LEFT", label: "Bottom Left" },
+  { id: "BOTTOM_RIGHT", label: "Bottom Right" },
+  { id: "CENTER", label: "Center" },
+  { id: "TOP_CENTER", label: "Top Center" },
+  { id: "BOTTOM_CENTER", label: "Bottom Center" },
+  { id: "LEFT_CENTER", label: "Left Center" },
+  { id: "RIGHT_CENTER", label: "Right Center" }
+];
+
 const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
   isOpen,
   onClose,
@@ -68,6 +81,10 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editingLineName, setEditingLineName] = useState('');
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
+  
+  // State for editing threshold and anchors
+  const [showLineSettings, setShowLineSettings] = useState<string | null>(null);
+  const [editingThreshold, setEditingThreshold] = useState<number>(1);
   
   // Reference to the canvas element
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -396,6 +413,11 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
       setSelectedLineId(null);
       setSelectedPoint(null);
     }
+    
+    // Close settings panel if open for this line
+    if (showLineSettings === lineId) {
+      setShowLineSettings(null);
+    }
   };
 
   // Select a line for editing
@@ -407,6 +429,7 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
     const line = lines.find(l => l.id === lineId);
     if (line) {
       setEditingLineName(line.name || '');
+      setEditingThreshold(line.minimum_crossing_threshold);
     }
   };
 
@@ -428,6 +451,49 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
       return line;
     }));
     setEditingLineId(null);
+  };
+
+  // Toggle settings panel for a line
+  const toggleLineSettings = (lineId: string) => {
+    if (showLineSettings === lineId) {
+      setShowLineSettings(null);
+    } else {
+      setShowLineSettings(lineId);
+      const line = lines.find(l => l.id === lineId);
+      if (line) {
+        setEditingThreshold(line.minimum_crossing_threshold);
+      }
+    }
+  };
+  
+  // Save the threshold value
+  const saveThreshold = (lineId: string) => {
+    setLines(lines.map(line => {
+      if (line.id === lineId) {
+        return { ...line, minimum_crossing_threshold: editingThreshold };
+      }
+      return line;
+    }));
+  };
+  
+  // Toggle an anchor for a line
+  const toggleAnchor = (lineId: string, anchorId: string) => {
+    setLines(lines.map(line => {
+      if (line.id === lineId) {
+        const currentAnchors = line.triggering_anchors || [];
+        const newAnchors = currentAnchors.includes(anchorId)
+          ? currentAnchors.filter(a => a !== anchorId)
+          : [...currentAnchors, anchorId];
+        
+        // Ensure at least one anchor is selected
+        if (newAnchors.length === 0) {
+          return line;
+        }
+        
+        return { ...line, triggering_anchors: newAnchors };
+      }
+      return line;
+    }));
   };
 
   // Handle canvas mouse up to end dragging
@@ -548,58 +614,111 @@ const LineZoneConfigModal: React.FC<LineZoneConfigModalProps> = ({
             ) : (
               <div className="line-list">
                 {lines.map(line => (
-                  <div 
-                    key={line.id} 
-                    className={`line-item ${selectedLineId === line.id ? 'selected' : ''}`}
-                    onClick={() => selectLine(line.id)}
-                  >
-                    <div className="line-info">
-                      {editingLineId === line.id ? (
-                        <div className="line-name-edit">
-                          <input
-                            type="text"
-                            value={editingLineName}
-                            onChange={(e) => setEditingLineName(e.target.value)}
-                            autoFocus
-                            onClick={(e) => e.stopPropagation()}
-                          />
+                  <div key={line.id} className="line-item-wrapper">
+                    <div 
+                      className={`line-item ${selectedLineId === line.id ? 'selected' : ''}`}
+                      onClick={() => selectLine(line.id)}
+                    >
+                      <div className="line-info">
+                        {editingLineId === line.id ? (
+                          <div className="line-name-edit">
+                            <input
+                              type="text"
+                              value={editingLineName}
+                              onChange={(e) => setEditingLineName(e.target.value)}
+                              autoFocus
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                        ) : (
+                          <span className="line-name">{line.name || `Line ${line.id}`}</span>
+                        )}
+                        <span className="line-counts">
+                          In: {line.in_count}, Out: {line.out_count}
+                        </span>
+                        <span className="line-coords-info">
+                          Coords: ({line.start_x}, {line.start_y}) → ({line.end_x}, {line.end_y})
+                        </span>
+                      </div>
+                      <div className="line-actions">
+                        <button 
+                          className={editingLineId === line.id ? "save-button" : "edit-button"}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (editingLineId === line.id) {
+                              saveLineName(line.id);
+                            } else {
+                              startEditing(line.id);
+                            }
+                          }}
+                          title={editingLineId === line.id ? "Save line name" : "Edit line name"}
+                        >
+                          {editingLineId === line.id ? "Save" : "Edit"}
+                        </button>
+                        <button
+                          className={`settings-button ${showLineSettings === line.id ? 'active' : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleLineSettings(line.id);
+                          }}
+                          title="Line settings"
+                        >
+                          Settings
+                        </button>
+                        <button 
+                          className="delete-button" 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteLine(line.id);
+                          }}
+                          title="Delete line"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                    
+                    {showLineSettings === line.id && (
+                      <div className="line-settings-panel">
+                        <div className="settings-section">
+                          <h4>Minimum Crossing Threshold</h4>
+                          <div className="threshold-control">
+                            <input
+                              type="number"
+                              min="1"
+                              max="10"
+                              value={editingThreshold}
+                              onChange={(e) => setEditingThreshold(parseInt(e.target.value) || 1)}
+                              onBlur={() => saveThreshold(line.id)}
+                            />
+                            <span className="threshold-help">
+                              Minimum number of frames an object must be detected crossing the line
+                            </span>
+                          </div>
                         </div>
-                      ) : (
-                        <span className="line-name">{line.name || `Line ${line.id}`}</span>
-                      )}
-                      <span className="line-counts">
-                        In: {line.in_count}, Out: {line.out_count}
-                      </span>
-                      <span className="line-coords-info">
-                        Coords: ({line.start_x}, {line.start_y}) → ({line.end_x}, {line.end_y})
-                      </span>
-                    </div>
-                    <div className="line-actions">
-                      <button 
-                        className={editingLineId === line.id ? "save-button" : "edit-button"}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (editingLineId === line.id) {
-                            saveLineName(line.id);
-                          } else {
-                            startEditing(line.id);
-                          }
-                        }}
-                        title={editingLineId === line.id ? "Save line name" : "Edit line name"}
-                      >
-                        {editingLineId === line.id ? "Save" : "Edit"}
-                      </button>
-                      <button 
-                        className="delete-button" 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteLine(line.id);
-                        }}
-                        title="Delete line"
-                      >
-                        Delete
-                      </button>
-                    </div>
+                        
+                        <div className="settings-section">
+                          <h4>Triggering Anchors</h4>
+                          <div className="anchors-description">
+                            Select which points on detected objects will trigger crossing events:
+                          </div>
+                          <div className="anchors-grid">
+                            {AVAILABLE_ANCHORS.map(anchor => (
+                              <div key={anchor.id} className="anchor-checkbox">
+                                <label>
+                                  <input
+                                    type="checkbox"
+                                    checked={line.triggering_anchors.includes(anchor.id)}
+                                    onChange={() => toggleAnchor(line.id, anchor.id)}
+                                  />
+                                  {anchor.label}
+                                </label>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
