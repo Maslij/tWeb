@@ -58,6 +58,29 @@ export interface LicenseStatus {
   has_license: boolean;
 }
 
+// Component types interface
+export interface ComponentTypes {
+  sources: string[];
+  processors: string[];
+  sinks: string[];
+}
+
+// Generic component interface
+export interface Component {
+  id: string;
+  type: string;
+  type_name?: string;
+  running: boolean;
+  config: any;
+}
+
+// Component input interface
+export interface ComponentInput {
+  id?: string;
+  type: string;
+  config: any;
+}
+
 // API Service
 const apiService = {
   // License related API calls
@@ -166,6 +189,175 @@ const apiService = {
       }
       return getFullUrl(`/api/v1/cameras/${cameraId}/frame?quality=${quality}`);
     }
+  },
+
+  // Component related API calls
+  components: {
+    // Get all available component types
+    getTypes: async (): Promise<ComponentTypes | null> => {
+      try {
+        const response = await axios.get(getFullUrl('/api/v1/component-types'));
+        return response.data;
+      } catch (error) {
+        console.error('Error fetching component types:', error);
+        return null;
+      }
+    },
+
+    // Get all components for a camera
+    getAll: async (cameraId: string): Promise<{ source: Component | null, processors: Component[], sinks: Component[] } | null> => {
+      try {
+        const response = await axios.get(getFullUrl(`/api/v1/cameras/${cameraId}/components`));
+        return response.data;
+      } catch (error) {
+        console.error(`Error fetching components for camera ${cameraId}:`, error);
+        return null;
+      }
+    },
+
+    // Source component operations
+    source: {
+      // Create a source component
+      create: async (cameraId: string, componentData: ComponentInput): Promise<Component | null> => {
+        try {
+          const response = await axios.post(getFullUrl(`/api/v1/cameras/${cameraId}/source`), componentData);
+          return response.data;
+        } catch (error) {
+          console.error(`Error creating source for camera ${cameraId}:`, error);
+          return null;
+        }
+      },
+
+      // Update a source component
+      update: async (cameraId: string, componentData: Partial<ComponentInput>): Promise<Component | null> => {
+        try {
+          const response = await axios.put(getFullUrl(`/api/v1/cameras/${cameraId}/source`), componentData);
+          return response.data;
+        } catch (error) {
+          console.error(`Error updating source for camera ${cameraId}:`, error);
+          return null;
+        }
+      },
+
+      // Delete a source component
+      delete: async (cameraId: string): Promise<boolean> => {
+        try {
+          await axios.delete(getFullUrl(`/api/v1/cameras/${cameraId}/source`));
+          return true;
+        } catch (error) {
+          console.error(`Error deleting source for camera ${cameraId}:`, error);
+          return false;
+        }
+      },
+    },
+
+    // Processor component operations
+    processors: {
+      // Create a processor component
+      create: async (cameraId: string, componentData: ComponentInput): Promise<Component | null> => {
+        try {
+          const response = await axios.post(getFullUrl(`/api/v1/cameras/${cameraId}/processors`), componentData);
+          return response.data;
+        } catch (error) {
+          console.error(`Error creating processor for camera ${cameraId}:`, error);
+          return null;
+        }
+      },
+
+      // Get a specific processor component
+      getById: async (cameraId: string, processorId: string): Promise<Component | null> => {
+        try {
+          const response = await axios.get(getFullUrl(`/api/v1/cameras/${cameraId}/processors/${processorId}`));
+          return response.data;
+        } catch (error) {
+          console.error(`Error fetching processor ${processorId} for camera ${cameraId}:`, error);
+          return null;
+        }
+      },
+
+      // Update a processor component
+      update: async (cameraId: string, processorId: string, componentData: { config: any }): Promise<Component | null> => {
+        try {
+          const response = await axios.put(getFullUrl(`/api/v1/cameras/${cameraId}/processors/${processorId}`), componentData);
+          return response.data;
+        } catch (error) {
+          console.error(`Error updating processor ${processorId} for camera ${cameraId}:`, error);
+          return null;
+        }
+      },
+
+      // Delete a processor component
+      delete: async (cameraId: string, processorId: string): Promise<boolean> => {
+        try {
+          await axios.delete(getFullUrl(`/api/v1/cameras/${cameraId}/processors/${processorId}`));
+          return true;
+        } catch (error) {
+          console.error(`Error deleting processor ${processorId} for camera ${cameraId}:`, error);
+          return false;
+        }
+      },
+    },
+
+    // Sink component operations
+    sinks: {
+      // Create a sink component
+      create: async (cameraId: string, componentData: ComponentInput): Promise<Component | null> => {
+        try {
+          const response = await axios.post(getFullUrl(`/api/v1/cameras/${cameraId}/sinks`), componentData);
+          return response.data;
+        } catch (error) {
+          console.error(`Error creating sink for camera ${cameraId}:`, error);
+          return null;
+        }
+      },
+
+      // Get a specific sink component
+      getById: async (cameraId: string, sinkId: string): Promise<Component | null> => {
+        try {
+          const response = await axios.get(getFullUrl(`/api/v1/cameras/${cameraId}/sinks/${sinkId}`));
+          return response.data;
+        } catch (error) {
+          console.error(`Error fetching sink ${sinkId} for camera ${cameraId}:`, error);
+          return null;
+        }
+      },
+
+      // Update a sink component
+      update: async (cameraId: string, sinkId: string, componentData: { config: any }): Promise<Component | null> => {
+        try {
+          const response = await axios.put(getFullUrl(`/api/v1/cameras/${cameraId}/sinks/${sinkId}`), componentData);
+          return response.data;
+        } catch (error) {
+          console.error(`Error updating sink ${sinkId} for camera ${cameraId}:`, error);
+          return null;
+        }
+      },
+
+      // Delete a sink component
+      delete: async (cameraId: string, sinkId: string): Promise<boolean> => {
+        try {
+          await axios.delete(getFullUrl(`/api/v1/cameras/${cameraId}/sinks/${sinkId}`));
+          return true;
+        } catch (error) {
+          console.error(`Error deleting sink ${sinkId} for camera ${cameraId}:`, error);
+          return false;
+        }
+      },
+    },
+  },
+
+  // Object detection models
+  models: {
+    // Get available object detection models
+    getObjectDetectionModels: async (): Promise<any> => {
+      try {
+        const response = await axios.get(getFullUrl('/api/v1/models/object-detection'));
+        return response.data;
+      } catch (error) {
+        console.error('Error fetching object detection models:', error);
+        return null;
+      }
+    },
   }
 };
 
