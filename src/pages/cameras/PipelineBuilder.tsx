@@ -51,7 +51,80 @@ import StopIcon from '@mui/icons-material/Stop';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
 import RemoveCircleIcon from '@mui/icons-material/RemoveCircle';
 
-import apiService, { Camera, Component, ComponentInput, ComponentTypes } from '../../services/api';
+import apiService, { Camera, Component, ComponentInput } from '../../services/api';
+
+// Component type mapping interfaces
+interface ComponentTypeInfo {
+  name: string;
+  description: string;
+  icon?: React.ReactNode;
+}
+
+interface ComponentTypeMapping {
+  [key: string]: ComponentTypeInfo;
+}
+
+// Human-readable component type mappings
+const sourceTypeMapping: ComponentTypeMapping = {
+  "rtsp": {
+    name: "RTSP Camera Stream",
+    description: "Connect to an IP camera using the RTSP protocol",
+    icon: <VideoSettingsIcon />
+  },
+  "file": {
+    name: "Video File",
+    description: "Process a pre-recorded video file",
+    icon: <VideoSettingsIcon />
+  }
+};
+
+const processorTypeMapping: ComponentTypeMapping = {
+  "object_detection": {
+    name: "Object Detection",
+    description: "Detect objects in the video using deep learning models",
+    icon: <MemoryIcon />
+  },
+  "object_tracking": {
+    name: "Object Tracking",
+    description: "Track detected objects across video frames",
+    icon: <MemoryIcon />
+  },
+  "line_zone_manager": {
+    name: "Line Crossing Detection",
+    description: "Count objects crossing defined line zones",
+    icon: <MemoryIcon />
+  }
+};
+
+const sinkTypeMapping: ComponentTypeMapping = {
+  "file": {
+    name: "Video File Output",
+    description: "Save processed video to a file",
+    icon: <SaveIcon />
+  }
+};
+
+// Helper function to get human-readable name for a component type
+const getComponentTypeName = (type: string, componentCategory: 'source' | 'processor' | 'sink'): string => {
+  const mapping = componentCategory === 'source' 
+    ? sourceTypeMapping 
+    : componentCategory === 'processor' 
+      ? processorTypeMapping 
+      : sinkTypeMapping;
+  
+  return mapping[type]?.name || type;
+};
+
+// Helper function to get description for a component type
+const getComponentTypeDescription = (type: string, componentCategory: 'source' | 'processor' | 'sink'): string => {
+  const mapping = componentCategory === 'source' 
+    ? sourceTypeMapping 
+    : componentCategory === 'processor' 
+      ? processorTypeMapping 
+      : sinkTypeMapping;
+  
+  return mapping[type]?.description || '';
+};
 
 // File Source form interface
 interface FileSourceForm {
@@ -183,6 +256,20 @@ const parseJson = (jsonString: string): any => {
   }
 };
 
+// Add dependency type definitions
+interface ComponentDependencyMap {
+  [key: string]: string[];
+}
+
+// Define ComponentTypes interface
+interface ComponentTypes {
+  sources: string[];
+  processors: string[];
+  sinks: string[];
+  dependencies?: ComponentDependencyMap;
+  dependency_rules?: string[];
+}
+
 const PipelineBuilder = () => {
   const { cameraId } = useParams<{ cameraId: string }>();
   const navigate = useNavigate();
@@ -280,6 +367,10 @@ const PipelineBuilder = () => {
   const [frameUrl, setFrameUrl] = useState<string>('');
   const [refreshInterval, setRefreshInterval] = useState<number | null>(null);
 
+  // Add state for component dependencies
+  const [dependencies, setDependencies] = useState<ComponentDependencyMap>({});
+  const [dependencyRules, setDependencyRules] = useState<string[]>([]);
+
   // Fetch data on mount
   useEffect(() => {
     if (!cameraId) return;
@@ -299,7 +390,14 @@ const PipelineBuilder = () => {
         // Fetch component types
         const types = await apiService.components.getTypes();
         if (types) {
-          setComponentTypes(types);
+          setComponentTypes(types as ComponentTypes);
+          // Store dependencies if available
+          if (types.dependencies) {
+            setDependencies(types.dependencies as ComponentDependencyMap);
+          }
+          if (types.dependency_rules) {
+            setDependencyRules(types.dependency_rules as string[]);
+          }
         }
         
         // Fetch camera components
@@ -899,25 +997,111 @@ const PipelineBuilder = () => {
     };
   }, [refreshInterval]);
 
+  // Add function to check if a component can be added based on dependencies
+  const canAddComponent = (type: string, category: 'source' | 'processor' | 'sink'): boolean => {
+    // Source can always be added if none exists
+    if (category === 'source') {
+      return !sourceComponent;
+    }
+    
+    // Any processor or sink requires a source
+    if (!sourceComponent) {
+      return false;
+    }
+    
+    // If this component type has dependencies, check if they're satisfied
+    if (dependencies[type]) {
+      const requiredTypes = dependencies[type];
+      // Check if we have all required components
+      for (const requiredType of requiredTypes) {
+        // Check if any processor matches the required type
+        const hasRequiredComponent = processorComponents.some(
+          processor => processor.type === requiredType || processor.type_name === requiredType
+        );
+        
+        if (!hasRequiredComponent) {
+          return false;
+        }
+      }
+    }
+    
+    return true;
+  };
+
+  // Add function to get reason why component cannot be added
+  const getDisabledReason = (type: string, category: 'source' | 'processor' | 'sink'): string => {
+    if (camera?.running) {
+      return "Pipeline is running";
+    }
+    
+    if (category === 'source' && sourceComponent) {
+      return "Source component already exists";
+    }
+    
+    if (!sourceComponent && (category === 'processor' || category === 'sink')) {
+      return "Source component is required first";
+    }
+    
+    if (dependencies[type]) {
+      const requiredTypes = dependencies[type];
+      const missingDeps = requiredTypes.filter(reqType => 
+        !processorComponents.some(proc => proc.type === reqType || proc.type_name === reqType)
+      );
+      
+      if (missingDeps.length > 0) {
+        return `Requires ${missingDeps.map(dep => 
+          getComponentTypeName(dep, 'processor')
+        ).join(", ")}`;
+      }
+    }
+    
+    return "";
+  };
+
   // Render component card
   const renderComponentCard = (component: Component, type: 'source' | 'processor' | 'sink') => {
     // Determine display name for component type
-    let displayType = component.type_name || component.type;
-    if (typeof displayType !== 'string') {
-      displayType = `${displayType}`;
+    let componentType = component.type_name || component.type;
+    if (typeof componentType !== 'string') {
+      componentType = `${componentType}`;
     }
+    
+    const displayName = getComponentTypeName(componentType, type);
+    const description = getComponentTypeDescription(componentType, type);
+    const mapping = type === 'source' 
+      ? sourceTypeMapping 
+      : type === 'processor' 
+        ? processorTypeMapping 
+        : sinkTypeMapping;
+    const icon = mapping[componentType]?.icon;
     
     return (
       <Card key={component.id} sx={{ mb: 2 }}>
         <CardContent>
-          <Typography variant="h6" gutterBottom>
-            {displayType}
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+            {icon && (
+              <Box sx={{ mr: 2, color: 'primary.main' }}>
+                {icon}
+              </Box>
+            )}
+            <Typography variant="h6" gutterBottom sx={{ mb: 0 }}>
+              {displayName}
+            </Typography>
+          </Box>
+          {description && (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              {description}
+            </Typography>
+          )}
+          <Divider sx={{ my: 1 }} />
           <Typography variant="body2" color="text.secondary">
             ID: {component.id}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Status: {component.running ? 'Running' : 'Stopped'}
+          <Typography variant="body2" color="text.secondary" component="div">
+            Status: {component.running ? 
+              <Chip size="small" color="success" label="Running" /> : 
+              <Chip size="small" color="default" label="Stopped" />
+            }
           </Typography>
         </CardContent>
         <CardActions>
@@ -1020,9 +1204,22 @@ const PipelineBuilder = () => {
             {sourceComponent ? (
               renderComponentCard(sourceComponent, 'source')
             ) : (
-              <Typography variant="body1" color="text.secondary" sx={{ textAlign: 'center', mt: 5 }}>
-                No source component added yet. Add a source to start building your pipeline.
-              </Typography>
+              <Paper sx={{ p: 3, textAlign: 'center', minHeight: '200px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+                <VideoSettingsIcon sx={{ fontSize: 60, color: 'text.secondary', opacity: 0.5, mb: 2 }} />
+                <Typography variant="body1" color="text.secondary">
+                  No source component added yet. Add a source to start building your pipeline.
+                </Typography>
+                <Button 
+                  variant="contained" 
+                  color="primary"
+                  startIcon={<AddIcon />}
+                  onClick={() => openCreateDialog('source')}
+                  disabled={!!sourceComponent || camera.running}
+                  sx={{ mt: 2 }}
+                >
+                  Add Source
+                </Button>
+              </Paper>
             )}
           </Box>
         </TabPanel>
@@ -1049,9 +1246,22 @@ const PipelineBuilder = () => {
                 ))}
               </Stack>
             ) : (
-              <Typography variant="body1" color="text.secondary" sx={{ textAlign: 'center', mt: 5 }}>
-                No processor components added yet. Add processors to process the video stream.
-              </Typography>
+              <Paper sx={{ p: 3, textAlign: 'center', minHeight: '200px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+                <MemoryIcon sx={{ fontSize: 60, color: 'text.secondary', opacity: 0.5, mb: 2 }} />
+                <Typography variant="body1" color="text.secondary">
+                  No processor components added yet. Add processors to process the video stream.
+                </Typography>
+                <Button 
+                  variant="contained" 
+                  color="primary"
+                  startIcon={<AddIcon />}
+                  onClick={() => openCreateDialog('processor')}
+                  disabled={!sourceComponent || camera.running}
+                  sx={{ mt: 2 }}
+                >
+                  Add Processor
+                </Button>
+              </Paper>
             )}
           </Box>
         </TabPanel>
@@ -1078,9 +1288,22 @@ const PipelineBuilder = () => {
                 ))}
               </Stack>
             ) : (
-              <Typography variant="body1" color="text.secondary" sx={{ textAlign: 'center', mt: 5 }}>
-                No sink components added yet. Add sinks to save or stream the processed video.
-              </Typography>
+              <Paper sx={{ p: 3, textAlign: 'center', minHeight: '200px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+                <SaveIcon sx={{ fontSize: 60, color: 'text.secondary', opacity: 0.5, mb: 2 }} />
+                <Typography variant="body1" color="text.secondary">
+                  No sink components added yet. Add sinks to save or stream the processed video.
+                </Typography>
+                <Button 
+                  variant="contained" 
+                  color="primary"
+                  startIcon={<AddIcon />}
+                  onClick={() => openCreateDialog('sink')}
+                  disabled={!sourceComponent || camera.running}
+                  sx={{ mt: 2 }}
+                >
+                  Add Sink
+                </Button>
+              </Paper>
             )}
           </Box>
         </TabPanel>
@@ -1089,16 +1312,42 @@ const PipelineBuilder = () => {
       {/* Dialog for creating/editing components */}
       <Dialog open={openDialog} onClose={handleDialogClose} maxWidth="md" fullWidth>
         <DialogTitle>
-          {dialogMode === 'create' ? 'Create' : 'Edit'} {dialogType.charAt(0).toUpperCase() + dialogType.slice(1)} Component
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            {dialogType === 'source' && <VideoSettingsIcon sx={{ mr: 1 }} />}
+            {dialogType === 'processor' && <MemoryIcon sx={{ mr: 1 }} />}
+            {dialogType === 'sink' && <SaveIcon sx={{ mr: 1 }} />}
+            {dialogMode === 'create' ? 'Add' : 'Edit'} {dialogMode === 'edit' && selectedComponentType ? 
+              getComponentTypeName(selectedComponentType, dialogType) : 
+              dialogType.charAt(0).toUpperCase() + dialogType.slice(1) + ' Component'}
+          </Box>
         </DialogTitle>
         <DialogContent>
+          {dialogMode === 'create' && dependencyRules.length > 0 && (
+            <Box sx={{ mt: 1, mb: 2, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                Component Dependencies:
+              </Typography>
+              <ul style={{ margin: 0, paddingLeft: '1.5rem' }}>
+                {dependencyRules.map((rule, index) => (
+                  <li key={index}>
+                    <Typography variant="body2">{rule}</Typography>
+                  </li>
+                ))}
+                {selectedComponentType && dependencies[selectedComponentType] && (
+                  <li>
+                    <Typography variant="body2">
+                      <strong>{getComponentTypeName(selectedComponentType, dialogType)}</strong> requires: {
+                        dependencies[selectedComponentType].map(dep => 
+                          getComponentTypeName(dep, 'processor')).join(", ")
+                      }
+                    </Typography>
+                  </li>
+                )}
+              </ul>
+            </Box>
+          )}
+          
           <Box sx={{ mt: 2 }}>
-            {/* Debug info - to be removed after fixing */}
-            <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mb: 2 }}>
-              Mode: {dialogMode}, Type: {dialogType}, Component Type: {selectedComponentType}
-              {selectedComponent && <span>, ID: {selectedComponent.id}, Full Type: {JSON.stringify(selectedComponent.type)}</span>}
-            </Typography>
-            
             {/* Component Type Selection (only for create mode) */}
             {dialogMode === 'create' && (
               <FormControl fullWidth sx={{ mb: 3 }}>
@@ -1110,24 +1359,63 @@ const PipelineBuilder = () => {
                   label="Component Type"
                 >
                   {componentTypes && componentTypes[dialogType === 'source' ? 'sources' : 
-                                      dialogType === 'processor' ? 'processors' : 'sinks'].map(type => (
-                    <MenuItem key={type} value={type}>{type}</MenuItem>
-                  ))}
+                                      dialogType === 'processor' ? 'processors' : 'sinks'].map(type => {
+                    const mapping = dialogType === 'source' 
+                      ? sourceTypeMapping 
+                      : dialogType === 'processor' 
+                        ? processorTypeMapping 
+                        : sinkTypeMapping;
+                    const icon = mapping[type]?.icon;
+                    const isDisabled = !canAddComponent(type, dialogType);
+                    const disabledReason = getDisabledReason(type, dialogType);
+                    
+                    return (
+                      <MenuItem 
+                        key={type} 
+                        value={type} 
+                        disabled={isDisabled}
+                        sx={{ flexDirection: 'column', alignItems: 'flex-start', py: 1 }}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                          {icon && <Box sx={{ mr: 1, color: 'primary.main' }}>{icon}</Box>}
+                          <Typography variant="body1">{getComponentTypeName(type, dialogType)}</Typography>
+                        </Box>
+                        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                          {getComponentTypeDescription(type, dialogType)}
+                          {isDisabled && disabledReason && (
+                            <Box component="span" sx={{ color: 'error.main', ml: 1 }}>
+                              ({disabledReason})
+                            </Box>
+                          )}
+                        </Typography>
+                      </MenuItem>
+                    );
+                  })}
                 </Select>
               </FormControl>
             )}
 
             {/* Show component type in edit mode */}
-            {dialogMode === 'edit' && (
-              <Typography variant="subtitle1" gutterBottom sx={{ mb: 3 }}>
-                Editing {selectedComponentType} component
-              </Typography>
+            {dialogMode === 'edit' && selectedComponentType && (
+              <Box sx={{ mb: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+                <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 'bold' }}>
+                  {getComponentTypeName(selectedComponentType, dialogType)}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {getComponentTypeDescription(selectedComponentType, dialogType)}
+                </Typography>
+              </Box>
             )}
             
             {/* Source Form (File type) */}
             {dialogType === 'source' && selectedComponentType === 'file' && (
               <Box>
-                <Typography variant="h6" gutterBottom>File Source Configuration</Typography>
+                <Typography variant="h6" gutterBottom>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <VideoSettingsIcon sx={{ mr: 1, fontSize: 20 }} />
+                    Video File Configuration
+                  </Box>
+                </Typography>
                 
                 <TextField
                   label="Video File URL"
@@ -1212,7 +1500,12 @@ const PipelineBuilder = () => {
             {/* RTSP Source Form */}
             {dialogType === 'source' && selectedComponentType === 'rtsp' && (
               <Box>
-                <Typography variant="h6" gutterBottom>RTSP Source Configuration</Typography>
+                <Typography variant="h6" gutterBottom>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <VideoSettingsIcon sx={{ mr: 1, fontSize: 20 }} />
+                    RTSP Camera Configuration
+                  </Box>
+                </Typography>
                 
                 <TextField
                   label="RTSP URL"
@@ -1315,7 +1608,12 @@ const PipelineBuilder = () => {
             {/* Object Detection Processor Form */}
             {dialogType === 'processor' && selectedComponentType === 'object_detection' && (
               <Box>
-                <Typography variant="h6" gutterBottom>Object Detection Configuration</Typography>
+                <Typography variant="h6" gutterBottom>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <MemoryIcon sx={{ mr: 1, fontSize: 20 }} />
+                    Object Detection Configuration
+                  </Box>
+                </Typography>
                 
                 <FormControl fullWidth sx={{ mb: 3, mt: 2 }}>
                   <InputLabel id="model-label">Model</InputLabel>
@@ -1386,7 +1684,12 @@ const PipelineBuilder = () => {
             {/* Object Tracking Processor Form */}
             {dialogType === 'processor' && selectedComponentType === 'object_tracking' && (
               <Box>
-                <Typography variant="h6" gutterBottom>Object Tracking Configuration</Typography>
+                <Typography variant="h6" gutterBottom>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <MemoryIcon sx={{ mr: 1, fontSize: 20 }} />
+                    Object Tracking Configuration
+                  </Box>
+                </Typography>
                 
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                   <TextField
@@ -1529,7 +1832,12 @@ const PipelineBuilder = () => {
             {/* Line Zone Manager Processor Form */}
             {dialogType === 'processor' && selectedComponentType === 'line_zone_manager' && (
               <Box>
-                <Typography variant="h6" gutterBottom>Line Zone Manager Configuration</Typography>
+                <Typography variant="h6" gutterBottom>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <MemoryIcon sx={{ mr: 1, fontSize: 20 }} />
+                    Line Zone Manager Configuration
+                  </Box>
+                </Typography>
                 
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                   <FormGroup sx={{ width: '100%' }}>
@@ -1697,7 +2005,12 @@ const PipelineBuilder = () => {
             {/* File Sink Form */}
             {dialogType === 'sink' && selectedComponentType === 'file' && (
               <Box>
-                <Typography variant="h6" gutterBottom>File Sink Configuration</Typography>
+                <Typography variant="h6" gutterBottom>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <SaveIcon sx={{ mr: 1, fontSize: 20 }} />
+                    Video File Output Configuration
+                  </Box>
+                </Typography>
                 
                 <TextField
                   label="Output File Path"
