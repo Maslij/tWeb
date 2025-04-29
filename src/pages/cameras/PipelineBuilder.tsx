@@ -305,6 +305,7 @@ const PipelineBuilder = () => {
         // Fetch camera components
         const components = await apiService.components.getAll(cameraId);
         if (components) {
+          console.log("Fetched components:", components);
           setSourceComponent(components.source);
           setProcessorComponents(components.processors || []);
           setSinkComponents(components.sinks || []);
@@ -349,6 +350,8 @@ const PipelineBuilder = () => {
     
     // Reset form data to defaults
     if (type === 'source') {
+      // Default to 'file' source type for create mode
+      setSelectedComponentType('file');
       setFileSourceForm({
         url: "",
         width: 640,
@@ -419,11 +422,43 @@ const PipelineBuilder = () => {
     setDialogType(type);
     setDialogMode('edit');
     setSelectedComponent(component);
-    setSelectedComponentType(component.type);
+    
+    // Make sure we get the correct component type as a string
+    let componentType: string;
+    
+    if (typeof component.type === 'string') {
+      componentType = component.type;
+    } else if (component.type_name) {
+      componentType = component.type_name.toLowerCase();
+    } else {
+      // If type is a number or unknown format, try to determine the type based on inspection
+      // of the component config
+      const config = component.config || {};
+      
+      if (config.url && (config.url.startsWith('rtsp://') || config.rtsp_transport)) {
+        componentType = 'rtsp';
+      } else if (config.url) {
+        componentType = 'file';
+      } else if (config.model_id && config.classes) {
+        componentType = 'object_detection';
+      } else if (config.track_thresh !== undefined) {
+        componentType = 'object_tracking';
+      } else if (config.zones) {
+        componentType = 'line_zone_manager';
+      } else if (config.path && config.fourcc) {
+        componentType = 'file'; // file sink
+      } else {
+        componentType = 'unknown';
+      }
+    }
+    
+    console.log("Editing component:", component, "extracted type:", componentType);
+    
+    setSelectedComponentType(componentType);
     setComponentConfig(formatJson(component.config));
     
     // Initialize form data from component config
-    if (type === 'source' && component.type === 'file') {
+    if (type === 'source' && componentType === 'file') {
       const config = component.config || {};
       setFileSourceForm({
         url: config.url || "",
@@ -433,7 +468,7 @@ const PipelineBuilder = () => {
         use_hw_accel: config.use_hw_accel !== undefined ? config.use_hw_accel : true,
         adaptive_timing: config.adaptive_timing !== undefined ? config.adaptive_timing : true
       });
-    } else if (type === 'source' && component.type === 'rtsp') {
+    } else if (type === 'source' && componentType === 'rtsp') {
       const config = component.config || {};
       setRtspSourceForm({
         url: config.url || "rtsp://username:password@ip:port/stream",
@@ -447,13 +482,13 @@ const PipelineBuilder = () => {
     } else if (type === 'processor') {
       const config = component.config || {};
       
-      if (component.type === 'object_detection') {
+      if (componentType === 'object_detection') {
         setObjectDetectionForm({
           model_id: config.model_id || "yolov4-tiny",
           classes: Array.isArray(config.classes) ? config.classes : ["person"],
           newClass: ""
         });
-      } else if (component.type === 'object_tracking') {
+      } else if (componentType === 'object_tracking') {
         setObjectTrackingForm({
           frame_rate: config.frame_rate || 30,
           track_buffer: config.track_buffer || 30,
@@ -466,7 +501,7 @@ const PipelineBuilder = () => {
           draw_semi_transparent_boxes: config.draw_semi_transparent_boxes !== undefined ? config.draw_semi_transparent_boxes : true,
           label_font_scale: config.label_font_scale || 0.6
         });
-      } else if (component.type === 'line_zone_manager') {
+      } else if (componentType === 'line_zone_manager') {
         setLineZoneManagerForm({
           draw_zones: config.draw_zones !== undefined ? config.draw_zones : true,
           line_color: Array.isArray(config.line_color) ? config.line_color : [255, 255, 255],
@@ -486,7 +521,7 @@ const PipelineBuilder = () => {
           }]
         });
       }
-    } else if (type === 'sink' && component.type === 'file') {
+    } else if (type === 'sink' && componentType === 'file') {
       const config = component.config || {};
       setFileSinkForm({
         path: config.path || "/tmp/output.mp4",
@@ -866,11 +901,17 @@ const PipelineBuilder = () => {
 
   // Render component card
   const renderComponentCard = (component: Component, type: 'source' | 'processor' | 'sink') => {
+    // Determine display name for component type
+    let displayType = component.type_name || component.type;
+    if (typeof displayType !== 'string') {
+      displayType = `${displayType}`;
+    }
+    
     return (
       <Card key={component.id} sx={{ mb: 2 }}>
         <CardContent>
           <Typography variant="h6" gutterBottom>
-            {component.type_name || component.type}
+            {displayType}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             ID: {component.id}
@@ -1052,6 +1093,12 @@ const PipelineBuilder = () => {
         </DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
+            {/* Debug info - to be removed after fixing */}
+            <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mb: 2 }}>
+              Mode: {dialogMode}, Type: {dialogType}, Component Type: {selectedComponentType}
+              {selectedComponent && <span>, ID: {selectedComponent.id}, Full Type: {JSON.stringify(selectedComponent.type)}</span>}
+            </Typography>
+            
             {/* Component Type Selection (only for create mode) */}
             {dialogMode === 'create' && (
               <FormControl fullWidth sx={{ mb: 3 }}>
@@ -1068,6 +1115,13 @@ const PipelineBuilder = () => {
                   ))}
                 </Select>
               </FormControl>
+            )}
+
+            {/* Show component type in edit mode */}
+            {dialogMode === 'edit' && (
+              <Typography variant="subtitle1" gutterBottom sx={{ mb: 3 }}>
+                Editing {selectedComponentType} component
+              </Typography>
             )}
             
             {/* Source Form (File type) */}
@@ -1718,22 +1772,25 @@ const PipelineBuilder = () => {
             )}
             
             {/* Generic JSON Editor for unsupported component types */}
-            {((dialogType === 'source' && selectedComponentType !== 'file') ||
+            {((dialogType === 'source' && selectedComponentType !== 'file' && selectedComponentType !== 'rtsp') ||
               (dialogType === 'processor' && 
                selectedComponentType !== 'object_detection' && 
                selectedComponentType !== 'object_tracking' && 
                selectedComponentType !== 'line_zone_manager') ||
               (dialogType === 'sink' && selectedComponentType !== 'file')) && (
-              <TextField
-                label="Component Configuration (JSON)"
-                multiline
-                rows={10}
-                value={componentConfig}
-                onChange={handleConfigChange}
-                fullWidth
-                variant="outlined"
-                sx={{ mt: 2 }}
-              />
+              <>
+                <Typography variant="h6" gutterBottom>Advanced Configuration</Typography>
+                <TextField
+                  label="Component Configuration (JSON)"
+                  multiline
+                  rows={10}
+                  value={componentConfig}
+                  onChange={handleConfigChange}
+                  fullWidth
+                  variant="outlined"
+                  sx={{ mt: 2 }}
+                />
+              </>
             )}
           </Box>
         </DialogContent>
