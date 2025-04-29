@@ -1,4 +1,6 @@
 import { createContext, useState, useEffect, useContext, ReactNode } from 'react';
+import { ThemeProvider as MuiThemeProvider, createTheme } from '@mui/material/styles';
+import CssBaseline from '@mui/material/CssBaseline';
 
 type Theme = 'light' | 'dark' | 'system';
 
@@ -59,9 +61,42 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     document.documentElement.setAttribute('data-theme', effectiveTheme);
   }, [effectiveTheme]);
 
+  // Create Material-UI theme
+  const muiTheme = createTheme({
+    palette: {
+      mode: effectiveTheme,
+      primary: {
+        main: '#2196f3', // Blue
+      },
+      secondary: {
+        main: '#f50057', // Pink
+      },
+      background: {
+        default: effectiveTheme === 'light' ? '#f5f5f5' : '#121212',
+        paper: effectiveTheme === 'light' ? '#ffffff' : '#1e1e1e',
+      },
+    },
+    components: {
+      MuiAppBar: {
+        styleOverrides: {
+          root: {
+            backgroundColor: effectiveTheme === 'light' ? '#ffffff' : '#1e1e1e',
+            color: effectiveTheme === 'light' ? '#333333' : '#ffffff',
+            boxShadow: effectiveTheme === 'light' 
+              ? '0 1px 3px rgba(0,0,0,0.12)' 
+              : '0 1px 3px rgba(0,0,0,0.5)',
+          },
+        },
+      },
+    },
+  });
+
   return (
     <ThemeContext.Provider value={{ theme, setTheme, effectiveTheme }}>
-      {children}
+      <MuiThemeProvider theme={muiTheme}>
+        <CssBaseline />
+        {children}
+      </MuiThemeProvider>
     </ThemeContext.Provider>
   );
 };

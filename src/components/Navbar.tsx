@@ -1,9 +1,57 @@
-import { Link } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import ThemeToggleIcon from './ThemeToggleIcon';
+import {
+  AppBar,
+  Box,
+  Toolbar,
+  Typography,
+  Button,
+  IconButton,
+  Container,
+  Tooltip,
+  Link,
+  Chip,
+  Badge
+} from '@mui/material';
+import VideocamIcon from '@mui/icons-material/Videocam';
+import AddIcon from '@mui/icons-material/Add';
+import VerifiedIcon from '@mui/icons-material/Verified';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import apiService, { LicenseStatus } from '../services/api';
+
+// Get app version from Vite environment or fallback to default
+const APP_VERSION = import.meta.env.VITE_APP_VERSION || '1.0.0';
 
 const Navbar = () => {
   const { theme, setTheme } = useTheme();
+  const [licenseStatus, setLicenseStatus] = useState<LicenseStatus | null>(null);
+  const [isLicenseValid, setIsLicenseValid] = useState<boolean>(false);
+  const [checkingLicense, setCheckingLicense] = useState<boolean>(true);
+
+  // Check license status on component mount
+  useEffect(() => {
+    const checkLicense = async () => {
+      try {
+        const status = await apiService.license.getStatus();
+        setLicenseStatus(status);
+        setIsLicenseValid(status?.valid || false);
+      } catch (err) {
+        console.error('Error checking license:', err);
+        setIsLicenseValid(false);
+      } finally {
+        setCheckingLicense(false);
+      }
+    };
+
+    checkLicense();
+
+    // Periodically check license status every 5 minutes
+    const intervalId = setInterval(checkLicense, 5 * 60 * 1000);
+    
+    return () => clearInterval(intervalId);
+  }, []);
 
   const toggleTheme = () => {
     if (theme === 'light') {
@@ -16,73 +64,109 @@ const Navbar = () => {
   };
 
   return (
-    <nav>
-      <style>
-        {`
-          nav {
-            background: var(--nav-bg, rgba(255, 255, 255, 0.8));
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border-bottom: 1px solid var(--nav-border, rgba(0, 0, 0, 0.1));
-            position: sticky;
-            top: 0;
-            z-index: 100;
-          }
+    <AppBar position="sticky" elevation={0}>
+      <Container maxWidth="xl">
+        <Toolbar disableGutters>
+          <VideocamIcon sx={{ display: { xs: 'none', md: 'flex' }, mr: 1 }} />
+          <Typography
+            variant="h6"
+            noWrap
+            component={RouterLink}
+            to="/"
+            sx={{
+              mr: 2,
+              display: { xs: 'none', md: 'flex' },
+              fontWeight: 700,
+              color: 'inherit',
+              textDecoration: 'none',
+            }}
+          >
+            Vision Dashboard
+          </Typography>
 
-          .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 1rem 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-          }
+          {/* Mobile logo */}
+          <VideocamIcon sx={{ display: { xs: 'flex', md: 'none' }, mr: 1 }} />
+          <Typography
+            variant="h6"
+            noWrap
+            component={RouterLink}
+            to="/"
+            sx={{
+              mr: 2,
+              display: { xs: 'flex', md: 'none' },
+              flexGrow: 1,
+              fontWeight: 700,
+              color: 'inherit',
+              textDecoration: 'none',
+            }}
+          >
+            Vision
+          </Typography>
 
-          .logo {
-            font-size: 1.5rem;
-            font-weight: 600;
-            color: var(--text-primary, #1d1d1f);
-            text-decoration: none;
-            letter-spacing: -0.5px;
-          }
+          <Box sx={{ flexGrow: 1, display: 'flex' }}>
+            <Button
+              component={RouterLink}
+              to="/"
+              sx={{ my: 2, color: 'inherit', display: 'block' }}
+            >
+              Cameras
+            </Button>
+          </Box>
 
-          .theme-toggle {
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 0.5rem;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: background-color 0.2s;
-            color: var(--text-primary);
-          }
-
-          .theme-toggle:hover {
-            background: var(--hover-bg, rgba(0, 0, 0, 0.05));
-          }
-          
-          .theme-icon {
-            display: flex;
-            align-items: center;
-          }
-        `}
-      </style>
-      
-      <div className="container">
-        <Link to="/" className="logo">
-          Vision
-        </Link>
-        <button 
-          className="theme-toggle" 
-          onClick={toggleTheme} 
-          title={`Current theme: ${theme}. Click to cycle themes.`}
-        >
-          <ThemeToggleIcon />
-        </button>
-      </div>
-    </nav>
+          <Box sx={{ flexGrow: 0, display: 'flex', alignItems: 'center' }}>
+            {/* Version indicator */}
+            <Tooltip title="Application Version">
+              <Chip 
+                label={`v${APP_VERSION}`} 
+                size="small" 
+                variant="outlined"
+                sx={{ mr: 2, borderColor: 'rgba(255,255,255,0.3)' }}
+              />
+            </Tooltip>
+            
+            {/* License status indicator */}
+            <Tooltip title={
+              isLicenseValid 
+                ? "License valid" 
+                : checkingLicense 
+                  ? "Checking license..." 
+                  : "License invalid or expired"
+            }>
+              <Chip
+                icon={isLicenseValid 
+                  ? <VerifiedIcon fontSize="small" /> 
+                  : <ErrorOutlineIcon fontSize="small" />
+                }
+                label={isLicenseValid ? "Licensed" : "Unlicensed"}
+                color={isLicenseValid ? "success" : "error"}
+                size="small"
+                sx={{ mr: 2 }}
+                onClick={() => !isLicenseValid && window.location.pathname !== '/license' && (window.location.href = '/license')}
+                clickable={!isLicenseValid}
+              />
+            </Tooltip>
+            
+            <Tooltip title="Add new camera">
+              <Button
+                component={RouterLink}
+                to="/cameras/new"
+                variant="outlined"
+                color="inherit"
+                startIcon={<AddIcon />}
+                sx={{ mr: 2 }}
+              >
+                New Camera
+              </Button>
+            </Tooltip>
+            <Tooltip title={`Current theme: ${theme}. Click to cycle themes.`}>
+              <IconButton onClick={toggleTheme} color="inherit">
+                <ThemeToggleIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        </Toolbar>
+      </Container>
+    </AppBar>
   );
 };
 

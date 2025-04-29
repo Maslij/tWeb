@@ -4,109 +4,6 @@ import axios from 'axios';
 // This remains empty for backwards compatibility
 const API_URL = '';
 
-// Stream type definitions
-export interface Stream {
-  id: string;
-  name?: string;
-  source: string;
-  type?: string;
-  status: 'created' | 'running' | 'stopped' | 'error';
-  width?: number;
-  height?: number;
-  fps?: number;
-  pipeline?: {
-    id: string;
-    name: string;
-    nodes: Array<{
-      id: string;
-      componentId: string;
-      name?: string;
-      position: { x: number; y: number };
-      connections: string[];
-      config?: Record<string, any>;
-      sourceDetails?: {
-        name: string;
-        source: string;
-        type: string;
-      };
-    }>;
-  };
-}
-
-export interface CreateStreamPayload {
-  source: string;
-  type: 'camera' | 'file' | 'rtsp';
-  name: string;
-  autoStart?: boolean;
-  username?: string;
-  password?: string;
-}
-
-export interface ValidateStreamPayload {
-  source: string;
-  type: 'camera' | 'file' | 'rtsp';
-  username?: string;
-  password?: string;
-}
-
-export interface ValidationResult {
-  valid: boolean;
-  error?: string;
-  details?: {
-    width?: number;
-    height?: number;
-    fps?: number;
-  };
-}
-
-// Polygon type definitions
-export interface Polygon {
-  id: string;
-  name: string;
-  points: [number, number][]; // Array of [x, y] coordinates
-  color: [number, number, number]; // RGB
-  filled: boolean;
-  thickness: number;
-}
-
-export interface CreatePolygonPayload {
-  name: string;
-  points: [number, number][]; // Array of [x, y] coordinates
-  color?: [number, number, number]; // RGB
-  filled?: boolean;
-  thickness?: number;
-}
-
-export interface UpdatePolygonPayload {
-  points: [number, number][]; // Array of [x, y] coordinates
-  name?: string;
-  color?: [number, number, number]; // RGB
-  filled?: boolean;
-  thickness?: number;
-}
-
-// Alarm type definitions
-export interface AlarmEvent {
-  message: string;
-  objectId?: string;
-  objectClass?: string;
-  confidence?: number;
-  timestamp: number;
-  boundingBox?: { x: number, y: number, width: number, height: number };
-  image_data?: string;
-}
-
-// ONVIF camera type definitions
-export interface OnvifCamera {
-  name: string;
-  ip_address: string;
-  hardware: string;
-  endpoint_reference: string;
-  types: string;
-  xaddrs: string;
-  rtsp_urls: string[];
-}
-
 // Helper function to ensure response is an array
 const ensureArray = (data: any): any[] => {
   if (Array.isArray(data)) {
@@ -125,11 +22,9 @@ const ensureArray = (data: any): any[] => {
 const getFullUrl = (path: string): string => {
   // For development with the proxy, we use relative URLs
   if (window.location.hostname === 'localhost') {
-    // Check if this is a development environment or production
-    // If we have VITE_TAPI_SERVER environment variable, use it
-    const apiServer = import.meta.env.VITE_TAPI_SERVER || 'localhost:8081';
-    const protocol = window.location.protocol;
-    return `${protocol}//${apiServer}${path}`;
+    // When using Vite's built-in proxy, we should use relative URLs
+    // The proxy in vite.config.ts will forward /api requests to the backend
+    return path;
   }
   
   // For production, we need to use the actual API server
@@ -138,564 +33,139 @@ const getFullUrl = (path: string): string => {
   return `${apiBaseUrl}${path}`;
 };
 
+// Camera interface to match the API response
+export interface Camera {
+  id: string;
+  name: string;
+  running: boolean;
+  components?: {
+    source: number;
+    processors: number;
+    sinks: number;
+  };
+}
+
+// Camera creation/update interface
+export interface CameraInput {
+  id?: string;
+  name?: string;
+  running?: boolean;
+}
+
+// License status interface
+export interface LicenseStatus {
+  valid: boolean;
+  has_license: boolean;
+}
+
 // API Service
 const apiService = {
-  // Check if the API is reachable
-  checkServerHealth: async () => {
-    try {
-      // Use a simple HEAD request to check if the server is reachable
-      const response = await fetch(getFullUrl('/api/streams'), {
-        method: 'HEAD'
-      });
-      return response.ok;
-    } catch (error) {
-      console.error('API server health check failed:', error);
-      return false;
-    }
-  },
-
-  // Get API status
-  getStatus: async () => {
-    try {
-      const response = await axios.get(getFullUrl(`/`));
-      return response.data;
-    } catch (error) {
-      console.error('Error getting API status:', error);
-      throw error;
-    }
-  },
-
-  // Stream Management
-  getStreams: async (): Promise<Stream[]> => {
-    try {
-      const response = await axios.get(getFullUrl(`/api/streams`));
-      return ensureArray(response.data);
-    } catch (error) {
-      console.error('Error fetching streams:', error);
-      return [];
-    }
-  },
-
-  getStreamById: async (id: string): Promise<Stream> => {
-    try {
-      const response = await axios.get(getFullUrl(`/api/streams/${id}`));
-      return response.data;
-    } catch (error) {
-      console.error(`Error fetching stream ${id}:`, error);
-      // Re-throw the error so callers can handle it
-      throw error;
-    }
-  },
-
-  createStream: async (payload: CreateStreamPayload): Promise<{ id: string }> => {
-    try {
-      const response = await axios.post(getFullUrl(`/api/streams`), payload);
-      return response.data;
-    } catch (error) {
-      console.error('Error creating stream:', error);
-      throw error;
-    }
-  },
-
-  validateStream: async (payload: ValidateStreamPayload): Promise<ValidationResult> => {
-    try {
-      const response = await axios.post(getFullUrl(`/api/validate-stream`), payload);
-      return response.data;
-    } catch (error) {
-      console.error('Error validating stream:', error);
-      if (axios.isAxiosError(error) && error.response) {
-        return {
-          valid: false,
-          error: error.response.data.error || 'Failed to validate stream'
-        };
+  // License related API calls
+  license: {
+    // Get license status
+    getStatus: async (): Promise<LicenseStatus | null> => {
+      try {
+        const response = await axios.get(getFullUrl('/api/v1/license'));
+        return response.data;
+      } catch (error) {
+        console.error('Error checking license status:', error);
+        return null;
       }
-      return {
-        valid: false,
-        error: 'Connection error, please check your network'
-      };
+    },
+
+    // Set license key
+    setLicense: async (licenseKey: string): Promise<boolean> => {
+      try {
+        const response = await axios.post(getFullUrl('/api/v1/license'), {
+          license_key: licenseKey
+        });
+        return response.data?.valid === true;
+      } catch (error) {
+        console.error('Error setting license key:', error);
+        return false;
+      }
     }
   },
 
-  startStream: async (id: string): Promise<{ success: boolean; id: string }> => {
-    try {
-      const response = await axios.post(getFullUrl(`/api/streams/${id}/start`));
-      return response.data;
-    } catch (error) {
-      console.error(`Error starting stream ${id}:`, error);
-      throw error;
-    }
-  },
-
-  stopStream: async (id: string): Promise<{ success: boolean; id: string }> => {
-    try {
-      const response = await axios.post(getFullUrl(`/api/streams/${id}/stop`));
-      return response.data;
-    } catch (error) {
-      console.error(`Error stopping stream ${id}:`, error);
-      throw error;
-    }
-  },
-
-  deleteStream: async (id: string): Promise<{ success: boolean; id: string }> => {
-    try {
-      const response = await axios.delete(getFullUrl(`/api/streams/${id}`));
-      return response.data;
-    } catch (error) {
-      console.error(`Error deleting stream ${id}:`, error);
-      throw error;
-    }
-  },
-
-  // Polygon Management
-  getPolygons: async (streamId: string): Promise<Polygon[]> => {
-    try {
-      const response = await axios.get(getFullUrl(`/api/streams/${streamId}/polygons`));
-      return ensureArray(response.data);
-    } catch (error) {
-      console.error(`Error fetching polygons for stream ${streamId}:`, error);
-      return [];
-    }
-  },
-
-  createPolygon: async (streamId: string, payload: CreatePolygonPayload): Promise<{ id: string }> => {
-    try {
-      const response = await axios.post(getFullUrl(`/api/streams/${streamId}/polygons`), payload);
-      return response.data;
-    } catch (error) {
-      console.error(`Error creating polygon for stream ${streamId}:`, error);
-      throw error;
-    }
-  },
-
-  updatePolygon: async (streamId: string, polygonId: string, payload: UpdatePolygonPayload): Promise<{ success: boolean }> => {
-    try {
-      const response = await axios.put(getFullUrl(`/api/streams/${streamId}/polygons/${polygonId}`), payload);
-      return response.data;
-    } catch (error) {
-      console.error(`Error updating polygon ${polygonId}:`, error);
-      throw error;
-    }
-  },
-
-  deletePolygon: async (streamId: string, polygonId: string): Promise<{ success: boolean }> => {
-    try {
-      const response = await axios.delete(getFullUrl(`/api/streams/${streamId}/polygons/${polygonId}`));
-      return response.data;
-    } catch (error) {
-      console.error(`Error deleting polygon ${polygonId}:`, error);
-      throw error;
-    }
-  },
-
-  // Stream URLs - these need to use the actual server URL for embedding in img tags
-  getFrameUrl: (id: string) => getFullUrl(`/api/streams/${id}/frame`),
-  
-  getStreamUrl: (id: string) => getFullUrl(`/api/streams/${id}/stream`),
-  
-  getEmbedUrl: (id: string) => getFullUrl(`/api/streams/${id}/embed`),
-  
-  // WebSocket URL host
-  getWebSocketHost: () => {
-    // Always use the VITE_TAPI_SERVER environment variable if available
-    return import.meta.env.VITE_TAPI_SERVER || 'localhost:8081';
-  },
-  
-  // Helper method to get a frame URL with timestamp to prevent caching
-  getFrameUrlWithTimestamp: (id: string) => 
-    `${getFullUrl(`/api/streams/${id}/frame`)}?t=${new Date().getTime()}`,
-
-  // ONVIF Camera Discovery
-  discoverOnvifCameras: async (timeout?: number): Promise<OnvifCamera[]> => {
-    try {
-      const timeoutParam = timeout ? `?timeout=${timeout}` : '';
-      const response = await axios.get(getFullUrl(`/api/onvif/discover${timeoutParam}`), {
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-        },
-        timeout: (timeout || 5) * 1000 + 2000 // API timeout + 2 seconds for network overhead
-      });
-      
-      // Log the response for debugging
-      console.log('ONVIF discovery response:', response.data);
-      
-      if (!response.data || !Array.isArray(response.data)) {
-        console.warn('ONVIF discovery response is not an array:', response.data);
+  // Camera related API calls
+  cameras: {
+    // Get all cameras
+    getAll: async (): Promise<Camera[]> => {
+      try {
+        const response = await axios.get(getFullUrl('/api/v1/cameras'));
+        console.log('API response:', response.data);
+        return ensureArray(response.data);
+      } catch (error) {
+        console.error('Error fetching cameras:', error);
         return [];
       }
-      
-      return response.data;
-    } catch (error) {
-      console.error('Error discovering ONVIF cameras:', error);
-      return [];
-    }
-  },
-};
+    },
 
-// Vision component API methods
-export const getVisionComponents = async (): Promise<any[]> => {
-  try {
-    const response = await fetch(getFullUrl(`/api/vision/components`));
-    if (!response.ok) {
-      throw new Error(`Failed to fetch vision components: ${response.status}`);
-    }
-    return await response.json();
-  } catch (error) {
-    console.error('Error fetching vision components:', error);
-    throw error;
-  }
-};
-
-// Vision models API methods
-export const getVisionModels = async (): Promise<any> => {
-  try {
-    const response = await fetch(getFullUrl(`/api/vision/models`));
-    if (!response.ok) {
-      throw new Error(`Failed to fetch vision models: ${response.status}`);
-    }
-    return await response.json();
-  } catch (error) {
-    console.error('Error fetching vision models:', error);
-    throw error;
-  }
-};
-
-// Pipeline API methods
-export const getPipelinesForStream = async (streamId: string): Promise<any[]> => {
-  try {
-    const response = await fetch(getFullUrl(`/api/streams/${streamId}/pipelines`));
-    if (!response.ok) {
-      throw new Error(`Failed to fetch pipelines: ${response.status}`);
-    }
-    return await response.json();
-  } catch (error) {
-    console.error('Error fetching pipelines:', error);
-    throw error;
-  }
-};
-
-// Create a cache for deleted pipeline IDs
-const deletedPipelineIds = new Set<string>();
-
-// Add function to get pipeline processing state
-export const getPipelineProcessingState = async (streamId: string, pipelineId: string, signal?: AbortSignal): Promise<string> => {
-  // Check cache first - if we know this pipeline is deleted, don't even make the request
-  if (deletedPipelineIds.has(pipelineId)) {
-    return 'idle';
-  }
-  
-  try {
-    const response = await fetch(getFullUrl(`/api/streams/${streamId}/pipelines/${pipelineId}/state`), { signal });
-    
-    // If the pipeline doesn't exist (404), cache and return 'idle' instead of throwing an error
-    if (response.status === 404) {
-      deletedPipelineIds.add(pipelineId);
-      return 'idle';
-    }
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch pipeline state: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    return data.processing_state || 'idle';
-  } catch (error) {
-    // Skip handling AbortError - this is expected during cleanup
-    if (error instanceof DOMException && error.name === 'AbortError') {
-      throw error; // Re-throw abort errors
-    }
-    
-    // Only log errors that aren't 404s
-    if (error instanceof Error && !error.message.includes('404')) {
-      console.error('Error fetching pipeline processing state:', error);
-    } else if (error instanceof Error && error.message.includes('404')) {
-      // If we got a 404, cache the pipeline ID as deleted
-      deletedPipelineIds.add(pipelineId);
-    }
-    return 'idle'; // Return idle state if we can't determine the actual state
-  }
-};
-
-export const getPipeline = async (streamId: string, pipelineId: string): Promise<any> => {
-  try {
-    const response = await fetch(getFullUrl(`/api/streams/${streamId}/pipelines/${pipelineId}`));
-    if (!response.ok) {
-      throw new Error(`Failed to fetch pipeline: ${response.status}`);
-    }
-    return await response.json();
-  } catch (error) {
-    console.error('Error fetching pipeline:', error);
-    throw error;
-  }
-};
-
-export const createPipeline = async (streamId: string, pipeline: any): Promise<any> => {
-  try {
-    const response = await fetch(getFullUrl(`/api/streams/${streamId}/pipelines`), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(pipeline),
-    });
-    if (!response.ok) {
-      throw new Error(`Failed to create pipeline: ${response.status}`);
-    }
-    return await response.json();
-  } catch (error) {
-    console.error('Error creating pipeline:', error);
-    throw error;
-  }
-};
-
-export const updatePipeline = async (streamId: string, pipelineId: string, pipeline: any): Promise<any> => {
-  try {
-    const response = await fetch(getFullUrl(`/api/streams/${streamId}/pipelines/${pipelineId}`), {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(pipeline),
-    });
-    if (!response.ok) {
-      throw new Error(`Failed to update pipeline: ${response.status}`);
-    }
-    return await response.json();
-  } catch (error) {
-    console.error('Error updating pipeline:', error);
-    throw error;
-  }
-};
-
-export const deletePipeline = async (streamId: string, pipelineId: string): Promise<void> => {
-  try {
-    const response = await fetch(getFullUrl(`/api/streams/${streamId}/pipelines/${pipelineId}`), {
-      method: 'DELETE',
-    });
-    if (!response.ok) {
-      throw new Error(`Failed to delete pipeline: ${response.status}`);
-    }
-  } catch (error) {
-    console.error('Error deleting pipeline:', error);
-    throw error;
-  }
-};
-
-// Function to reset deleted pipeline status (useful if a deleted pipeline is recreated)
-export const resetDeletedPipelineStatus = (pipelineId: string): void => {
-  if (deletedPipelineIds.has(pipelineId)) {
-    deletedPipelineIds.delete(pipelineId);
-  }
-};
-
-// Check if a pipeline is being processed
-export const isPipelineProcessing = async (streamId: string, pipelineId: string, signal?: AbortSignal): Promise<boolean> => {
-  try {
-    const state = await getPipelineProcessingState(streamId, pipelineId, signal);
-    return state === 'processing';
-  } catch (error) {
-    // Handle abort error
-    if (error instanceof DOMException && error.name === 'AbortError') {
-      throw error; // Re-throw abort errors
-    }
-    // This should never happen now that getPipelineProcessingState handles 404s gracefully
-    return false;
-  }
-};
-
-export const activatePipeline = async (streamId: string, pipelineId: string): Promise<void> => {
-  console.log(`Activating pipeline ${pipelineId} for stream ${streamId}`);
-  
-  // Clear any deleted status for this pipeline, since we're activating it
-  resetDeletedPipelineStatus(pipelineId);
-  
-  try {
-    const response = await fetch(getFullUrl(`/api/streams/${streamId}/pipelines/${pipelineId}/activate`), {
-      method: 'POST',
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Failed to activate pipeline (${response.status}): ${errorText}`);
-    }
-    
-    console.log(`Successfully activated pipeline ${pipelineId}`);
-  } catch (error) {
-    console.error('Error activating pipeline:', error);
-    throw error;
-  }
-};
-
-// Wait for pipeline processing to complete
-export const waitForPipelineProcessing = async (
-  streamId: string, 
-  pipelineId: string, 
-  timeoutMs: number = 30000, // Default 30 second timeout
-  intervalMs: number = 500,   // Check every 500ms
-  signal?: AbortSignal        // Optional AbortSignal
-): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const startTime = Date.now();
-    
-    // Set up abort handler
-    if (signal) {
-      signal.addEventListener('abort', () => {
-        reject(new DOMException('Pipeline processing aborted', 'AbortError'));
-      });
-      
-      // If signal is already aborted, reject immediately
-      if (signal.aborted) {
-        reject(new DOMException('Pipeline processing aborted', 'AbortError'));
-        return;
-      }
-    }
-    
-    const checkState = async () => {
+    // Get a specific camera by ID
+    getById: async (id: string): Promise<Camera | null> => {
       try {
-        // Pass the signal to the getPipelineProcessingState function
-        const state = await getPipelineProcessingState(streamId, pipelineId, signal);
-        
-        // If the state is not 'processing', we're done
-        if (state !== 'processing') {
-          return resolve(state);
-        }
-        
-        // Check if we've exceeded the timeout
-        if (Date.now() - startTime > timeoutMs) {
-          return reject(new Error(`Pipeline processing timed out after ${timeoutMs}ms`));
-        }
-        
-        // Check again after the interval
-        setTimeout(checkState, intervalMs);
+        const response = await axios.get(getFullUrl(`/api/v1/cameras/${id}`));
+        return response.data;
       } catch (error) {
-        // If the error is an AbortError, reject with that
-        if (error instanceof DOMException && error.name === 'AbortError') {
-          return reject(error);
-        }
-        
-        // For other errors, reject with the error
-        reject(error);
+        console.error(`Error fetching camera ${id}:`, error);
+        return null;
       }
-    };
-    
-    // Start checking
-    checkState();
-  });
-};
+    },
 
-export const getActivePipeline = async (streamId: string): Promise<any> => {
-  try {
-    const response = await fetch(getFullUrl(`/api/streams/${streamId}/pipelines/active`));
-
-    // If the response is 404, it means there's no active pipeline - this is not an error
-    if (response.status === 404) {
-      return { active: false };
-    }
-    
-    if (!response.ok) {
-      throw new Error(`Failed to fetch active pipeline: ${response.status}`);
-    }
-    
-    const result = await response.json();
-    
-    // The backend API returns active:true with a nested 'pipeline' object containing all details
-    // Our frontend code expects the pipelineId, so let's normalize the response format
-    if (result.active && result.pipeline) {
-      // Return a format that matches what the frontend expects
-      return {
-        active: true,
-        pipelineId: result.pipeline.id,
-        pipeline: result.pipeline
-      };
-    }
-    
-    return result;
-  } catch (error) {
-    // Only log actual errors, not expected 404s
-    if (!(error instanceof Error && error.message.includes("404"))) {
-      console.error('Error fetching active pipeline:', error);
-    }
-    
-    // Return a default response that indicates no active pipeline
-    return { active: false };
-  }
-};
-
-export const getPipelineComponents = async (streamId: string, pipelineId: string): Promise<any[]> => {
-  try {
-    const pipeline = await getPipeline(streamId, pipelineId);
-    if (!pipeline || !pipeline.nodes) {
-      return [];
-    }
-    return pipeline.nodes;
-  } catch (error) {
-    console.error('Error getting pipeline components:', error);
-    return [];
-  }
-};
-
-export const hasPipelineComponent = async (streamId: string, componentType: string): Promise<boolean> => {
-  try {
-    // Skip the HEAD request since it's causing 500 errors
-    // Go directly to pipeline check
-    const activePipeline = await getActivePipeline(streamId);
-    if (!activePipeline || !activePipeline.active || !activePipeline.pipelineId) {
-      return false;
-    }
-
-    const components = await getPipelineComponents(streamId, activePipeline.pipelineId);
-    return components.some(node => node.componentType === componentType || node.componentId === componentType);
-  } catch (error) {
-    // Gracefully handle the error - don't show errors in console for expected cases
-    if (componentType === 'EventAlarm') {
-      console.log(`Unable to determine if stream ${streamId} has ${componentType} component - assuming true for testing`);
-      // For testing/development - return true for EventAlarm to test UI
-      return true; 
-    } else {
-      console.error('Error checking for pipeline component:', error);
-    }
-    return false;
-  }
-};
-
-export const getStreamAlarms = async (streamId: string): Promise<AlarmEvent[]> => {
-  try {
-    // Try to get real alarms from the API if it exists
-    try {
-      const response = await fetch(getFullUrl(`/api/streams/${streamId}/alarms`));
-      if (response.ok) {
-        return await response.json();
+    // Create a new camera
+    create: async (cameraData: CameraInput): Promise<Camera | null> => {
+      try {
+        const response = await axios.post(getFullUrl('/api/v1/cameras'), cameraData);
+        return response.data;
+      } catch (error) {
+        console.error('Error creating camera:', error);
+        return null;
       }
-    } catch (error) {
-      // If endpoint doesn't exist, continue to the mock data
-      console.log('Alarms endpoint not available, using mock data for development');
-    }
-    
-    // For development/testing: Return mock alarms when the endpoint doesn't exist
-    return [
-      {
-        message: "Person detected in restricted area",
-        objectId: "obj_123",
-        objectClass: "person",
-        confidence: 0.89,
-        timestamp: Date.now() - 300000, // 5 minutes ago
-        boundingBox: { x: 100, y: 150, width: 80, height: 200 }
-      },
-      {
-        message: "Vehicle stopped in no parking zone",
-        objectId: "obj_456",
-        objectClass: "car",
-        confidence: 0.95,
-        timestamp: Date.now() - 120000 // 2 minutes ago
-      },
-      {
-        message: "Motion detected after hours",
-        timestamp: Date.now() - 60000 // 1 minute ago
+    },
+
+    // Update an existing camera
+    update: async (id: string, cameraData: CameraInput): Promise<Camera | null> => {
+      try {
+        const response = await axios.put(getFullUrl(`/api/v1/cameras/${id}`), cameraData);
+        return response.data;
+      } catch (error) {
+        console.error(`Error updating camera ${id}:`, error);
+        return null;
       }
-    ];
-  } catch (error) {
-    console.error('Error fetching alarms:', error);
-    return [];
+    },
+
+    // Delete a camera
+    delete: async (id: string): Promise<boolean> => {
+      try {
+        await axios.delete(getFullUrl(`/api/v1/cameras/${id}`));
+        return true;
+      } catch (error) {
+        console.error(`Error deleting camera ${id}:`, error);
+        return false;
+      }
+    },
+
+    // Start a camera (convenience method)
+    start: async (id: string): Promise<Camera | null> => {
+      return apiService.cameras.update(id, { running: true });
+    },
+
+    // Stop a camera (convenience method)
+    stop: async (id: string): Promise<Camera | null> => {
+      return apiService.cameras.update(id, { running: false });
+    },
+
+    // Get the latest frame from a camera
+    getFrame: (cameraId: string, quality: number = 90): string => {
+      // For frames, we need to use the direct URL even in development
+      // because the img src tag doesn't go through the proxy
+      if (window.location.hostname === 'localhost') {
+        const apiServer = import.meta.env.VITE_TAPI_SERVER || 'localhost:8090';
+        const protocol = window.location.protocol;
+        return `${protocol}//${apiServer}/api/v1/cameras/${cameraId}/frame?quality=${quality}`;
+      }
+      return getFullUrl(`/api/v1/cameras/${cameraId}/frame?quality=${quality}`);
+    }
   }
 };
 
