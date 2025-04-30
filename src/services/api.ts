@@ -63,6 +63,10 @@ export interface ComponentTypes {
   sources: string[];
   processors: string[];
   sinks: string[];
+  dependencies?: {
+    [key: string]: string[];
+  };
+  dependency_rules?: string[];
 }
 
 // Generic component interface

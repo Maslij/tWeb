@@ -266,8 +266,8 @@ interface ComponentTypes {
   sources: string[];
   processors: string[];
   sinks: string[];
-  dependencies?: ComponentDependencyMap;
-  dependency_rules?: string[];
+  dependencies: ComponentDependencyMap;
+  dependency_rules: string[];
 }
 
 // Add model interfaces
@@ -412,12 +412,8 @@ const PipelineBuilder = () => {
         if (types) {
           setComponentTypes(types as ComponentTypes);
           // Store dependencies if available
-          if (types.dependencies) {
-            setDependencies(types.dependencies as ComponentDependencyMap);
-          }
-          if (types.dependency_rules) {
-            setDependencyRules(types.dependency_rules as string[]);
-          }
+          setDependencies(types.dependencies || {});
+          setDependencyRules(types.dependency_rules || []);
         }
         
         // Fetch camera components
@@ -1114,6 +1110,43 @@ const PipelineBuilder = () => {
       return false;
     }
     
+    // Check if a component of this specific type already exists
+    if (category === 'processor') {
+      // Check if a processor with this type already exists
+      const existingProcessor = processorComponents.find(
+        (p: Component) => {
+          if (typeof p.type === 'string') {
+            return p.type === type;
+          }
+          if (p.type_name) {
+            return p.type_name === type;
+          }
+          return false;
+        }
+      );
+      
+      if (existingProcessor) {
+        return false; // Component of this type already exists
+      }
+    } else if (category === 'sink') {
+      // Check if a sink with this type already exists
+      const existingSink = sinkComponents.find(
+        (s: Component) => {
+          if (typeof s.type === 'string') {
+            return s.type === type;
+          }
+          if (s.type_name) {
+            return s.type_name === type;
+          }
+          return false;
+        }
+      );
+      
+      if (existingSink) {
+        return false; // Component of this type already exists
+      }
+    }
+    
     // For object_detection processor, check if it's available
     if (type === 'object_detection' && category === 'processor') {
       return objectDetectionAvailable;
@@ -1150,6 +1183,41 @@ const PipelineBuilder = () => {
     
     if (!sourceComponent && (category === 'processor' || category === 'sink')) {
       return "Source component is required first";
+    }
+    
+    // Check if component of this type already exists
+    if (category === 'processor') {
+      const existingProcessor = processorComponents.find(
+        (p: Component) => {
+          if (typeof p.type === 'string') {
+            return p.type === type;
+          }
+          if (p.type_name) {
+            return p.type_name === type;
+          }
+          return false;
+        }
+      );
+      
+      if (existingProcessor) {
+        return `${getComponentTypeName(type, 'processor')} component already exists`;
+      }
+    } else if (category === 'sink') {
+      const existingSink = sinkComponents.find(
+        (s: Component) => {
+          if (typeof s.type === 'string') {
+            return s.type === type;
+          }
+          if (s.type_name) {
+            return s.type_name === type;
+          }
+          return false;
+        }
+      );
+      
+      if (existingSink) {
+        return `${getComponentTypeName(type, 'sink')} component already exists`;
+      }
     }
     
     if (type === 'object_detection' && !objectDetectionAvailable) {
@@ -1263,6 +1331,47 @@ const PipelineBuilder = () => {
     );
   };
 
+  // Add function to check if all component types of a category have been added
+  const areAllComponentTypesUsed = (category: 'processor' | 'sink'): boolean => {
+    if (!componentTypes) return false;
+    
+    if (category === 'processor') {
+      // If no processor types exist in the system, return false
+      if (componentTypes.processors.length === 0) return false;
+      
+      // Check if every processor type has at least one instance
+      return componentTypes.processors.every(type => 
+        processorComponents.some(component => {
+          if (typeof component.type === 'string') {
+            return component.type === type;
+          }
+          if (component.type_name) {
+            return component.type_name === type;
+          }
+          return false;
+        })
+      );
+    } else if (category === 'sink') {
+      // If no sink types exist in the system, return false
+      if (componentTypes.sinks.length === 0) return false;
+      
+      // Check if every sink type has at least one instance
+      return componentTypes.sinks.every(type => 
+        sinkComponents.some(component => {
+          if (typeof component.type === 'string') {
+            return component.type === type;
+          }
+          if (component.type_name) {
+            return component.type_name === type;
+          }
+          return false;
+        })
+      );
+    }
+    
+    return false;
+  };
+
   if (loading) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -1366,10 +1475,15 @@ const PipelineBuilder = () => {
               variant="contained" 
               startIcon={<AddIcon />} 
               onClick={() => openCreateDialog('processor')}
-              disabled={!sourceComponent || camera.running}
+              disabled={!sourceComponent || camera.running || areAllComponentTypesUsed('processor')}
             >
               Add Processor
             </Button>
+            {areAllComponentTypesUsed('processor') && sourceComponent && !camera.running && (
+              <Alert severity="info" sx={{ mt: 2 }}>
+                All available processor types have been added. Each processor type can only be added once.
+              </Alert>
+            )}
           </Box>
           
           <Box sx={{ minHeight: '400px' }}>
@@ -1385,14 +1499,17 @@ const PipelineBuilder = () => {
               <Paper sx={{ p: 3, textAlign: 'center', minHeight: '200px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
                 <MemoryIcon sx={{ fontSize: 60, color: 'text.secondary', opacity: 0.5, mb: 2 }} />
                 <Typography variant="body1" color="text.secondary">
-                  No processor components added yet. Add processors to process the video stream.
+                  {areAllComponentTypesUsed('processor') ? 
+                    "All available processor types have been added." : 
+                    "No processor components added yet. Add processors to process the video stream."
+                  }
                 </Typography>
                 <Button 
                   variant="contained" 
                   color="primary"
                   startIcon={<AddIcon />}
                   onClick={() => openCreateDialog('processor')}
-                  disabled={!sourceComponent || camera.running}
+                  disabled={!sourceComponent || camera.running || areAllComponentTypesUsed('processor')}
                   sx={{ mt: 2 }}
                 >
                   Add Processor
@@ -1408,10 +1525,15 @@ const PipelineBuilder = () => {
               variant="contained" 
               startIcon={<AddIcon />} 
               onClick={() => openCreateDialog('sink')}
-              disabled={!sourceComponent || camera.running}
+              disabled={!sourceComponent || camera.running || areAllComponentTypesUsed('sink')}
             >
               Add Sink
             </Button>
+            {areAllComponentTypesUsed('sink') && sourceComponent && !camera.running && (
+              <Alert severity="info" sx={{ mt: 2 }}>
+                All available sink types have been added. Each sink type can only be added once.
+              </Alert>
+            )}
           </Box>
           
           <Box sx={{ minHeight: '400px' }}>
@@ -1427,14 +1549,17 @@ const PipelineBuilder = () => {
               <Paper sx={{ p: 3, textAlign: 'center', minHeight: '200px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
                 <SaveIcon sx={{ fontSize: 60, color: 'text.secondary', opacity: 0.5, mb: 2 }} />
                 <Typography variant="body1" color="text.secondary">
-                  No sink components added yet. Add sinks to save or stream the processed video.
+                  {areAllComponentTypesUsed('sink') ? 
+                    "All available sink types have been added." : 
+                    "No sink components added yet. Add sinks to save or stream the processed video."
+                  }
                 </Typography>
                 <Button 
                   variant="contained" 
                   color="primary"
                   startIcon={<AddIcon />}
                   onClick={() => openCreateDialog('sink')}
-                  disabled={!sourceComponent || camera.running}
+                  disabled={!sourceComponent || camera.running || areAllComponentTypesUsed('sink')}
                   sx={{ mt: 2 }}
                 >
                   Add Sink
