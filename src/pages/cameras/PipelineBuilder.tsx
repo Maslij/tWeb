@@ -150,6 +150,11 @@ interface RtspSourceForm {
 // Object Detection form interface
 interface ObjectDetectionForm {
   model_id: string;
+  server_url: string;
+  confidence_threshold: number;
+  draw_bounding_boxes: boolean;
+  use_shared_memory: boolean;
+  label_font_scale: number;
   classes: string[];
   newClass: string;
 }
@@ -333,6 +338,11 @@ const PipelineBuilder = () => {
 
   const [objectDetectionForm, setObjectDetectionForm] = useState<ObjectDetectionForm>({
     model_id: "yolov4-tiny",
+    server_url: "http://localhost:8080",
+    confidence_threshold: 0.5,
+    draw_bounding_boxes: true,
+    use_shared_memory: true,
+    label_font_scale: 0.5,
     classes: ["person"],
     newClass: ""
   });
@@ -444,7 +454,13 @@ const PipelineBuilder = () => {
             setObjectDetectionForm(prev => ({
               ...prev,
               model_id: defaultModel.id,
-              classes: []
+              server_url: "http://localhost:8080",
+              confidence_threshold: 0.5,
+              draw_bounding_boxes: true,
+              use_shared_memory: true,
+              label_font_scale: 0.5,
+              classes: [],
+              newClass: ""
             }));
             
             // Set available classes for the selected model
@@ -519,6 +535,11 @@ const PipelineBuilder = () => {
         const defaultModel = objectDetectionModels[0];
         setObjectDetectionForm({
           model_id: defaultModel.id,
+          server_url: "http://localhost:8080",
+          confidence_threshold: 0.5,
+          draw_bounding_boxes: true,
+          use_shared_memory: true,
+          label_font_scale: 0.5,
           classes: [],
           newClass: ""
         });
@@ -531,6 +552,11 @@ const PipelineBuilder = () => {
         // If object detection is not available, default to another processor type
         setObjectDetectionForm({
           model_id: "yolov4-tiny",
+          server_url: "http://localhost:8080",
+          confidence_threshold: 0.5,
+          draw_bounding_boxes: true,
+          use_shared_memory: true,
+          label_font_scale: 0.5,
           classes: ["person"],
           newClass: ""
         });
@@ -648,6 +674,11 @@ const PipelineBuilder = () => {
         const modelId = config.model_id || "yolov4-tiny";
         setObjectDetectionForm({
           model_id: modelId,
+          server_url: config.server_url || "http://localhost:8080",
+          confidence_threshold: config.confidence_threshold !== undefined ? config.confidence_threshold : 0.5,
+          draw_bounding_boxes: config.draw_bounding_boxes !== undefined ? config.draw_bounding_boxes : true,
+          use_shared_memory: config.use_shared_memory !== undefined ? config.use_shared_memory : true,
+          label_font_scale: config.label_font_scale !== undefined ? config.label_font_scale : 0.5,
           classes: Array.isArray(config.classes) ? config.classes : ["person"],
           newClass: ""
         });
@@ -904,6 +935,11 @@ const PipelineBuilder = () => {
         if (selectedComponentType === 'object_detection') {
           config = {
             model_id: objectDetectionForm.model_id,
+            server_url: objectDetectionForm.server_url,
+            confidence_threshold: objectDetectionForm.confidence_threshold,
+            draw_bounding_boxes: objectDetectionForm.draw_bounding_boxes,
+            use_shared_memory: objectDetectionForm.use_shared_memory,
+            label_font_scale: objectDetectionForm.label_font_scale,
             classes: objectDetectionForm.classes
           };
         } else if (selectedComponentType === 'object_tracking') {
@@ -1876,6 +1912,15 @@ const PipelineBuilder = () => {
                   </Box>
                 </Typography>
                 
+                <TextField
+                  label="Server URL"
+                  value={objectDetectionForm.server_url}
+                  onChange={(e) => handleObjectDetectionFormChange('server_url', e.target.value)}
+                  fullWidth
+                  margin="normal"
+                  helperText="URL of the AI server, e.g., http://localhost:8080"
+                />
+                
                 <FormControl fullWidth sx={{ mb: 3, mt: 2 }}>
                   <InputLabel id="model-label">Model</InputLabel>
                   <Select
@@ -1892,7 +1937,58 @@ const PipelineBuilder = () => {
                   </Select>
                 </FormControl>
                 
-                <Typography variant="subtitle1" gutterBottom>Classes to Detect</Typography>
+                <Box sx={{ width: '100%', px: 2, mt: 2 }}>
+                  <Typography variant="body2" gutterBottom>
+                    Confidence Threshold: {objectDetectionForm.confidence_threshold.toFixed(2)}
+                  </Typography>
+                  <Slider
+                    value={objectDetectionForm.confidence_threshold}
+                    onChange={(_, value) => handleObjectDetectionFormChange('confidence_threshold', value as number)}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    valueLabelDisplay="auto"
+                  />
+                </Box>
+                
+                <Box sx={{ width: '100%', px: 2, mt: 2 }}>
+                  <Typography variant="body2" gutterBottom>
+                    Label Font Scale: {objectDetectionForm.label_font_scale.toFixed(1)}
+                  </Typography>
+                  <Slider
+                    value={objectDetectionForm.label_font_scale}
+                    onChange={(_, value) => handleObjectDetectionFormChange('label_font_scale', value as number)}
+                    min={0.1}
+                    max={2.0}
+                    step={0.1}
+                    valueLabelDisplay="auto"
+                  />
+                </Box>
+                
+                <Typography variant="subtitle1" gutterBottom sx={{ mt: 3 }}>Visualization Options</Typography>
+                
+                <FormGroup sx={{ mt: 2 }}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={objectDetectionForm.draw_bounding_boxes}
+                        onChange={(e) => handleObjectDetectionFormChange('draw_bounding_boxes', e.target.checked)}
+                      />
+                    }
+                    label="Draw Bounding Boxes"
+                  />
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={objectDetectionForm.use_shared_memory}
+                        onChange={(e) => handleObjectDetectionFormChange('use_shared_memory', e.target.checked)}
+                      />
+                    }
+                    label="Use Shared Memory"
+                  />
+                </FormGroup>
+                
+                <Typography variant="subtitle1" gutterBottom sx={{ mt: 3 }}>Classes to Detect</Typography>
                 
                 <Box sx={{ mb: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                   {objectDetectionForm.classes.length > 0 ? (
@@ -1935,6 +2031,11 @@ const PipelineBuilder = () => {
                   rows={6}
                   value={JSON.stringify({
                     model_id: objectDetectionForm.model_id,
+                    server_url: objectDetectionForm.server_url,
+                    confidence_threshold: objectDetectionForm.confidence_threshold,
+                    draw_bounding_boxes: objectDetectionForm.draw_bounding_boxes,
+                    use_shared_memory: objectDetectionForm.use_shared_memory,
+                    label_font_scale: objectDetectionForm.label_font_scale,
                     classes: objectDetectionForm.classes
                   }, null, 2)}
                   fullWidth
