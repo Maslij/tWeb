@@ -3625,9 +3625,12 @@ const PipelineBuilder = () => {
                           zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"]
                       }));
                       
-                      // Create the updated config with normalized zones
-                      const config = {
-                        ...lineZoneManagerComponent.config,
+                      console.log('Current zones in form:', lineZoneManagerForm.zones);
+                      console.log('Normalized zones to send:', normalizedZones);
+                      
+                      // Create a new config object without spreading the old config
+                      // This ensures we don't accidentally keep old zones data
+                      const config: Record<string, any> = {
                         draw_zones: lineZoneManagerForm.draw_zones,
                         line_color: lineZoneManagerForm.line_color,
                         line_thickness: lineZoneManagerForm.line_thickness,
@@ -3635,8 +3638,21 @@ const PipelineBuilder = () => {
                         text_color: lineZoneManagerForm.text_color,
                         text_scale: lineZoneManagerForm.text_scale,
                         text_thickness: lineZoneManagerForm.text_thickness,
-                        zones: normalizedZones
+                        zones: normalizedZones,
+                        remove_missing: true // Add this flag to tell the backend to remove zones not in this config
                       };
+                      
+                      // Preserve any other config properties that aren't related to zones
+                      if (lineZoneManagerComponent.config) {
+                        Object.entries(lineZoneManagerComponent.config as Record<string, any>).forEach(([key, value]) => {
+                          // Only copy over properties that aren't already set and aren't 'zones'
+                          if (key !== 'zones' && config[key] === undefined) {
+                            config[key] = value;
+                          }
+                        });
+                      }
+                      
+                      console.log('Sending config to API:', config);
                       
                       // Update the component
                       const result = await apiService.components.processors.update(
