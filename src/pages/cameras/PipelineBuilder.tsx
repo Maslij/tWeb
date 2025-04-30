@@ -270,6 +270,20 @@ interface ComponentTypes {
   dependency_rules?: string[];
 }
 
+// Add model interfaces
+interface AIModel {
+  id: string;
+  type: string;
+  status: string;
+  classes?: string[];
+}
+
+interface ModelsResponse {
+  models: AIModel[];
+  service: string;
+  status: string;
+}
+
 const PipelineBuilder = () => {
   const { cameraId } = useParams<{ cameraId: string }>();
   const navigate = useNavigate();
@@ -371,6 +385,12 @@ const PipelineBuilder = () => {
   const [dependencies, setDependencies] = useState<ComponentDependencyMap>({});
   const [dependencyRules, setDependencyRules] = useState<string[]>([]);
 
+  // Add state for available models
+  const [availableModels, setAvailableModels] = useState<AIModel[]>([]);
+  const [objectDetectionModels, setObjectDetectionModels] = useState<AIModel[]>([]);
+  const [selectedModelClasses, setSelectedModelClasses] = useState<string[]>([]);
+  const [objectDetectionAvailable, setObjectDetectionAvailable] = useState(false);
+
   // Fetch data on mount
   useEffect(() => {
     if (!cameraId) return;
@@ -407,6 +427,35 @@ const PipelineBuilder = () => {
           setSourceComponent(components.source);
           setProcessorComponents(components.processors || []);
           setSinkComponents(components.sinks || []);
+        }
+
+        // Fetch available object detection models
+        const modelResponse = await apiService.models.getObjectDetectionModels();
+        if (modelResponse && modelResponse.models) {
+          setAvailableModels(modelResponse.models);
+          
+          // Filter out object detection models
+          const detectionModels = modelResponse.models.filter(
+            (model: AIModel) => model.type === 'object_detection' && model.status === 'loaded'
+          );
+          
+          setObjectDetectionModels(detectionModels);
+          setObjectDetectionAvailable(detectionModels.length > 0);
+          
+          // If object detection models are available, set default model
+          if (detectionModels.length > 0) {
+            const defaultModel = detectionModels[0];
+            setObjectDetectionForm(prev => ({
+              ...prev,
+              model_id: defaultModel.id,
+              classes: []
+            }));
+            
+            // Set available classes for the selected model
+            if (defaultModel.classes && defaultModel.classes.length > 0) {
+              setSelectedModelClasses(defaultModel.classes);
+            }
+          }
         }
       } catch (err) {
         console.error('Error fetching data:', err);
@@ -468,11 +517,29 @@ const PipelineBuilder = () => {
         latency: 200
       });
     } else if (type === 'processor') {
-      setObjectDetectionForm({
-        model_id: "yolov4-tiny",
-        classes: ["person"],
-        newClass: ""
-      });
+      // For processor, default to 'object_detection' if it's available
+      if (objectDetectionAvailable && objectDetectionModels.length > 0) {
+        setSelectedComponentType('object_detection');
+        const defaultModel = objectDetectionModels[0];
+        setObjectDetectionForm({
+          model_id: defaultModel.id,
+          classes: [],
+          newClass: ""
+        });
+        
+        // Set available classes for the selected model
+        if (defaultModel.classes && defaultModel.classes.length > 0) {
+          setSelectedModelClasses(defaultModel.classes);
+        }
+      } else {
+        // If object detection is not available, default to another processor type
+        setObjectDetectionForm({
+          model_id: "yolov4-tiny",
+          classes: ["person"],
+          newClass: ""
+        });
+      }
+      
       setObjectTrackingForm({
         frame_rate: 30,
         track_buffer: 30,
@@ -581,11 +648,35 @@ const PipelineBuilder = () => {
       const config = component.config || {};
       
       if (componentType === 'object_detection') {
+        // For object detection, set the form and find the available classes for the selected model
+        const modelId = config.model_id || "yolov4-tiny";
         setObjectDetectionForm({
-          model_id: config.model_id || "yolov4-tiny",
+          model_id: modelId,
           classes: Array.isArray(config.classes) ? config.classes : ["person"],
           newClass: ""
         });
+        
+        // Find the corresponding model to get its available classes
+        const selectedModel = objectDetectionModels.find(model => model.id === modelId);
+        if (selectedModel && selectedModel.classes) {
+          setSelectedModelClasses(selectedModel.classes);
+        } else {
+          // If model not found in available models, try to get it from API
+          const fetchModelClasses = async () => {
+            try {
+              const modelResponse = await apiService.models.getObjectDetectionModels();
+              if (modelResponse && modelResponse.models) {
+                const model = modelResponse.models.find((m: AIModel) => m.id === modelId);
+                if (model && model.classes) {
+                  setSelectedModelClasses(model.classes);
+                }
+              }
+            } catch (err) {
+              console.error('Error fetching model classes:', err);
+            }
+          };
+          fetchModelClasses();
+        }
       } else if (componentType === 'object_tracking') {
         setObjectTrackingForm({
           frame_rate: config.frame_rate || 30,
@@ -674,6 +765,20 @@ const PipelineBuilder = () => {
       ...prev,
       [field]: value
     }));
+
+    // If model_id changes, update the available classes
+    if (field === 'model_id') {
+      const selectedModel = objectDetectionModels.find(model => model.id === value);
+      if (selectedModel && selectedModel.classes) {
+        setSelectedModelClasses(selectedModel.classes);
+        // Reset selected classes when changing the model
+        setObjectDetectionForm(prev => ({
+          ...prev,
+          model_id: value,
+          classes: []
+        }));
+      }
+    }
   };
 
   const handleAddClass = () => {
@@ -1009,6 +1114,11 @@ const PipelineBuilder = () => {
       return false;
     }
     
+    // For object_detection processor, check if it's available
+    if (type === 'object_detection' && category === 'processor') {
+      return objectDetectionAvailable;
+    }
+    
     // If this component type has dependencies, check if they're satisfied
     if (dependencies[type]) {
       const requiredTypes = dependencies[type];
@@ -1042,6 +1152,10 @@ const PipelineBuilder = () => {
       return "Source component is required first";
     }
     
+    if (type === 'object_detection' && !objectDetectionAvailable) {
+      return "Object detection model not available";
+    }
+    
     if (dependencies[type]) {
       const requiredTypes = dependencies[type];
       const missingDeps = requiredTypes.filter(reqType => 
@@ -1056,6 +1170,28 @@ const PipelineBuilder = () => {
     }
     
     return "";
+  };
+
+  // New method to toggle a class selection
+  const handleToggleClass = (className: string) => {
+    setObjectDetectionForm(prev => {
+      // Check if the class is already selected
+      const isSelected = prev.classes.includes(className);
+      
+      if (isSelected) {
+        // Remove the class if already selected
+        return {
+          ...prev,
+          classes: prev.classes.filter(c => c !== className)
+        };
+      } else {
+        // Add the class if not selected
+        return {
+          ...prev,
+          classes: [...prev.classes, className]
+        };
+      }
+    });
   };
 
   // Render component card
@@ -1623,43 +1759,48 @@ const PipelineBuilder = () => {
                     onChange={(e) => handleObjectDetectionFormChange('model_id', e.target.value)}
                     label="Model"
                   >
-                    <MenuItem value="yolov4">YOLOv4</MenuItem>
-                    <MenuItem value="yolov4-tiny">YOLOv4-Tiny</MenuItem>
-                    <MenuItem value="yolov5">YOLOv5</MenuItem>
-                    <MenuItem value="yolov7">YOLOv7</MenuItem>
+                    {objectDetectionModels.map((model) => (
+                      <MenuItem key={model.id} value={model.id}>
+                        {model.id}
+                      </MenuItem>
+                    ))}
                   </Select>
                 </FormControl>
                 
                 <Typography variant="subtitle1" gutterBottom>Classes to Detect</Typography>
                 
                 <Box sx={{ mb: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                  {objectDetectionForm.classes.map((cls, index) => (
+                  {objectDetectionForm.classes.length > 0 ? (
+                    objectDetectionForm.classes.map((cls, index) => (
+                      <Chip
+                        key={index}
+                        label={cls}
+                        onDelete={() => handleToggleClass(cls)}
+                        color="primary"
+                      />
+                    ))
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">
+                      No classes selected. Select from available classes below.
+                    </Typography>
+                  )}
+                </Box>
+                
+                <Divider sx={{ my: 2 }} />
+                
+                <Typography variant="subtitle1" gutterBottom>Available Classes</Typography>
+                
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, maxHeight: '200px', overflowY: 'auto', p: 1 }}>
+                  {selectedModelClasses.map((cls, index) => (
                     <Chip
                       key={index}
                       label={cls}
-                      onDelete={() => handleDeleteClass(index)}
-                      color="primary"
-                      variant="outlined"
+                      onClick={() => handleToggleClass(cls)}
+                      color={objectDetectionForm.classes.includes(cls) ? "primary" : "default"}
+                      variant={objectDetectionForm.classes.includes(cls) ? "filled" : "outlined"}
+                      sx={{ m: 0.5 }}
                     />
                   ))}
-                </Box>
-                
-                <Box sx={{ display: 'flex', gap: 1, mb: 3 }}>
-                  <TextField
-                    label="Add Class"
-                    value={objectDetectionForm.newClass}
-                    onChange={(e) => handleObjectDetectionFormChange('newClass', e.target.value)}
-                    size="small"
-                    sx={{ flexGrow: 1 }}
-                  />
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    onClick={handleAddClass}
-                    disabled={!objectDetectionForm.newClass.trim()}
-                  >
-                    Add
-                  </Button>
                 </Box>
                 
                 {/* JSON Preview */}
