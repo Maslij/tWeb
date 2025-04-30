@@ -1204,6 +1204,63 @@ const PipelineBuilder = () => {
           setSourceComponent(components.source);
           setProcessorComponents(components.processors || []);
           setSinkComponents(components.sinks || []);
+          
+          // Look for line zone manager component and initialize its zones if found
+          const lineZoneManager = components.processors?.find(
+            comp => (comp.type === 'line_zone_manager' || comp.type_name === 'line_zone_manager')
+          );
+          
+          if (lineZoneManager) {
+            // Determine where the zones are stored in the component data
+            let zones: any[] = [];
+            
+            if (Array.isArray(lineZoneManager.zones)) {
+              zones = lineZoneManager.zones;
+            } else if (lineZoneManager.config && Array.isArray(lineZoneManager.config.zones)) {
+              zones = lineZoneManager.config.zones;
+            }
+            
+            if (zones.length > 0) {
+              // Ensure zones have all required properties in the correct format
+              const normalizedZones = zones.map(zone => {
+                // Handle nested structure {start: {x, y}, end: {x, y}}
+                const start_x = zone.start && typeof zone.start.x === 'number' ? zone.start.x :
+                                zone.start_x !== undefined ? (typeof zone.start_x === 'number' ? zone.start_x : 
+                                parseFloat(String(zone.start_x))) : 0.2;
+                                
+                const start_y = zone.start && typeof zone.start.y === 'number' ? zone.start.y :
+                                zone.start_y !== undefined ? (typeof zone.start_y === 'number' ? zone.start_y : 
+                                parseFloat(String(zone.start_y))) : 0.5;
+                                
+                const end_x = zone.end && typeof zone.end.x === 'number' ? zone.end.x :
+                              zone.end_x !== undefined ? (typeof zone.end_x === 'number' ? zone.end_x : 
+                              parseFloat(String(zone.end_x))) : 0.8;
+                              
+                const end_y = zone.end && typeof zone.end.y === 'number' ? zone.end.y :
+                              zone.end_y !== undefined ? (typeof zone.end_y === 'number' ? zone.end_y : 
+                              parseFloat(String(zone.end_y))) : 0.5;
+                
+                return {
+                  id: zone.id || `zone${Math.random().toString(36).substr(2, 9)}`,
+                  start_x,
+                  start_y,
+                  end_x,
+                  end_y,
+                  min_crossing_threshold: zone.min_crossing_threshold || 1,
+                  triggering_anchors: Array.isArray(zone.triggering_anchors) ? 
+                    zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"]
+                };
+              });
+              
+              console.log("Setting normalized zones during initial load:", normalizedZones);
+              
+              // Update the line zone manager form with the normalized zones
+              setLineZoneManagerForm(prev => ({
+                ...prev,
+                zones: normalizedZones
+              }));
+            }
+          }
         }
 
         // Fetch available object detection models
@@ -1253,13 +1310,57 @@ const PipelineBuilder = () => {
 
   // Update the form when the processor components change - moved up to follow React hooks rules
   useEffect(() => {
-    if (lineZoneManagerComponent && lineZoneManagerComponent.zones) {
-      // Update the line zone manager form with zones from the component
+    if (!lineZoneManagerComponent) return;
+    
+    console.log("LineZoneManagerComponent updated:", lineZoneManagerComponent);
+    
+    // Extract zones from the component
+    let zones: any[] = [];
+    
+    if (Array.isArray(lineZoneManagerComponent.zones)) {
+      zones = lineZoneManagerComponent.zones;
+    } else if (lineZoneManagerComponent.config && Array.isArray(lineZoneManagerComponent.config.zones)) {
+      zones = lineZoneManagerComponent.config.zones;
+    }
+    
+    if (zones.length > 0) {
+      // Ensure zones have all required properties in the correct format
+      const normalizedZones = zones.map(zone => {
+        // Handle nested structure {start: {x, y}, end: {x, y}}
+        const start_x = zone.start && typeof zone.start.x === 'number' ? zone.start.x :
+                        zone.start_x !== undefined ? (typeof zone.start_x === 'number' ? zone.start_x : 
+                        parseFloat(String(zone.start_x))) : 0.2;
+                        
+        const start_y = zone.start && typeof zone.start.y === 'number' ? zone.start.y :
+                        zone.start_y !== undefined ? (typeof zone.start_y === 'number' ? zone.start_y : 
+                        parseFloat(String(zone.start_y))) : 0.5;
+                        
+        const end_x = zone.end && typeof zone.end.x === 'number' ? zone.end.x :
+                      zone.end_x !== undefined ? (typeof zone.end_x === 'number' ? zone.end_x : 
+                      parseFloat(String(zone.end_x))) : 0.8;
+                      
+        const end_y = zone.end && typeof zone.end.y === 'number' ? zone.end.y :
+                      zone.end_y !== undefined ? (typeof zone.end_y === 'number' ? zone.end_y : 
+                      parseFloat(String(zone.end_y))) : 0.5;
+        
+        return {
+          id: zone.id || `zone${Math.random().toString(36).substr(2, 9)}`,
+          start_x,
+          start_y,
+          end_x,
+          end_y,
+          min_crossing_threshold: zone.min_crossing_threshold || 1,
+          triggering_anchors: Array.isArray(zone.triggering_anchors) ? 
+            zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"]
+        };
+      });
+      
+      console.log("Setting normalized zones in form:", normalizedZones);
+      
+      // Update the line zone manager form with the normalized zones
       setLineZoneManagerForm(prev => ({
         ...prev,
-        zones: Array.isArray(lineZoneManagerComponent.zones) ? 
-          lineZoneManagerComponent.zones as Zone[] : 
-          prev.zones
+        zones: normalizedZones
       }));
     }
   }, [lineZoneManagerComponent]);
@@ -1273,6 +1374,63 @@ const PipelineBuilder = () => {
         setSourceComponent(components.source);
         setProcessorComponents(components.processors || []);
         setSinkComponents(components.sinks || []);
+        
+        // Look for line zone manager component and initialize its zones if found
+        const lineZoneManager = components.processors?.find(
+          comp => (comp.type === 'line_zone_manager' || comp.type_name === 'line_zone_manager')
+        );
+        
+        if (lineZoneManager) {
+          // Determine where the zones are stored in the component data
+          let zones: any[] = [];
+          
+          if (Array.isArray(lineZoneManager.zones)) {
+            zones = lineZoneManager.zones;
+          } else if (lineZoneManager.config && Array.isArray(lineZoneManager.config.zones)) {
+            zones = lineZoneManager.config.zones;
+          }
+          
+          if (zones.length > 0) {
+            // Ensure zones have all required properties in the correct format
+            const normalizedZones = zones.map(zone => {
+              // Handle nested structure {start: {x, y}, end: {x, y}}
+              const start_x = zone.start && typeof zone.start.x === 'number' ? zone.start.x :
+                              zone.start_x !== undefined ? (typeof zone.start_x === 'number' ? zone.start_x : 
+                              parseFloat(String(zone.start_x))) : 0.2;
+                              
+              const start_y = zone.start && typeof zone.start.y === 'number' ? zone.start.y :
+                              zone.start_y !== undefined ? (typeof zone.start_y === 'number' ? zone.start_y : 
+                              parseFloat(String(zone.start_y))) : 0.5;
+                              
+              const end_x = zone.end && typeof zone.end.x === 'number' ? zone.end.x :
+                            zone.end_x !== undefined ? (typeof zone.end_x === 'number' ? zone.end_x : 
+                            parseFloat(String(zone.end_x))) : 0.8;
+                            
+              const end_y = zone.end && typeof zone.end.y === 'number' ? zone.end.y :
+                            zone.end_y !== undefined ? (typeof zone.end_y === 'number' ? zone.end_y : 
+                            parseFloat(String(zone.end_y))) : 0.5;
+              
+              return {
+                id: zone.id || `zone${Math.random().toString(36).substr(2, 9)}`,
+                start_x,
+                start_y,
+                end_x,
+                end_y,
+                min_crossing_threshold: zone.min_crossing_threshold || 1,
+                triggering_anchors: Array.isArray(zone.triggering_anchors) ? 
+                  zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"]
+              };
+            });
+            
+            console.log("Setting normalized zones after component refresh:", normalizedZones);
+            
+            // Update the line zone manager form with the normalized zones
+            setLineZoneManagerForm(prev => ({
+              ...prev,
+              zones: normalizedZones
+            }));
+          }
+        }
       }
     } catch (err) {
       console.error('Error fetching components:', err);
@@ -1506,6 +1664,48 @@ const PipelineBuilder = () => {
           label_font_scale: component.label_font_scale || configData.label_font_scale || 0.6
         });
       } else if (componentType === 'line_zone_manager') {
+        // Extract zones from either the component directly or its config
+        let zones: any[] = [];
+        
+        if (Array.isArray(component.zones)) {
+          zones = component.zones;
+        } else if (configData && Array.isArray(configData.zones)) {
+          zones = configData.zones;
+        }
+        
+        // Normalize the zones data to ensure it's in the correct format
+        const normalizedZones = zones.length > 0 ? zones.map(zone => {
+          // Handle nested structure {start: {x, y}, end: {x, y}}
+          const start_x = zone.start && typeof zone.start.x === 'number' ? zone.start.x :
+                          zone.start_x !== undefined ? (typeof zone.start_x === 'number' ? zone.start_x : 
+                          parseFloat(String(zone.start_x))) : 0.2;
+                          
+          const start_y = zone.start && typeof zone.start.y === 'number' ? zone.start.y :
+                          zone.start_y !== undefined ? (typeof zone.start_y === 'number' ? zone.start_y : 
+                          parseFloat(String(zone.start_y))) : 0.5;
+                          
+          const end_x = zone.end && typeof zone.end.x === 'number' ? zone.end.x :
+                        zone.end_x !== undefined ? (typeof zone.end_x === 'number' ? zone.end_x : 
+                        parseFloat(String(zone.end_x))) : 0.8;
+                        
+          const end_y = zone.end && typeof zone.end.y === 'number' ? zone.end.y :
+                        zone.end_y !== undefined ? (typeof zone.end_y === 'number' ? zone.end_y : 
+                        parseFloat(String(zone.end_y))) : 0.5;
+          
+          return {
+            id: zone.id || `zone${Math.random().toString(36).substr(2, 9)}`,
+            start_x,
+            start_y,
+            end_x,
+            end_y,
+            min_crossing_threshold: zone.min_crossing_threshold || 1,
+            triggering_anchors: Array.isArray(zone.triggering_anchors) ? 
+              zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"]
+          };
+        }) : [defaultLineZone];
+        
+        console.log("Setting normalized zones in dialog:", normalizedZones);
+        
         setLineZoneManagerForm({
           draw_zones: component.draw_zones !== undefined ? component.draw_zones : 
                     configData.draw_zones !== undefined ? configData.draw_zones : true,
@@ -1518,8 +1718,7 @@ const PipelineBuilder = () => {
                     Array.isArray(configData.text_color) ? configData.text_color : [0, 0, 0],
           text_scale: component.text_scale || configData.text_scale || 0.5,
           text_thickness: component.text_thickness || configData.text_thickness || 2,
-          zones: Array.isArray(component.zones) ? component.zones : 
-               Array.isArray(configData.zones) ? configData.zones : []
+          zones: normalizedZones
         });
       }
     } else if (type === 'sink' && componentType === 'file') {
@@ -2208,9 +2407,21 @@ const PipelineBuilder = () => {
 
   // Handle line zone updates from the visual editor
   const handleLineZonesUpdate = (updatedZones: Zone[]) => {
+    // Ensure all zones have valid values before updating
+    const normalizedZones = updatedZones.map(zone => ({
+      id: zone.id || `zone${Math.random().toString(36).substr(2, 9)}`,
+      start_x: typeof zone.start_x === 'number' ? zone.start_x : parseFloat(String(zone.start_x)) || 0.2,
+      start_y: typeof zone.start_y === 'number' ? zone.start_y : parseFloat(String(zone.start_y)) || 0.5,
+      end_x: typeof zone.end_x === 'number' ? zone.end_x : parseFloat(String(zone.end_x)) || 0.8,
+      end_y: typeof zone.end_y === 'number' ? zone.end_y : parseFloat(String(zone.end_y)) || 0.5,
+      min_crossing_threshold: zone.min_crossing_threshold || 1,
+      triggering_anchors: Array.isArray(zone.triggering_anchors) ? 
+        zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"]
+    }));
+    
     setLineZoneManagerForm(prev => ({
       ...prev,
-      zones: updatedZones
+      zones: normalizedZones
     }));
     
     // If editing a component, update the component as well
@@ -2218,7 +2429,7 @@ const PipelineBuilder = () => {
       // Create a deep copy of the component config
       const updatedConfig = {
         ...parseJson(componentConfig),
-        zones: updatedZones
+        zones: normalizedZones
       };
       
       setComponentConfig(formatJson(updatedConfig));
@@ -3402,10 +3613,29 @@ const PipelineBuilder = () => {
                     if (!lineZoneManagerComponent || !cameraId) return;
                     
                     try {
-                      // Create the updated config
+                      // Normalize all zones to ensure they have proper values
+                      const normalizedZones = lineZoneManagerForm.zones.map(zone => ({
+                        id: zone.id || `zone${Math.random().toString(36).substr(2, 9)}`,
+                        start_x: typeof zone.start_x === 'number' ? zone.start_x : parseFloat(String(zone.start_x)) || 0.2,
+                        start_y: typeof zone.start_y === 'number' ? zone.start_y : parseFloat(String(zone.start_y)) || 0.5,
+                        end_x: typeof zone.end_x === 'number' ? zone.end_x : parseFloat(String(zone.end_x)) || 0.8,
+                        end_y: typeof zone.end_y === 'number' ? zone.end_y : parseFloat(String(zone.end_y)) || 0.5,
+                        min_crossing_threshold: zone.min_crossing_threshold || 1,
+                        triggering_anchors: Array.isArray(zone.triggering_anchors) ? 
+                          zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"]
+                      }));
+                      
+                      // Create the updated config with normalized zones
                       const config = {
                         ...lineZoneManagerComponent.config,
-                        zones: lineZoneManagerForm.zones
+                        draw_zones: lineZoneManagerForm.draw_zones,
+                        line_color: lineZoneManagerForm.line_color,
+                        line_thickness: lineZoneManagerForm.line_thickness,
+                        draw_counts: lineZoneManagerForm.draw_counts,
+                        text_color: lineZoneManagerForm.text_color,
+                        text_scale: lineZoneManagerForm.text_scale,
+                        text_thickness: lineZoneManagerForm.text_thickness,
+                        zones: normalizedZones
                       };
                       
                       // Update the component
