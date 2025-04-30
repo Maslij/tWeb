@@ -37,7 +37,10 @@ import {
   FormGroup,
   Chip,
   Slider,
-  Checkbox
+  Checkbox,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import VideoSettingsIcon from '@mui/icons-material/VideoSettings';
@@ -50,6 +53,8 @@ import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopIcon from '@mui/icons-material/Stop';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
 import RemoveCircleIcon from '@mui/icons-material/RemoveCircle';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import SettingsIcon from '@mui/icons-material/Settings';
 
 import apiService, { Camera, Component, ComponentInput } from '../../services/api';
 
@@ -400,6 +405,15 @@ const PipelineBuilder = () => {
   const [objectDetectionModels, setObjectDetectionModels] = useState<AIModel[]>([]);
   const [selectedModelClasses, setSelectedModelClasses] = useState<string[]>([]);
   const [objectDetectionAvailable, setObjectDetectionAvailable] = useState(false);
+
+  const [advancedSettingsExpanded, setAdvancedSettingsExpanded] = useState({
+    fileSource: false,
+    rtspSource: false,
+    objectDetection: false,
+    objectTracking: false,
+    lineZoneManager: false,
+    fileSink: false
+  });
 
   // Fetch data on mount
   useEffect(() => {
@@ -1298,6 +1312,13 @@ const PipelineBuilder = () => {
     });
   };
 
+  const toggleAdvancedSettings = (component: keyof typeof advancedSettingsExpanded) => {
+    setAdvancedSettingsExpanded(prev => ({
+      ...prev,
+      [component]: !prev[component]
+    }));
+  };
+
   // Render component card
   const renderComponentCard = (component: Component, type: 'source' | 'processor' | 'sink') => {
     // Determine display name for component type
@@ -1771,26 +1792,44 @@ const PipelineBuilder = () => {
                   />
                 </FormGroup>
                 
-                {/* JSON Preview */}
-                <TextField
-                  label="Configuration Preview (JSON)"
-                  multiline
-                  rows={6}
-                  value={JSON.stringify({
-                    url: fileSourceForm.url,
-                    width: fileSourceForm.width,
-                    height: fileSourceForm.height,
-                    fps: fileSourceForm.fps,
-                    use_hw_accel: fileSourceForm.use_hw_accel,
-                    adaptive_timing: fileSourceForm.adaptive_timing
-                  }, null, 2)}
-                  fullWidth
-                  variant="outlined"
-                  sx={{ mt: 3 }}
-                  InputProps={{
-                    readOnly: true,
-                  }}
-                />
+                {/* Advanced Settings Accordion */}
+                <Accordion 
+                  expanded={advancedSettingsExpanded.fileSource}
+                  onChange={() => toggleAdvancedSettings('fileSource')}
+                  sx={{ mt: 2 }}
+                >
+                  <AccordionSummary
+                    expandIcon={<ExpandMoreIcon />}
+                    aria-controls="file-source-advanced-settings-content"
+                    id="file-source-advanced-settings-header"
+                  >
+                    <Typography sx={{ display: 'flex', alignItems: 'center' }}>
+                      <SettingsIcon sx={{ mr: 1, fontSize: 'small' }} />
+                      Advanced Settings
+                    </Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    {/* JSON Preview */}
+                    <TextField
+                      label="Configuration Preview (JSON)"
+                      multiline
+                      rows={6}
+                      value={JSON.stringify({
+                        url: fileSourceForm.url,
+                        width: fileSourceForm.width,
+                        height: fileSourceForm.height,
+                        fps: fileSourceForm.fps,
+                        use_hw_accel: fileSourceForm.use_hw_accel,
+                        adaptive_timing: fileSourceForm.adaptive_timing
+                      }, null, 2)}
+                      fullWidth
+                      variant="outlined"
+                      InputProps={{
+                        readOnly: true,
+                      }}
+                    />
+                  </AccordionDetails>
+                </Accordion>
               </Box>
             )}
             
@@ -1840,32 +1879,6 @@ const PipelineBuilder = () => {
                   />
                 </Stack>
                 
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 1 }}>
-                  <FormControl fullWidth margin="normal">
-                    <InputLabel id="rtsp-transport-label">RTSP Transport</InputLabel>
-                    <Select
-                      labelId="rtsp-transport-label"
-                      value={rtspSourceForm.rtsp_transport}
-                      onChange={(e) => handleRtspSourceFormChange('rtsp_transport', e.target.value)}
-                      label="RTSP Transport"
-                    >
-                      <MenuItem value="tcp">TCP</MenuItem>
-                      <MenuItem value="udp">UDP</MenuItem>
-                      <MenuItem value="http">HTTP</MenuItem>
-                      <MenuItem value="udp_multicast">UDP Multicast</MenuItem>
-                    </Select>
-                  </FormControl>
-                  <TextField
-                    label="Latency (ms)"
-                    type="number"
-                    value={rtspSourceForm.latency}
-                    onChange={(e) => handleRtspSourceFormChange('latency', parseInt(e.target.value))}
-                    fullWidth
-                    margin="normal"
-                    helperText="Lower values reduce delay but may increase jitter"
-                  />
-                </Stack>
-                
                 <FormGroup sx={{ mt: 2 }}>
                   <FormControlLabel
                     control={
@@ -1878,27 +1891,71 @@ const PipelineBuilder = () => {
                   />
                 </FormGroup>
                 
-                {/* JSON Preview */}
-                <TextField
-                  label="Configuration Preview (JSON)"
-                  multiline
-                  rows={6}
-                  value={JSON.stringify({
-                    url: rtspSourceForm.url,
-                    width: rtspSourceForm.width,
-                    height: rtspSourceForm.height,
-                    fps: rtspSourceForm.fps,
-                    use_hw_accel: rtspSourceForm.use_hw_accel,
-                    rtsp_transport: rtspSourceForm.rtsp_transport,
-                    latency: rtspSourceForm.latency
-                  }, null, 2)}
-                  fullWidth
-                  variant="outlined"
-                  sx={{ mt: 3 }}
-                  InputProps={{
-                    readOnly: true,
-                  }}
-                />
+                {/* Advanced Settings Accordion */}
+                <Accordion 
+                  expanded={advancedSettingsExpanded.rtspSource}
+                  onChange={() => toggleAdvancedSettings('rtspSource')}
+                  sx={{ mt: 2 }}
+                >
+                  <AccordionSummary
+                    expandIcon={<ExpandMoreIcon />}
+                    aria-controls="rtsp-source-advanced-settings-content"
+                    id="rtsp-source-advanced-settings-header"
+                  >
+                    <Typography sx={{ display: 'flex', alignItems: 'center' }}>
+                      <SettingsIcon sx={{ mr: 1, fontSize: 'small' }} />
+                      Advanced Settings
+                    </Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 1, mb: 2 }}>
+                      <FormControl fullWidth margin="normal">
+                        <InputLabel id="rtsp-transport-label">RTSP Transport</InputLabel>
+                        <Select
+                          labelId="rtsp-transport-label"
+                          value={rtspSourceForm.rtsp_transport}
+                          onChange={(e) => handleRtspSourceFormChange('rtsp_transport', e.target.value)}
+                          label="RTSP Transport"
+                        >
+                          <MenuItem value="tcp">TCP</MenuItem>
+                          <MenuItem value="udp">UDP</MenuItem>
+                          <MenuItem value="http">HTTP</MenuItem>
+                          <MenuItem value="udp_multicast">UDP Multicast</MenuItem>
+                        </Select>
+                      </FormControl>
+                      <TextField
+                        label="Latency (ms)"
+                        type="number"
+                        value={rtspSourceForm.latency}
+                        onChange={(e) => handleRtspSourceFormChange('latency', parseInt(e.target.value))}
+                        fullWidth
+                        margin="normal"
+                        helperText="Lower values reduce delay but may increase jitter"
+                      />
+                    </Stack>
+                    
+                    {/* JSON Preview */}
+                    <TextField
+                      label="Configuration Preview (JSON)"
+                      multiline
+                      rows={6}
+                      value={JSON.stringify({
+                        url: rtspSourceForm.url,
+                        width: rtspSourceForm.width,
+                        height: rtspSourceForm.height,
+                        fps: rtspSourceForm.fps,
+                        use_hw_accel: rtspSourceForm.use_hw_accel,
+                        rtsp_transport: rtspSourceForm.rtsp_transport,
+                        latency: rtspSourceForm.latency
+                      }, null, 2)}
+                      fullWidth
+                      variant="outlined"
+                      InputProps={{
+                        readOnly: true,
+                      }}
+                    />
+                  </AccordionDetails>
+                </Accordion>
               </Box>
             )}
             
@@ -1911,15 +1968,6 @@ const PipelineBuilder = () => {
                     Object Detection Configuration
                   </Box>
                 </Typography>
-                
-                <TextField
-                  label="Server URL"
-                  value={objectDetectionForm.server_url}
-                  onChange={(e) => handleObjectDetectionFormChange('server_url', e.target.value)}
-                  fullWidth
-                  margin="normal"
-                  helperText="URL of the AI server, e.g., http://localhost:8080"
-                />
                 
                 <FormControl fullWidth sx={{ mb: 3, mt: 2 }}>
                   <InputLabel id="model-label">Model</InputLabel>
@@ -1951,20 +1999,6 @@ const PipelineBuilder = () => {
                   />
                 </Box>
                 
-                <Box sx={{ width: '100%', px: 2, mt: 2 }}>
-                  <Typography variant="body2" gutterBottom>
-                    Label Font Scale: {objectDetectionForm.label_font_scale.toFixed(1)}
-                  </Typography>
-                  <Slider
-                    value={objectDetectionForm.label_font_scale}
-                    onChange={(_, value) => handleObjectDetectionFormChange('label_font_scale', value as number)}
-                    min={0.1}
-                    max={2.0}
-                    step={0.1}
-                    valueLabelDisplay="auto"
-                  />
-                </Box>
-                
                 <Typography variant="subtitle1" gutterBottom sx={{ mt: 3 }}>Visualization Options</Typography>
                 
                 <FormGroup sx={{ mt: 2 }}>
@@ -1976,15 +2010,6 @@ const PipelineBuilder = () => {
                       />
                     }
                     label="Draw Bounding Boxes"
-                  />
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={objectDetectionForm.use_shared_memory}
-                        onChange={(e) => handleObjectDetectionFormChange('use_shared_memory', e.target.checked)}
-                      />
-                    }
-                    label="Use Shared Memory"
                   />
                 </FormGroup>
                 
@@ -2024,27 +2049,81 @@ const PipelineBuilder = () => {
                   ))}
                 </Box>
                 
-                {/* JSON Preview */}
-                <TextField
-                  label="Configuration Preview (JSON)"
-                  multiline
-                  rows={6}
-                  value={JSON.stringify({
-                    model_id: objectDetectionForm.model_id,
-                    server_url: objectDetectionForm.server_url,
-                    confidence_threshold: objectDetectionForm.confidence_threshold,
-                    draw_bounding_boxes: objectDetectionForm.draw_bounding_boxes,
-                    use_shared_memory: objectDetectionForm.use_shared_memory,
-                    label_font_scale: objectDetectionForm.label_font_scale,
-                    classes: objectDetectionForm.classes
-                  }, null, 2)}
-                  fullWidth
-                  variant="outlined"
-                  sx={{ mt: 3 }}
-                  InputProps={{
-                    readOnly: true,
-                  }}
-                />
+                {/* Advanced Settings Accordion */}
+                <Accordion 
+                  expanded={advancedSettingsExpanded.objectDetection}
+                  onChange={() => toggleAdvancedSettings('objectDetection')}
+                  sx={{ mt: 2 }}
+                >
+                  <AccordionSummary
+                    expandIcon={<ExpandMoreIcon />}
+                    aria-controls="object-detection-advanced-settings-content"
+                    id="object-detection-advanced-settings-header"
+                  >
+                    <Typography sx={{ display: 'flex', alignItems: 'center' }}>
+                      <SettingsIcon sx={{ mr: 1, fontSize: 'small' }} />
+                      Advanced Settings
+                    </Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <TextField
+                      label="Server URL"
+                      value={objectDetectionForm.server_url}
+                      onChange={(e) => handleObjectDetectionFormChange('server_url', e.target.value)}
+                      fullWidth
+                      margin="normal"
+                      helperText="URL of the AI server, e.g., http://localhost:8080"
+                    />
+                    
+                    <Box sx={{ width: '100%', px: 2, mt: 2 }}>
+                      <Typography variant="body2" gutterBottom>
+                        Label Font Scale: {objectDetectionForm.label_font_scale.toFixed(1)}
+                      </Typography>
+                      <Slider
+                        value={objectDetectionForm.label_font_scale}
+                        onChange={(_, value) => handleObjectDetectionFormChange('label_font_scale', value as number)}
+                        min={0.1}
+                        max={2.0}
+                        step={0.1}
+                        valueLabelDisplay="auto"
+                      />
+                    </Box>
+                    
+                    <FormGroup sx={{ mt: 2 }}>
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={objectDetectionForm.use_shared_memory}
+                            onChange={(e) => handleObjectDetectionFormChange('use_shared_memory', e.target.checked)}
+                          />
+                        }
+                        label="Use Shared Memory"
+                      />
+                    </FormGroup>
+                    
+                    {/* JSON Preview */}
+                    <TextField
+                      label="Configuration Preview (JSON)"
+                      multiline
+                      rows={6}
+                      value={JSON.stringify({
+                        model_id: objectDetectionForm.model_id,
+                        server_url: objectDetectionForm.server_url,
+                        confidence_threshold: objectDetectionForm.confidence_threshold,
+                        draw_bounding_boxes: objectDetectionForm.draw_bounding_boxes,
+                        use_shared_memory: objectDetectionForm.use_shared_memory,
+                        label_font_scale: objectDetectionForm.label_font_scale,
+                        classes: objectDetectionForm.classes
+                      }, null, 2)}
+                      fullWidth
+                      variant="outlined"
+                      sx={{ mt: 3 }}
+                      InputProps={{
+                        readOnly: true,
+                      }}
+                    />
+                  </AccordionDetails>
+                </Accordion>
               </Box>
             )}
             
@@ -2058,68 +2137,19 @@ const PipelineBuilder = () => {
                   </Box>
                 </Typography>
                 
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                  <TextField
-                    label="Frame Rate"
-                    type="number"
-                    value={objectTrackingForm.frame_rate}
-                    onChange={(e) => handleObjectTrackingFormChange('frame_rate', parseInt(e.target.value))}
-                    fullWidth
-                    margin="normal"
+                <Box sx={{ width: '100%', px: 2, mt: 2 }}>
+                  <Typography variant="body2" gutterBottom>
+                    Track Threshold: {objectTrackingForm.track_thresh.toFixed(2)}
+                  </Typography>
+                  <Slider
+                    value={objectTrackingForm.track_thresh}
+                    onChange={(_, value) => handleObjectTrackingFormChange('track_thresh', value as number)}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    valueLabelDisplay="auto"
                   />
-                  <TextField
-                    label="Track Buffer"
-                    type="number"
-                    value={objectTrackingForm.track_buffer}
-                    onChange={(e) => handleObjectTrackingFormChange('track_buffer', parseInt(e.target.value))}
-                    fullWidth
-                    margin="normal"
-                  />
-                </Stack>
-                
-                <Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>Tracking Thresholds</Typography>
-                
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                  <Box sx={{ width: '100%', px: 2, mt: 2 }}>
-                    <Typography variant="body2" gutterBottom>
-                      Track Threshold: {objectTrackingForm.track_thresh.toFixed(2)}
-                    </Typography>
-                    <Slider
-                      value={objectTrackingForm.track_thresh}
-                      onChange={(_, value) => handleObjectTrackingFormChange('track_thresh', value as number)}
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      valueLabelDisplay="auto"
-                    />
-                  </Box>
-                  <Box sx={{ width: '100%', px: 2, mt: 2 }}>
-                    <Typography variant="body2" gutterBottom>
-                      High Threshold: {objectTrackingForm.high_thresh.toFixed(2)}
-                    </Typography>
-                    <Slider
-                      value={objectTrackingForm.high_thresh}
-                      onChange={(_, value) => handleObjectTrackingFormChange('high_thresh', value as number)}
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      valueLabelDisplay="auto"
-                    />
-                  </Box>
-                  <Box sx={{ width: '100%', px: 2, mt: 2 }}>
-                    <Typography variant="body2" gutterBottom>
-                      Match Threshold: {objectTrackingForm.match_thresh.toFixed(2)}
-                    </Typography>
-                    <Slider
-                      value={objectTrackingForm.match_thresh}
-                      onChange={(_, value) => handleObjectTrackingFormChange('match_thresh', value as number)}
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      valueLabelDisplay="auto"
-                    />
-                  </Box>
-                </Stack>
+                </Box>
                 
                 <Typography variant="subtitle1" gutterBottom sx={{ mt: 3 }}>Visualization Options</Typography>
                 
@@ -2137,62 +2167,130 @@ const PipelineBuilder = () => {
                     <FormControlLabel
                       control={
                         <Switch
-                          checked={objectTrackingForm.draw_track_trajectory}
-                          onChange={(e) => handleObjectTrackingFormChange('draw_track_trajectory', e.target.checked)}
-                        />
-                      }
-                      label="Draw Track Trajectory"
-                    />
-                  </FormGroup>
-                  <FormGroup sx={{ width: '100%' }}>
-                    <FormControlLabel
-                      control={
-                        <Switch
                           checked={objectTrackingForm.draw_track_id}
                           onChange={(e) => handleObjectTrackingFormChange('draw_track_id', e.target.checked)}
                         />
                       }
                       label="Draw Track ID"
                     />
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={objectTrackingForm.draw_semi_transparent_boxes}
-                          onChange={(e) => handleObjectTrackingFormChange('draw_semi_transparent_boxes', e.target.checked)}
-                        />
-                      }
-                      label="Draw Semi-Transparent Boxes"
-                    />
                   </FormGroup>
                 </Stack>
                 
-                <Box sx={{ width: '100%', px: 2, mt: 2 }}>
-                  <Typography variant="body2" gutterBottom>
-                    Label Font Scale: {objectTrackingForm.label_font_scale.toFixed(1)}
-                  </Typography>
-                  <Slider
-                    value={objectTrackingForm.label_font_scale}
-                    onChange={(_, value) => handleObjectTrackingFormChange('label_font_scale', value as number)}
-                    min={0.1}
-                    max={2.0}
-                    step={0.1}
-                    valueLabelDisplay="auto"
-                  />
-                </Box>
-                
-                {/* JSON Preview */}
-                <TextField
-                  label="Configuration Preview (JSON)"
-                  multiline
-                  rows={6}
-                  value={JSON.stringify(objectTrackingForm, null, 2)}
-                  fullWidth
-                  variant="outlined"
-                  sx={{ mt: 3 }}
-                  InputProps={{
-                    readOnly: true,
-                  }}
-                />
+                {/* Advanced Settings Accordion */}
+                <Accordion 
+                  expanded={advancedSettingsExpanded.objectTracking}
+                  onChange={() => toggleAdvancedSettings('objectTracking')}
+                  sx={{ mt: 2 }}
+                >
+                  <AccordionSummary
+                    expandIcon={<ExpandMoreIcon />}
+                    aria-controls="object-tracking-advanced-settings-content"
+                    id="object-tracking-advanced-settings-header"
+                  >
+                    <Typography sx={{ display: 'flex', alignItems: 'center' }}>
+                      <SettingsIcon sx={{ mr: 1, fontSize: 'small' }} />
+                      Advanced Settings
+                    </Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                      <TextField
+                        label="Frame Rate"
+                        type="number"
+                        value={objectTrackingForm.frame_rate}
+                        onChange={(e) => handleObjectTrackingFormChange('frame_rate', parseInt(e.target.value))}
+                        fullWidth
+                        margin="normal"
+                      />
+                      <TextField
+                        label="Track Buffer"
+                        type="number"
+                        value={objectTrackingForm.track_buffer}
+                        onChange={(e) => handleObjectTrackingFormChange('track_buffer', parseInt(e.target.value))}
+                        fullWidth
+                        margin="normal"
+                      />
+                    </Stack>
+                    
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 1 }}>
+                      <Box sx={{ width: '100%', px: 2, mt: 2 }}>
+                        <Typography variant="body2" gutterBottom>
+                          High Threshold: {objectTrackingForm.high_thresh.toFixed(2)}
+                        </Typography>
+                        <Slider
+                          value={objectTrackingForm.high_thresh}
+                          onChange={(_, value) => handleObjectTrackingFormChange('high_thresh', value as number)}
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          valueLabelDisplay="auto"
+                        />
+                      </Box>
+                      <Box sx={{ width: '100%', px: 2, mt: 2 }}>
+                        <Typography variant="body2" gutterBottom>
+                          Match Threshold: {objectTrackingForm.match_thresh.toFixed(2)}
+                        </Typography>
+                        <Slider
+                          value={objectTrackingForm.match_thresh}
+                          onChange={(_, value) => handleObjectTrackingFormChange('match_thresh', value as number)}
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          valueLabelDisplay="auto"
+                        />
+                      </Box>
+                    </Stack>
+                    
+                    <FormGroup sx={{ mt: 2 }}>
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={objectTrackingForm.draw_track_trajectory}
+                            onChange={(e) => handleObjectTrackingFormChange('draw_track_trajectory', e.target.checked)}
+                          />
+                        }
+                        label="Draw Track Trajectory"
+                      />
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={objectTrackingForm.draw_semi_transparent_boxes}
+                            onChange={(e) => handleObjectTrackingFormChange('draw_semi_transparent_boxes', e.target.checked)}
+                          />
+                        }
+                        label="Draw Semi-Transparent Boxes"
+                      />
+                    </FormGroup>
+                    
+                    <Box sx={{ width: '100%', px: 2, mt: 2 }}>
+                      <Typography variant="body2" gutterBottom>
+                        Label Font Scale: {objectTrackingForm.label_font_scale.toFixed(1)}
+                      </Typography>
+                      <Slider
+                        value={objectTrackingForm.label_font_scale}
+                        onChange={(_, value) => handleObjectTrackingFormChange('label_font_scale', value as number)}
+                        min={0.1}
+                        max={2.0}
+                        step={0.1}
+                        valueLabelDisplay="auto"
+                      />
+                    </Box>
+                    
+                    {/* JSON Preview */}
+                    <TextField
+                      label="Configuration Preview (JSON)"
+                      multiline
+                      rows={6}
+                      value={JSON.stringify(objectTrackingForm, null, 2)}
+                      fullWidth
+                      variant="outlined"
+                      sx={{ mt: 3 }}
+                      InputProps={{
+                        readOnly: true,
+                      }}
+                    />
+                  </AccordionDetails>
+                </Accordion>
               </Box>
             )}
             
@@ -2206,55 +2304,26 @@ const PipelineBuilder = () => {
                   </Box>
                 </Typography>
                 
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                  <FormGroup sx={{ width: '100%' }}>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={lineZoneManagerForm.draw_zones}
-                          onChange={(e) => handleLineZoneManagerFormChange('draw_zones', e.target.checked)}
-                        />
-                      }
-                      label="Draw Zones"
-                    />
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={lineZoneManagerForm.draw_counts}
-                          onChange={(e) => handleLineZoneManagerFormChange('draw_counts', e.target.checked)}
-                        />
-                      }
-                      label="Draw Counts"
-                    />
-                  </FormGroup>
-                  <Box sx={{ width: '100%' }}>
-                    <TextField
-                      label="Line Thickness"
-                      type="number"
-                      value={lineZoneManagerForm.line_thickness}
-                      onChange={(e) => handleLineZoneManagerFormChange('line_thickness', parseInt(e.target.value))}
-                      fullWidth
-                      margin="normal"
-                    />
-                    <TextField
-                      label="Text Scale"
-                      type="number"
-                      value={lineZoneManagerForm.text_scale}
-                      onChange={(e) => handleLineZoneManagerFormChange('text_scale', parseFloat(e.target.value))}
-                      fullWidth
-                      margin="normal"
-                      inputProps={{ step: 0.1 }}
-                    />
-                    <TextField
-                      label="Text Thickness"
-                      type="number"
-                      value={lineZoneManagerForm.text_thickness}
-                      onChange={(e) => handleLineZoneManagerFormChange('text_thickness', parseInt(e.target.value))}
-                      fullWidth
-                      margin="normal"
-                    />
-                  </Box>
-                </Stack>
+                <FormGroup sx={{ width: '100%', mt: 2 }}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={lineZoneManagerForm.draw_zones}
+                        onChange={(e) => handleLineZoneManagerFormChange('draw_zones', e.target.checked)}
+                      />
+                    }
+                    label="Draw Zones"
+                  />
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={lineZoneManagerForm.draw_counts}
+                        onChange={(e) => handleLineZoneManagerFormChange('draw_counts', e.target.checked)}
+                      />
+                    }
+                    label="Draw Counts"
+                  />
+                </FormGroup>
                 
                 <Typography variant="subtitle1" gutterBottom sx={{ mt: 3 }}>Zones</Typography>
                 
@@ -2353,19 +2422,66 @@ const PipelineBuilder = () => {
                   </Card>
                 ))}
                 
-                {/* JSON Preview */}
-                <TextField
-                  label="Configuration Preview (JSON)"
-                  multiline
-                  rows={6}
-                  value={JSON.stringify(lineZoneManagerForm, null, 2)}
-                  fullWidth
-                  variant="outlined"
-                  sx={{ mt: 3 }}
-                  InputProps={{
-                    readOnly: true,
-                  }}
-                />
+                {/* Advanced Settings Accordion */}
+                <Accordion 
+                  expanded={advancedSettingsExpanded.lineZoneManager}
+                  onChange={() => toggleAdvancedSettings('lineZoneManager')}
+                  sx={{ mt: 2 }}
+                >
+                  <AccordionSummary
+                    expandIcon={<ExpandMoreIcon />}
+                    aria-controls="line-zone-manager-advanced-settings-content"
+                    id="line-zone-manager-advanced-settings-header"
+                  >
+                    <Typography sx={{ display: 'flex', alignItems: 'center' }}>
+                      <SettingsIcon sx={{ mr: 1, fontSize: 'small' }} />
+                      Advanced Settings
+                    </Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Box sx={{ width: '100%' }}>
+                      <TextField
+                        label="Line Thickness"
+                        type="number"
+                        value={lineZoneManagerForm.line_thickness}
+                        onChange={(e) => handleLineZoneManagerFormChange('line_thickness', parseInt(e.target.value))}
+                        fullWidth
+                        margin="normal"
+                      />
+                      <TextField
+                        label="Text Scale"
+                        type="number"
+                        value={lineZoneManagerForm.text_scale}
+                        onChange={(e) => handleLineZoneManagerFormChange('text_scale', parseFloat(e.target.value))}
+                        fullWidth
+                        margin="normal"
+                        inputProps={{ step: 0.1 }}
+                      />
+                      <TextField
+                        label="Text Thickness"
+                        type="number"
+                        value={lineZoneManagerForm.text_thickness}
+                        onChange={(e) => handleLineZoneManagerFormChange('text_thickness', parseInt(e.target.value))}
+                        fullWidth
+                        margin="normal"
+                      />
+                    </Box>
+                    
+                    {/* JSON Preview */}
+                    <TextField
+                      label="Configuration Preview (JSON)"
+                      multiline
+                      rows={6}
+                      value={JSON.stringify(lineZoneManagerForm, null, 2)}
+                      fullWidth
+                      variant="outlined"
+                      sx={{ mt: 3 }}
+                      InputProps={{
+                        readOnly: true,
+                      }}
+                    />
+                  </AccordionDetails>
+                </Accordion>
               </Box>
             )}
             
@@ -2388,33 +2504,6 @@ const PipelineBuilder = () => {
                   helperText="Path to output file, e.g., /tmp/output.mp4"
                 />
                 
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 1 }}>
-                  <TextField
-                    label="Width"
-                    type="number"
-                    value={fileSinkForm.width}
-                    onChange={(e) => handleFileSinkFormChange('width', parseInt(e.target.value))}
-                    fullWidth
-                    margin="normal"
-                  />
-                  <TextField
-                    label="Height"
-                    type="number"
-                    value={fileSinkForm.height}
-                    onChange={(e) => handleFileSinkFormChange('height', parseInt(e.target.value))}
-                    fullWidth
-                    margin="normal"
-                  />
-                  <TextField
-                    label="FPS"
-                    type="number"
-                    value={fileSinkForm.fps}
-                    onChange={(e) => handleFileSinkFormChange('fps', parseInt(e.target.value))}
-                    fullWidth
-                    margin="normal"
-                  />
-                </Stack>
-                
                 <FormControl fullWidth sx={{ mb: 3, mt: 2 }}>
                   <InputLabel id="fourcc-label">Codec (FourCC)</InputLabel>
                   <Select
@@ -2429,25 +2518,71 @@ const PipelineBuilder = () => {
                   </Select>
                 </FormControl>
                 
-                {/* JSON Preview */}
-                <TextField
-                  label="Configuration Preview (JSON)"
-                  multiline
-                  rows={6}
-                  value={JSON.stringify({
-                    path: fileSinkForm.path,
-                    width: fileSinkForm.width,
-                    height: fileSinkForm.height,
-                    fps: fileSinkForm.fps,
-                    fourcc: fileSinkForm.fourcc
-                  }, null, 2)}
-                  fullWidth
-                  variant="outlined"
-                  sx={{ mt: 3 }}
-                  InputProps={{
-                    readOnly: true,
-                  }}
-                />
+                {/* Advanced Settings Accordion */}
+                <Accordion 
+                  expanded={advancedSettingsExpanded.fileSink}
+                  onChange={() => toggleAdvancedSettings('fileSink')}
+                  sx={{ mt: 2 }}
+                >
+                  <AccordionSummary
+                    expandIcon={<ExpandMoreIcon />}
+                    aria-controls="file-sink-advanced-settings-content"
+                    id="file-sink-advanced-settings-header"
+                  >
+                    <Typography sx={{ display: 'flex', alignItems: 'center' }}>
+                      <SettingsIcon sx={{ mr: 1, fontSize: 'small' }} />
+                      Advanced Settings
+                    </Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 1 }}>
+                      <TextField
+                        label="Width"
+                        type="number"
+                        value={fileSinkForm.width}
+                        onChange={(e) => handleFileSinkFormChange('width', parseInt(e.target.value))}
+                        fullWidth
+                        margin="normal"
+                      />
+                      <TextField
+                        label="Height"
+                        type="number"
+                        value={fileSinkForm.height}
+                        onChange={(e) => handleFileSinkFormChange('height', parseInt(e.target.value))}
+                        fullWidth
+                        margin="normal"
+                      />
+                      <TextField
+                        label="FPS"
+                        type="number"
+                        value={fileSinkForm.fps}
+                        onChange={(e) => handleFileSinkFormChange('fps', parseInt(e.target.value))}
+                        fullWidth
+                        margin="normal"
+                      />
+                    </Stack>
+                    
+                    {/* JSON Preview */}
+                    <TextField
+                      label="Configuration Preview (JSON)"
+                      multiline
+                      rows={6}
+                      value={JSON.stringify({
+                        path: fileSinkForm.path,
+                        width: fileSinkForm.width,
+                        height: fileSinkForm.height,
+                        fps: fileSinkForm.fps,
+                        fourcc: fileSinkForm.fourcc
+                      }, null, 2)}
+                      fullWidth
+                      variant="outlined"
+                      sx={{ mt: 3 }}
+                      InputProps={{
+                        readOnly: true,
+                      }}
+                    />
+                  </AccordionDetails>
+                </Accordion>
               </Box>
             )}
             
