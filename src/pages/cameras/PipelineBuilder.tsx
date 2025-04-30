@@ -633,20 +633,18 @@ const PipelineBuilder = () => {
       componentType = component.type_name.toLowerCase();
     } else {
       // If type is a number or unknown format, try to determine the type based on inspection
-      // of the component config
-      const config = component.config || {};
-      
-      if (config.url && (config.url.startsWith('rtsp://') || config.rtsp_transport)) {
+      // of the component properties
+      if (component.url && (component.url.startsWith('rtsp://') || component.rtsp_transport)) {
         componentType = 'rtsp';
-      } else if (config.url) {
+      } else if (component.url) {
         componentType = 'file';
-      } else if (config.model_id && config.classes) {
+      } else if (component.model_id && component.classes) {
         componentType = 'object_detection';
-      } else if (config.track_thresh !== undefined) {
+      } else if (component.track_thresh !== undefined) {
         componentType = 'object_tracking';
-      } else if (config.zones) {
+      } else if (component.zones) {
         componentType = 'line_zone_manager';
-      } else if (config.path && config.fourcc) {
+      } else if (component.path && component.fourcc) {
         componentType = 'file'; // file sink
       } else {
         componentType = 'unknown';
@@ -656,44 +654,51 @@ const PipelineBuilder = () => {
     console.log("Editing component:", component, "extracted type:", componentType);
     
     setSelectedComponentType(componentType);
+    
+    // The API returns the component status with properties directly on the object
+    // rather than nested in a config property. We'll use these values directly.
+    // Create a config object for the JSON editor
+    const configData = component.config || {};
     setComponentConfig(formatJson(component.config));
     
-    // Initialize form data from component config
+    // Initialize form data from component properties
+    // We need to check both flattened properties and config object properties
     if (type === 'source' && componentType === 'file') {
-      const config = component.config || {};
       setFileSourceForm({
-        url: config.url || "",
-        width: config.width || 640,
-        height: config.height || 480,
-        fps: config.fps || 30,
-        use_hw_accel: config.use_hw_accel !== undefined ? config.use_hw_accel : true,
-        adaptive_timing: config.adaptive_timing !== undefined ? config.adaptive_timing : true
+        url: component.url || configData.url || "",
+        width: component.width || configData.width || 640,
+        height: component.height || configData.height || 480,
+        fps: component.target_fps || component.fps || configData.fps || 30,
+        use_hw_accel: component.hardware_acceleration === "enabled" || configData.use_hw_accel || true,
+        adaptive_timing: component.adaptive_timing === "enabled" || configData.adaptive_timing || true
       });
     } else if (type === 'source' && componentType === 'rtsp') {
-      const config = component.config || {};
       setRtspSourceForm({
-        url: config.url || "rtsp://username:password@ip:port/stream",
-        width: config.width || 640,
-        height: config.height || 480,
-        fps: config.fps || 30,
-        use_hw_accel: config.use_hw_accel !== undefined ? config.use_hw_accel : true,
-        rtsp_transport: config.rtsp_transport || "tcp",
-        latency: config.latency || 200
+        url: component.url || configData.url || "rtsp://username:password@ip:port/stream",
+        width: component.width || configData.width || 640,
+        height: component.height || configData.height || 480,
+        fps: component.target_fps || component.fps || configData.fps || 30,
+        use_hw_accel: component.hardware_acceleration === "enabled" || configData.use_hw_accel || true,
+        rtsp_transport: component.rtsp_transport || configData.rtsp_transport || "tcp",
+        latency: component.latency || configData.latency || 200
       });
     } else if (type === 'processor') {
-      const config = component.config || {};
-      
       if (componentType === 'object_detection') {
         // For object detection, set the form and find the available classes for the selected model
-        const modelId = config.model_id || "yolov4-tiny";
+        const modelId = component.model_id || configData.model_id || "yolov4-tiny";
         setObjectDetectionForm({
           model_id: modelId,
-          server_url: config.server_url || "http://localhost:8080",
-          confidence_threshold: config.confidence_threshold !== undefined ? config.confidence_threshold : 0.5,
-          draw_bounding_boxes: config.draw_bounding_boxes !== undefined ? config.draw_bounding_boxes : true,
-          use_shared_memory: config.use_shared_memory !== undefined ? config.use_shared_memory : true,
-          label_font_scale: config.label_font_scale !== undefined ? config.label_font_scale : 0.5,
-          classes: Array.isArray(config.classes) ? config.classes : ["person"],
+          server_url: component.server_url || configData.server_url || "http://localhost:8080",
+          confidence_threshold: component.confidence_threshold !== undefined ? component.confidence_threshold : 
+                              configData.confidence_threshold !== undefined ? configData.confidence_threshold : 0.5,
+          draw_bounding_boxes: component.draw_bounding_boxes !== undefined ? component.draw_bounding_boxes : 
+                             configData.draw_bounding_boxes !== undefined ? configData.draw_bounding_boxes : true,
+          use_shared_memory: component.use_shared_memory !== undefined ? component.use_shared_memory : 
+                           configData.use_shared_memory !== undefined ? configData.use_shared_memory : true,
+          label_font_scale: component.label_font_scale !== undefined ? component.label_font_scale : 
+                          configData.label_font_scale !== undefined ? configData.label_font_scale : 0.5,
+          classes: Array.isArray(component.classes) ? component.classes : 
+                 Array.isArray(configData.classes) ? configData.classes : ["person"],
           newClass: ""
         });
         
@@ -720,27 +725,39 @@ const PipelineBuilder = () => {
         }
       } else if (componentType === 'object_tracking') {
         setObjectTrackingForm({
-          frame_rate: config.frame_rate || 30,
-          track_buffer: config.track_buffer || 30,
-          track_thresh: config.track_thresh || 0.5,
-          high_thresh: config.high_thresh || 0.6,
-          match_thresh: config.match_thresh || 0.8,
-          draw_tracking: config.draw_tracking !== undefined ? config.draw_tracking : true,
-          draw_track_trajectory: config.draw_track_trajectory !== undefined ? config.draw_track_trajectory : true,
-          draw_track_id: config.draw_track_id !== undefined ? config.draw_track_id : true,
-          draw_semi_transparent_boxes: config.draw_semi_transparent_boxes !== undefined ? config.draw_semi_transparent_boxes : true,
-          label_font_scale: config.label_font_scale || 0.6
+          frame_rate: component.frame_rate || configData.frame_rate || 30,
+          track_buffer: component.track_buffer || configData.track_buffer || 30,
+          track_thresh: component.track_thresh !== undefined ? component.track_thresh : 
+                      configData.track_thresh !== undefined ? configData.track_thresh : 0.5,
+          high_thresh: component.high_thresh !== undefined ? component.high_thresh : 
+                     configData.high_thresh !== undefined ? configData.high_thresh : 0.6,
+          match_thresh: component.match_thresh !== undefined ? component.match_thresh : 
+                      configData.match_thresh !== undefined ? configData.match_thresh : 0.8,
+          draw_tracking: component.draw_tracking !== undefined ? component.draw_tracking : 
+                       configData.draw_tracking !== undefined ? configData.draw_tracking : true,
+          draw_track_trajectory: component.draw_track_trajectory !== undefined ? component.draw_track_trajectory : 
+                               configData.draw_track_trajectory !== undefined ? configData.draw_track_trajectory : true,
+          draw_track_id: component.draw_track_id !== undefined ? component.draw_track_id : 
+                       configData.draw_track_id !== undefined ? configData.draw_track_id : true,
+          draw_semi_transparent_boxes: component.draw_semi_transparent_boxes !== undefined ? component.draw_semi_transparent_boxes : 
+                                     configData.draw_semi_transparent_boxes !== undefined ? configData.draw_semi_transparent_boxes : true,
+          label_font_scale: component.label_font_scale || configData.label_font_scale || 0.6
         });
       } else if (componentType === 'line_zone_manager') {
         setLineZoneManagerForm({
-          draw_zones: config.draw_zones !== undefined ? config.draw_zones : true,
-          line_color: Array.isArray(config.line_color) ? config.line_color : [255, 255, 255],
-          line_thickness: config.line_thickness || 2,
-          draw_counts: config.draw_counts !== undefined ? config.draw_counts : true,
-          text_color: Array.isArray(config.text_color) ? config.text_color : [0, 0, 0],
-          text_scale: config.text_scale || 0.5,
-          text_thickness: config.text_thickness || 2,
-          zones: Array.isArray(config.zones) ? config.zones : [{
+          draw_zones: component.draw_zones !== undefined ? component.draw_zones : 
+                    configData.draw_zones !== undefined ? configData.draw_zones : true,
+          line_color: Array.isArray(component.line_color) ? component.line_color : 
+                    Array.isArray(configData.line_color) ? configData.line_color : [255, 255, 255],
+          line_thickness: component.line_thickness || configData.line_thickness || 2,
+          draw_counts: component.draw_counts !== undefined ? component.draw_counts : 
+                     configData.draw_counts !== undefined ? configData.draw_counts : true,
+          text_color: Array.isArray(component.text_color) ? component.text_color : 
+                    Array.isArray(configData.text_color) ? configData.text_color : [0, 0, 0],
+          text_scale: component.text_scale || configData.text_scale || 0.5,
+          text_thickness: component.text_thickness || configData.text_thickness || 2,
+          zones: Array.isArray(component.zones) ? component.zones : 
+               Array.isArray(configData.zones) ? configData.zones : [{
             id: "zone1",
             start_x: 100,
             start_y: 240,
@@ -752,13 +769,12 @@ const PipelineBuilder = () => {
         });
       }
     } else if (type === 'sink' && componentType === 'file') {
-      const config = component.config || {};
       setFileSinkForm({
-        path: config.path || "/tmp/output.mp4",
-        width: config.width || 640,
-        height: config.height || 480,
-        fps: config.fps || 30,
-        fourcc: config.fourcc || "mp4v"
+        path: component.file_path || component.path || configData.path || "/tmp/output.mp4",
+        width: component.resolution?.width || component.width || configData.width || 640,
+        height: component.resolution?.height || component.height || configData.height || 480,
+        fps: component.fps || configData.fps || 30,
+        fourcc: component.fourcc || configData.fourcc || "mp4v"
       });
     }
     

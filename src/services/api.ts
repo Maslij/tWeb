@@ -72,10 +72,63 @@ export interface ComponentTypes {
 // Generic component interface
 export interface Component {
   id: string;
-  type: string;
+  type: string | number;
   type_name?: string;
   running: boolean;
   config: any;
+  
+  // Properties that might be directly on the component object rather than in config
+  // Source component properties
+  url?: string;
+  width?: number;
+  height?: number;
+  fps?: number;
+  target_fps?: number;
+  hardware_acceleration?: string;
+  adaptive_timing?: string;
+  rtsp_transport?: string;
+  latency?: number;
+  
+  // Processor component properties
+  model_id?: string;
+  server_url?: string;
+  confidence_threshold?: number;
+  draw_bounding_boxes?: boolean;
+  use_shared_memory?: boolean;
+  classes?: string[];
+  processed_frames?: number;
+  detection_count?: number;
+  label_font_scale?: number;
+  
+  // Object tracking properties
+  frame_rate?: number;
+  track_buffer?: number;
+  track_thresh?: number;
+  high_thresh?: number;
+  match_thresh?: number;
+  draw_tracking?: boolean;
+  draw_track_id?: boolean;
+  draw_track_trajectory?: boolean;
+  draw_semi_transparent_boxes?: boolean;
+  
+  // Line zone properties
+  draw_zones?: boolean;
+  line_color?: number[];
+  line_thickness?: number;
+  draw_counts?: boolean;
+  text_color?: number[];
+  text_scale?: number;
+  text_thickness?: number;
+  zones?: any[];
+  
+  // Sink component properties
+  file_path?: string;
+  path?: string;
+  fourcc?: string;
+  resolution?: {
+    width: number;
+    height: number;
+  };
 }
 
 // Component input interface
