@@ -1446,94 +1446,21 @@ const PipelineBuilder = () => {
     setDialogType(type);
     setDialogMode('create');
     setSelectedComponent(null);
-    setSelectedComponentType('');
     setComponentConfig('{}');
     
-    // Reset form data to defaults
-    if (type === 'source') {
-      // Default to 'file' source type for create mode
-      setSelectedComponentType('file');
-      setFileSourceForm({
-        url: "",
-        width: 640,
-        height: 480,
-        fps: 30,
-        use_hw_accel: true,
-        adaptive_timing: true
-      });
-      setRtspSourceForm({
-        url: "rtsp://username:password@ip:port/stream",
-        width: 640,
-        height: 480,
-        fps: 30,
-        use_hw_accel: true,
-        rtsp_transport: "tcp",
-        latency: 200
-      });
-    } else if (type === 'processor') {
-      // For processor, default to 'object_detection' if it's available
-      if (objectDetectionAvailable && objectDetectionModels.length > 0) {
-        setSelectedComponentType('object_detection');
-        const defaultModel = objectDetectionModels[0];
-        setObjectDetectionForm({
-          model_id: defaultModel.id,
-          server_url: "http://localhost:8080",
-          confidence_threshold: 0.5,
-          draw_bounding_boxes: true,
-          use_shared_memory: true,
-          label_font_scale: 0.5,
-          classes: [],
-          newClass: ""
-        });
-        
-        // Set available classes for the selected model
-        if (defaultModel.classes && defaultModel.classes.length > 0) {
-          setSelectedModelClasses(defaultModel.classes);
-        }
-      } else {
-        // If object detection is not available, default to another processor type
-        setObjectDetectionForm({
-          model_id: "yolov4-tiny",
-          server_url: "http://localhost:8080",
-          confidence_threshold: 0.5,
-          draw_bounding_boxes: true,
-          use_shared_memory: true,
-          label_font_scale: 0.5,
-          classes: ["person"],
-          newClass: ""
-        });
-      }
-      
-      setObjectTrackingForm({
-        frame_rate: 30,
-        track_buffer: 30,
-        track_thresh: 0.5,
-        high_thresh: 0.6,
-        match_thresh: 0.8,
-        draw_tracking: true,
-        draw_track_trajectory: true,
-        draw_track_id: true,
-        draw_semi_transparent_boxes: true,
-        label_font_scale: 0.6
-      });
-      setLineZoneManagerForm({
-        draw_zones: true,
-        line_color: [255, 255, 255],
-        line_thickness: 2,
-        draw_counts: true,
-        text_color: [0, 0, 0],
-        text_scale: 0.5,
-        text_thickness: 2,
-        zones: [defaultLineZone]
-      });
-    } else if (type === 'sink') {
-      setFileSinkForm({
-        path: "/tmp/output.mp4",
-        width: 640,
-        height: 480,
-        fps: 30,
-        fourcc: "mp4v"
-      });
+    // Find the first available component type
+    const availableTypes = componentTypes?.[type === 'source' ? 'sources' : 
+                            type === 'processor' ? 'processors' : 'sinks'] || [];
+    
+    const firstAvailableType = availableTypes.find(t => canAddComponent(t, type));
+    
+    if (firstAvailableType) {
+      setSelectedComponentType(firstAvailableType);
+      initializeFormForComponentType(firstAvailableType);
+    } else {
+      setSelectedComponentType('');
+      // Show a message that no components are available
+      showSnackbar(`No available ${type} components to add`);
     }
     
     setOpenDialog(true);
@@ -1739,7 +1666,35 @@ const PipelineBuilder = () => {
   };
 
   const handleTypeChange = (event: SelectChangeEvent<string>) => {
-    setSelectedComponentType(event.target.value);
+    const selectedType = event.target.value;
+    
+    // Check if the selected component type can be added
+    if (!canAddComponent(selectedType, dialogType)) {
+      // Find the next available component type
+      const availableTypes = componentTypes?.[dialogType === 'source' ? 'sources' : 
+                              dialogType === 'processor' ? 'processors' : 'sinks'] || [];
+      
+      const nextAvailableType = availableTypes.find(type => canAddComponent(type, dialogType));
+      
+      if (nextAvailableType) {
+        // Set to the next available type instead
+        setSelectedComponentType(nextAvailableType);
+        
+        // Initialize the appropriate form for the selected type
+        initializeFormForComponentType(nextAvailableType);
+        
+        // Show a notification that we selected a different component
+        showSnackbar(`Selected ${getComponentTypeName(nextAvailableType, dialogType)} instead, as ${getComponentTypeName(selectedType, dialogType)} is not available`);
+      } else {
+        // No available types
+        setSelectedComponentType('');
+        showSnackbar('No available component types to add');
+      }
+    } else {
+      // Set the selected component type and initialize its form
+      setSelectedComponentType(selectedType);
+      initializeFormForComponentType(selectedType);
+    }
   };
 
   const handleConfigChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -2436,6 +2391,85 @@ const PipelineBuilder = () => {
     }
   };
 
+  // Add a new helper function to initialize forms based on component type
+  const initializeFormForComponentType = (componentType: string) => {
+    if (dialogType === 'source') {
+      if (componentType === 'file') {
+        setFileSourceForm({
+          url: "",
+          width: 640,
+          height: 480,
+          fps: 30,
+          use_hw_accel: true,
+          adaptive_timing: true
+        });
+      } else if (componentType === 'rtsp') {
+        setRtspSourceForm({
+          url: "rtsp://username:password@ip:port/stream",
+          width: 640,
+          height: 480,
+          fps: 30,
+          use_hw_accel: true,
+          rtsp_transport: "tcp",
+          latency: 200
+        });
+      }
+    } else if (dialogType === 'processor') {
+      if (componentType === 'object_detection') {
+        const defaultModel = objectDetectionModels.length > 0 ? objectDetectionModels[0] : null;
+        setObjectDetectionForm({
+          model_id: defaultModel?.id || "yolov4-tiny",
+          server_url: "http://localhost:8080",
+          confidence_threshold: 0.5,
+          draw_bounding_boxes: true,
+          use_shared_memory: true,
+          label_font_scale: 0.5,
+          classes: [],
+          newClass: ""
+        });
+        
+        // Set available classes for the selected model
+        if (defaultModel?.classes) {
+          setSelectedModelClasses(defaultModel.classes);
+        }
+      } else if (componentType === 'object_tracking') {
+        setObjectTrackingForm({
+          frame_rate: 30,
+          track_buffer: 30,
+          track_thresh: 0.5,
+          high_thresh: 0.6,
+          match_thresh: 0.8,
+          draw_tracking: true,
+          draw_track_trajectory: true,
+          draw_track_id: true,
+          draw_semi_transparent_boxes: true,
+          label_font_scale: 0.6
+        });
+      } else if (componentType === 'line_zone_manager') {
+        setLineZoneManagerForm({
+          draw_zones: true,
+          line_color: [255, 255, 255],
+          line_thickness: 2,
+          draw_counts: true,
+          text_color: [0, 0, 0],
+          text_scale: 0.5,
+          text_thickness: 2,
+          zones: [defaultLineZone]
+        });
+      }
+    } else if (dialogType === 'sink') {
+      if (componentType === 'file') {
+        setFileSinkForm({
+          path: "/tmp/output.mp4",
+          width: 640,
+          height: 480,
+          fps: 30,
+          fourcc: "mp4v"
+        });
+      }
+    }
+  };
+
   if (loading) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -2672,6 +2706,17 @@ const PipelineBuilder = () => {
             </Box>
           )}
           
+          {/* Show a message when no components are available */}
+          {selectedComponentType === '' && (
+            <Alert severity="warning" sx={{ mt: 2, mb: 2 }}>
+              No available component types to add. {
+                dialogType === 'source' ? 'A source component already exists.' :
+                dialogType === 'processor' ? 'All processor components have been added or their dependencies are not met.' :
+                'All sink components have been added.'
+              }
+            </Alert>
+          )}
+          
           <Box sx={{ mt: 2 }}>
             {/* Component Type Selection (only for create mode) */}
             {dialogMode === 'create' && (
@@ -2732,803 +2777,808 @@ const PipelineBuilder = () => {
               </Box>
             )}
             
-            {/* Source Form (File type) */}
-            {dialogType === 'source' && selectedComponentType === 'file' && (
-              <Box>
-                <Typography variant="h6" gutterBottom>
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <VideoSettingsIcon sx={{ mr: 1, fontSize: 20 }} />
-                    Video File Configuration
-                  </Box>
-                </Typography>
-                
-                <TextField
-                  label="Video File URL"
-                  value={fileSourceForm.url}
-                  onChange={(e) => handleFileSourceFormChange('url', e.target.value)}
-                  fullWidth
-                  margin="normal"
-                  helperText="Path to video file, e.g., /path/to/video.mp4"
-                />
-                
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 1 }}>
-                  <TextField
-                    label="Width"
-                    type="number"
-                    value={fileSourceForm.width}
-                    onChange={(e) => handleFileSourceFormChange('width', parseInt(e.target.value))}
-                    fullWidth
-                    margin="normal"
-                  />
-                  <TextField
-                    label="Height"
-                    type="number"
-                    value={fileSourceForm.height}
-                    onChange={(e) => handleFileSourceFormChange('height', parseInt(e.target.value))}
-                    fullWidth
-                    margin="normal"
-                  />
-                  <TextField
-                    label="FPS"
-                    type="number"
-                    value={fileSourceForm.fps}
-                    onChange={(e) => handleFileSourceFormChange('fps', parseInt(e.target.value))}
-                    fullWidth
-                    margin="normal"
-                  />
-                </Stack>
-                
-                <FormGroup sx={{ mt: 2 }}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={fileSourceForm.use_hw_accel}
-                        onChange={(e) => handleFileSourceFormChange('use_hw_accel', e.target.checked)}
-                      />
-                    }
-                    label="Use Hardware Acceleration"
-                  />
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={fileSourceForm.adaptive_timing}
-                        onChange={(e) => handleFileSourceFormChange('adaptive_timing', e.target.checked)}
-                      />
-                    }
-                    label="Adaptive Timing"
-                  />
-                </FormGroup>
-                
-                {/* Advanced Settings Accordion */}
-                <Accordion 
-                  expanded={advancedSettingsExpanded.fileSource}
-                  onChange={() => toggleAdvancedSettings('fileSource')}
-                  sx={{ mt: 2 }}
-                >
-                  <AccordionSummary
-                    expandIcon={<ExpandMoreIcon />}
-                    aria-controls="file-source-advanced-settings-content"
-                    id="file-source-advanced-settings-header"
-                  >
-                    <Typography sx={{ display: 'flex', alignItems: 'center' }}>
-                      <SettingsIcon sx={{ mr: 1, fontSize: 'small' }} />
-                      Advanced Settings
+            {/* Only render the appropriate form if component can be added or in edit mode */}
+            {selectedComponentType !== '' && (dialogMode === 'edit' || canAddComponent(selectedComponentType, dialogType)) && (
+              <>
+                {/* Source - File type */}
+                {dialogType === 'source' && selectedComponentType === 'file' && (
+                  <Box>
+                    <Typography variant="h6" gutterBottom>
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <VideoSettingsIcon sx={{ mr: 1, fontSize: 20 }} />
+                        Video File Configuration
+                      </Box>
                     </Typography>
-                  </AccordionSummary>
-                  <AccordionDetails>
-                    {/* JSON Preview */}
-                    <TextField
-                      label="Configuration Preview (JSON)"
-                      multiline
-                      rows={6}
-                      value={JSON.stringify({
-                        url: fileSourceForm.url,
-                        width: fileSourceForm.width,
-                        height: fileSourceForm.height,
-                        fps: fileSourceForm.fps,
-                        use_hw_accel: fileSourceForm.use_hw_accel,
-                        adaptive_timing: fileSourceForm.adaptive_timing
-                      }, null, 2)}
-                      fullWidth
-                      variant="outlined"
-                      InputProps={{
-                        readOnly: true,
-                      }}
-                    />
-                  </AccordionDetails>
-                </Accordion>
-              </Box>
-            )}
-            
-            {/* RTSP Source Form */}
-            {dialogType === 'source' && selectedComponentType === 'rtsp' && (
-              <Box>
-                <Typography variant="h6" gutterBottom>
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <VideoSettingsIcon sx={{ mr: 1, fontSize: 20 }} />
-                    RTSP Camera Configuration
-                  </Box>
-                </Typography>
-                
-                <TextField
-                  label="RTSP URL"
-                  value={rtspSourceForm.url}
-                  onChange={(e) => handleRtspSourceFormChange('url', e.target.value)}
-                  fullWidth
-                  margin="normal"
-                  helperText="RTSP URL, e.g., rtsp://username:password@ip:port/stream"
-                />
-                
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 1 }}>
-                  <TextField
-                    label="Width"
-                    type="number"
-                    value={rtspSourceForm.width}
-                    onChange={(e) => handleRtspSourceFormChange('width', parseInt(e.target.value))}
-                    fullWidth
-                    margin="normal"
-                  />
-                  <TextField
-                    label="Height"
-                    type="number"
-                    value={rtspSourceForm.height}
-                    onChange={(e) => handleRtspSourceFormChange('height', parseInt(e.target.value))}
-                    fullWidth
-                    margin="normal"
-                  />
-                  <TextField
-                    label="FPS"
-                    type="number"
-                    value={rtspSourceForm.fps}
-                    onChange={(e) => handleRtspSourceFormChange('fps', parseInt(e.target.value))}
-                    fullWidth
-                    margin="normal"
-                  />
-                </Stack>
-                
-                <FormGroup sx={{ mt: 2 }}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={rtspSourceForm.use_hw_accel}
-                        onChange={(e) => handleRtspSourceFormChange('use_hw_accel', e.target.checked)}
-                      />
-                    }
-                    label="Use Hardware Acceleration"
-                  />
-                </FormGroup>
-                
-                {/* Advanced Settings Accordion */}
-                <Accordion 
-                  expanded={advancedSettingsExpanded.rtspSource}
-                  onChange={() => toggleAdvancedSettings('rtspSource')}
-                  sx={{ mt: 2 }}
-                >
-                  <AccordionSummary
-                    expandIcon={<ExpandMoreIcon />}
-                    aria-controls="rtsp-source-advanced-settings-content"
-                    id="rtsp-source-advanced-settings-header"
-                  >
-                    <Typography sx={{ display: 'flex', alignItems: 'center' }}>
-                      <SettingsIcon sx={{ mr: 1, fontSize: 'small' }} />
-                      Advanced Settings
-                    </Typography>
-                  </AccordionSummary>
-                  <AccordionDetails>
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 1, mb: 2 }}>
-                      <FormControl fullWidth margin="normal">
-                        <InputLabel id="rtsp-transport-label">RTSP Transport</InputLabel>
-                        <Select
-                          labelId="rtsp-transport-label"
-                          value={rtspSourceForm.rtsp_transport}
-                          onChange={(e) => handleRtspSourceFormChange('rtsp_transport', e.target.value)}
-                          label="RTSP Transport"
-                        >
-                          <MenuItem value="tcp">TCP</MenuItem>
-                          <MenuItem value="udp">UDP</MenuItem>
-                          <MenuItem value="http">HTTP</MenuItem>
-                          <MenuItem value="udp_multicast">UDP Multicast</MenuItem>
-                        </Select>
-                      </FormControl>
-                      <TextField
-                        label="Latency (ms)"
-                        type="number"
-                        value={rtspSourceForm.latency}
-                        onChange={(e) => handleRtspSourceFormChange('latency', parseInt(e.target.value))}
-                        fullWidth
-                        margin="normal"
-                        helperText="Lower values reduce delay but may increase jitter"
-                      />
-                    </Stack>
                     
-                    {/* JSON Preview */}
                     <TextField
-                      label="Configuration Preview (JSON)"
-                      multiline
-                      rows={6}
-                      value={JSON.stringify({
-                        url: rtspSourceForm.url,
-                        width: rtspSourceForm.width,
-                        height: rtspSourceForm.height,
-                        fps: rtspSourceForm.fps,
-                        use_hw_accel: rtspSourceForm.use_hw_accel,
-                        rtsp_transport: rtspSourceForm.rtsp_transport,
-                        latency: rtspSourceForm.latency
-                      }, null, 2)}
-                      fullWidth
-                      variant="outlined"
-                      InputProps={{
-                        readOnly: true,
-                      }}
-                    />
-                  </AccordionDetails>
-                </Accordion>
-              </Box>
-            )}
-            
-            {/* Object Detection Processor Form */}
-            {dialogType === 'processor' && selectedComponentType === 'object_detection' && (
-              <Box>
-                <Typography variant="h6" gutterBottom>
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <MemoryIcon sx={{ mr: 1, fontSize: 20 }} />
-                    Object Detection Configuration
-                  </Box>
-                </Typography>
-                
-                <FormControl fullWidth sx={{ mb: 3, mt: 2 }}>
-                  <InputLabel id="model-label">Model</InputLabel>
-                  <Select
-                    labelId="model-label"
-                    value={objectDetectionForm.model_id}
-                    onChange={(e) => handleObjectDetectionFormChange('model_id', e.target.value)}
-                    label="Model"
-                  >
-                    {objectDetectionModels.map((model) => (
-                      <MenuItem key={model.id} value={model.id}>
-                        {model.id}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                
-                <Box sx={{ width: '100%', px: 2, mt: 2 }}>
-                  <Typography variant="body2" gutterBottom>
-                    Confidence Threshold: {objectDetectionForm.confidence_threshold.toFixed(2)}
-                  </Typography>
-                  <Slider
-                    value={objectDetectionForm.confidence_threshold}
-                    onChange={(_, value) => handleObjectDetectionFormChange('confidence_threshold', value as number)}
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    valueLabelDisplay="auto"
-                  />
-                </Box>
-                
-                <Typography variant="subtitle1" gutterBottom sx={{ mt: 3 }}>Visualization Options</Typography>
-                
-                <FormGroup sx={{ mt: 2 }}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={objectDetectionForm.draw_bounding_boxes}
-                        onChange={(e) => handleObjectDetectionFormChange('draw_bounding_boxes', e.target.checked)}
-                      />
-                    }
-                    label="Draw Bounding Boxes"
-                  />
-                </FormGroup>
-                
-                <Typography variant="subtitle1" gutterBottom sx={{ mt: 3 }}>Classes to Detect</Typography>
-                
-                <Box sx={{ mb: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                  {objectDetectionForm.classes.length > 0 ? (
-                    objectDetectionForm.classes.map((cls, index) => (
-                      <Chip
-                        key={index}
-                        label={cls}
-                        onDelete={() => handleToggleClass(cls)}
-                        color="primary"
-                      />
-                    ))
-                  ) : (
-                    <Typography variant="body2" color="text.secondary">
-                      No classes selected. Select from available classes below.
-                    </Typography>
-                  )}
-                </Box>
-                
-                <Divider sx={{ my: 2 }} />
-                
-                <Typography variant="subtitle1" gutterBottom>Available Classes</Typography>
-                
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, maxHeight: '200px', overflowY: 'auto', p: 1 }}>
-                  {selectedModelClasses.map((cls, index) => (
-                    <Chip
-                      key={index}
-                      label={cls}
-                      onClick={() => handleToggleClass(cls)}
-                      color={objectDetectionForm.classes.includes(cls) ? "primary" : "default"}
-                      variant={objectDetectionForm.classes.includes(cls) ? "filled" : "outlined"}
-                      sx={{ m: 0.5 }}
-                    />
-                  ))}
-                </Box>
-                
-                {/* Advanced Settings Accordion */}
-                <Accordion 
-                  expanded={advancedSettingsExpanded.objectDetection}
-                  onChange={() => toggleAdvancedSettings('objectDetection')}
-                  sx={{ mt: 2 }}
-                >
-                  <AccordionSummary
-                    expandIcon={<ExpandMoreIcon />}
-                    aria-controls="object-detection-advanced-settings-content"
-                    id="object-detection-advanced-settings-header"
-                  >
-                    <Typography sx={{ display: 'flex', alignItems: 'center' }}>
-                      <SettingsIcon sx={{ mr: 1, fontSize: 'small' }} />
-                      Advanced Settings
-                    </Typography>
-                  </AccordionSummary>
-                  <AccordionDetails>
-                    <TextField
-                      label="Server URL"
-                      value={objectDetectionForm.server_url}
-                      onChange={(e) => handleObjectDetectionFormChange('server_url', e.target.value)}
+                      label="Video File URL"
+                      value={fileSourceForm.url}
+                      onChange={(e) => handleFileSourceFormChange('url', e.target.value)}
                       fullWidth
                       margin="normal"
-                      helperText="URL of the AI server, e.g., http://localhost:8080"
+                      helperText="Path to video file, e.g., /path/to/video.mp4"
                     />
                     
-                    <Box sx={{ width: '100%', px: 2, mt: 2 }}>
-                      <Typography variant="body2" gutterBottom>
-                        Label Font Scale: {objectDetectionForm.label_font_scale.toFixed(1)}
-                      </Typography>
-                      <Slider
-                        value={objectDetectionForm.label_font_scale}
-                        onChange={(_, value) => handleObjectDetectionFormChange('label_font_scale', value as number)}
-                        min={0.1}
-                        max={2.0}
-                        step={0.1}
-                        valueLabelDisplay="auto"
-                      />
-                    </Box>
-                    
-                    <FormGroup sx={{ mt: 2 }}>
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={objectDetectionForm.use_shared_memory}
-                            onChange={(e) => handleObjectDetectionFormChange('use_shared_memory', e.target.checked)}
-                          />
-                        }
-                        label="Use Shared Memory"
-                      />
-                    </FormGroup>
-                    
-                    {/* JSON Preview */}
-                    <TextField
-                      label="Configuration Preview (JSON)"
-                      multiline
-                      rows={6}
-                      value={JSON.stringify({
-                        model_id: objectDetectionForm.model_id,
-                        server_url: objectDetectionForm.server_url,
-                        confidence_threshold: objectDetectionForm.confidence_threshold,
-                        draw_bounding_boxes: objectDetectionForm.draw_bounding_boxes,
-                        use_shared_memory: objectDetectionForm.use_shared_memory,
-                        label_font_scale: objectDetectionForm.label_font_scale,
-                        classes: objectDetectionForm.classes
-                      }, null, 2)}
-                      fullWidth
-                      variant="outlined"
-                      sx={{ mt: 3 }}
-                      InputProps={{
-                        readOnly: true,
-                      }}
-                    />
-                  </AccordionDetails>
-                </Accordion>
-              </Box>
-            )}
-            
-            {/* Object Tracking Processor Form */}
-            {dialogType === 'processor' && selectedComponentType === 'object_tracking' && (
-              <Box>
-                <Typography variant="h6" gutterBottom>
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <MemoryIcon sx={{ mr: 1, fontSize: 20 }} />
-                    Object Tracking Configuration
-                  </Box>
-                </Typography>
-                
-                <Box sx={{ width: '100%', px: 2, mt: 2 }}>
-                  <Typography variant="body2" gutterBottom>
-                    Track Threshold: {objectTrackingForm.track_thresh.toFixed(2)}
-                  </Typography>
-                  <Slider
-                    value={objectTrackingForm.track_thresh}
-                    onChange={(_, value) => handleObjectTrackingFormChange('track_thresh', value as number)}
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    valueLabelDisplay="auto"
-                  />
-                </Box>
-                
-                <Typography variant="subtitle1" gutterBottom sx={{ mt: 3 }}>Visualization Options</Typography>
-                
-                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                  <FormGroup sx={{ width: '100%' }}>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={objectTrackingForm.draw_tracking}
-                          onChange={(e) => handleObjectTrackingFormChange('draw_tracking', e.target.checked)}
-                        />
-                      }
-                      label="Draw Tracking"
-                    />
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={objectTrackingForm.draw_track_id}
-                          onChange={(e) => handleObjectTrackingFormChange('draw_track_id', e.target.checked)}
-                        />
-                      }
-                      label="Draw Track ID"
-                    />
-                  </FormGroup>
-                </Stack>
-                
-                {/* Advanced Settings Accordion */}
-                <Accordion 
-                  expanded={advancedSettingsExpanded.objectTracking}
-                  onChange={() => toggleAdvancedSettings('objectTracking')}
-                  sx={{ mt: 2 }}
-                >
-                  <AccordionSummary
-                    expandIcon={<ExpandMoreIcon />}
-                    aria-controls="object-tracking-advanced-settings-content"
-                    id="object-tracking-advanced-settings-header"
-                  >
-                    <Typography sx={{ display: 'flex', alignItems: 'center' }}>
-                      <SettingsIcon sx={{ mr: 1, fontSize: 'small' }} />
-                      Advanced Settings
-                    </Typography>
-                  </AccordionSummary>
-                  <AccordionDetails>
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                      <TextField
-                        label="Frame Rate"
-                        type="number"
-                        value={objectTrackingForm.frame_rate}
-                        onChange={(e) => handleObjectTrackingFormChange('frame_rate', parseInt(e.target.value))}
-                        fullWidth
-                        margin="normal"
-                      />
-                      <TextField
-                        label="Track Buffer"
-                        type="number"
-                        value={objectTrackingForm.track_buffer}
-                        onChange={(e) => handleObjectTrackingFormChange('track_buffer', parseInt(e.target.value))}
-                        fullWidth
-                        margin="normal"
-                      />
-                    </Stack>
-                    
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 1 }}>
-                      <Box sx={{ width: '100%', px: 2, mt: 2 }}>
-                        <Typography variant="body2" gutterBottom>
-                          High Threshold: {objectTrackingForm.high_thresh.toFixed(2)}
-                        </Typography>
-                        <Slider
-                          value={objectTrackingForm.high_thresh}
-                          onChange={(_, value) => handleObjectTrackingFormChange('high_thresh', value as number)}
-                          min={0}
-                          max={1}
-                          step={0.01}
-                          valueLabelDisplay="auto"
-                        />
-                      </Box>
-                      <Box sx={{ width: '100%', px: 2, mt: 2 }}>
-                        <Typography variant="body2" gutterBottom>
-                          Match Threshold: {objectTrackingForm.match_thresh.toFixed(2)}
-                        </Typography>
-                        <Slider
-                          value={objectTrackingForm.match_thresh}
-                          onChange={(_, value) => handleObjectTrackingFormChange('match_thresh', value as number)}
-                          min={0}
-                          max={1}
-                          step={0.01}
-                          valueLabelDisplay="auto"
-                        />
-                      </Box>
-                    </Stack>
-                    
-                    <FormGroup sx={{ mt: 2 }}>
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={objectTrackingForm.draw_track_trajectory}
-                            onChange={(e) => handleObjectTrackingFormChange('draw_track_trajectory', e.target.checked)}
-                          />
-                        }
-                        label="Draw Track Trajectory"
-                      />
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={objectTrackingForm.draw_semi_transparent_boxes}
-                            onChange={(e) => handleObjectTrackingFormChange('draw_semi_transparent_boxes', e.target.checked)}
-                          />
-                        }
-                        label="Draw Semi-Transparent Boxes"
-                      />
-                    </FormGroup>
-                    
-                    <Box sx={{ width: '100%', px: 2, mt: 2 }}>
-                      <Typography variant="body2" gutterBottom>
-                        Label Font Scale: {objectTrackingForm.label_font_scale.toFixed(1)}
-                      </Typography>
-                      <Slider
-                        value={objectTrackingForm.label_font_scale}
-                        onChange={(_, value) => handleObjectTrackingFormChange('label_font_scale', value as number)}
-                        min={0.1}
-                        max={2.0}
-                        step={0.1}
-                        valueLabelDisplay="auto"
-                      />
-                    </Box>
-                    
-                    {/* JSON Preview */}
-                    <TextField
-                      label="Configuration Preview (JSON)"
-                      multiline
-                      rows={6}
-                      value={JSON.stringify(objectTrackingForm, null, 2)}
-                      fullWidth
-                      variant="outlined"
-                      sx={{ mt: 3 }}
-                      InputProps={{
-                        readOnly: true,
-                      }}
-                    />
-                  </AccordionDetails>
-                </Accordion>
-              </Box>
-            )}
-            
-            {/* Line Zone Manager Processor Form */}
-            {dialogType === 'processor' && selectedComponentType === 'line_zone_manager' && (
-              <Box>
-                <Typography variant="h6" gutterBottom>
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <MemoryIcon sx={{ mr: 1, fontSize: 20 }} />
-                    Line Zone Manager Configuration
-                  </Box>
-                </Typography>
-                
-                <Alert severity="info" sx={{ mb: 2 }}>
-                  Line zones can be created and edited in the Live Preview section after the pipeline has been started at least once.
-                </Alert>
-                
-                <FormGroup sx={{ width: '100%', mt: 2 }}>
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={lineZoneManagerForm.draw_zones}
-                        onChange={(e) => handleLineZoneManagerFormChange('draw_zones', e.target.checked)}
-                      />
-                    }
-                    label="Draw Zones"
-                  />
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={lineZoneManagerForm.draw_counts}
-                        onChange={(e) => handleLineZoneManagerFormChange('draw_counts', e.target.checked)}
-                      />
-                    }
-                    label="Draw Counts"
-                  />
-                </FormGroup>
-                
-                {/* Advanced Settings Accordion */}
-                <Accordion 
-                  expanded={advancedSettingsExpanded.lineZoneManager}
-                  onChange={() => toggleAdvancedSettings('lineZoneManager')}
-                  sx={{ mt: 2 }}
-                >
-                  <AccordionSummary
-                    expandIcon={<ExpandMoreIcon />}
-                    aria-controls="line-zone-manager-advanced-settings-content"
-                    id="line-zone-manager-advanced-settings-header"
-                  >
-                    <Typography sx={{ display: 'flex', alignItems: 'center' }}>
-                      <SettingsIcon sx={{ mr: 1, fontSize: 'small' }} />
-                      Advanced Settings
-                    </Typography>
-                  </AccordionSummary>
-                  <AccordionDetails>
-                    <Box sx={{ width: '100%' }}>
-                      <TextField
-                        label="Line Thickness"
-                        type="number"
-                        value={lineZoneManagerForm.line_thickness}
-                        onChange={(e) => handleLineZoneManagerFormChange('line_thickness', parseInt(e.target.value))}
-                        fullWidth
-                        margin="normal"
-                      />
-                      <TextField
-                        label="Text Scale"
-                        type="number"
-                        value={lineZoneManagerForm.text_scale}
-                        onChange={(e) => handleLineZoneManagerFormChange('text_scale', parseFloat(e.target.value))}
-                        fullWidth
-                        margin="normal"
-                        inputProps={{ step: 0.1 }}
-                      />
-                      <TextField
-                        label="Text Thickness"
-                        type="number"
-                        value={lineZoneManagerForm.text_thickness}
-                        onChange={(e) => handleLineZoneManagerFormChange('text_thickness', parseInt(e.target.value))}
-                        fullWidth
-                        margin="normal"
-                      />
-                    </Box>
-                    
-                    {/* JSON Preview */}
-                    <TextField
-                      label="Configuration Preview (JSON)"
-                      multiline
-                      rows={6}
-                      value={JSON.stringify({
-                        draw_zones: lineZoneManagerForm.draw_zones,
-                        line_color: lineZoneManagerForm.line_color,
-                        line_thickness: lineZoneManagerForm.line_thickness,
-                        draw_counts: lineZoneManagerForm.draw_counts,
-                        text_color: lineZoneManagerForm.text_color,
-                        text_scale: lineZoneManagerForm.text_scale,
-                        text_thickness: lineZoneManagerForm.text_thickness,
-                        // Don't show zones in the preview
-                        zones: lineZoneManagerForm.zones.length + " zones configured"
-                      }, null, 2)}
-                      fullWidth
-                      variant="outlined"
-                      sx={{ mt: 3 }}
-                      InputProps={{
-                        readOnly: true,
-                      }}
-                    />
-                  </AccordionDetails>
-                </Accordion>
-              </Box>
-            )}
-            
-            {/* File Sink Form */}
-            {dialogType === 'sink' && selectedComponentType === 'file' && (
-              <Box>
-                <Typography variant="h6" gutterBottom>
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <SaveIcon sx={{ mr: 1, fontSize: 20 }} />
-                    Video File Output Configuration
-                  </Box>
-                </Typography>
-                
-                <TextField
-                  label="Output File Path"
-                  value={fileSinkForm.path}
-                  onChange={(e) => handleFileSinkFormChange('path', e.target.value)}
-                  fullWidth
-                  margin="normal"
-                  helperText="Path to output file, e.g., /tmp/output.mp4"
-                />
-                
-                <FormControl fullWidth sx={{ mb: 3, mt: 2 }}>
-                  <InputLabel id="fourcc-label">Codec (FourCC)</InputLabel>
-                  <Select
-                    labelId="fourcc-label"
-                    value={fileSinkForm.fourcc}
-                    onChange={(e) => handleFileSinkFormChange('fourcc', e.target.value)}
-                    label="Codec (FourCC)"
-                  >
-                    <MenuItem value="mp4v">MP4V (MPEG-4)</MenuItem>
-                    <MenuItem value="avc1">AVC1 (H.264)</MenuItem>
-                    <MenuItem value="hevc">HEVC (H.265)</MenuItem>
-                  </Select>
-                </FormControl>
-                
-                {/* Advanced Settings Accordion */}
-                <Accordion 
-                  expanded={advancedSettingsExpanded.fileSink}
-                  onChange={() => toggleAdvancedSettings('fileSink')}
-                  sx={{ mt: 2 }}
-                >
-                  <AccordionSummary
-                    expandIcon={<ExpandMoreIcon />}
-                    aria-controls="file-sink-advanced-settings-content"
-                    id="file-sink-advanced-settings-header"
-                  >
-                    <Typography sx={{ display: 'flex', alignItems: 'center' }}>
-                      <SettingsIcon sx={{ mr: 1, fontSize: 'small' }} />
-                      Advanced Settings
-                    </Typography>
-                  </AccordionSummary>
-                  <AccordionDetails>
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 1 }}>
                       <TextField
                         label="Width"
                         type="number"
-                        value={fileSinkForm.width}
-                        onChange={(e) => handleFileSinkFormChange('width', parseInt(e.target.value))}
+                        value={fileSourceForm.width}
+                        onChange={(e) => handleFileSourceFormChange('width', parseInt(e.target.value))}
                         fullWidth
                         margin="normal"
                       />
                       <TextField
                         label="Height"
                         type="number"
-                        value={fileSinkForm.height}
-                        onChange={(e) => handleFileSinkFormChange('height', parseInt(e.target.value))}
+                        value={fileSourceForm.height}
+                        onChange={(e) => handleFileSourceFormChange('height', parseInt(e.target.value))}
                         fullWidth
                         margin="normal"
                       />
                       <TextField
                         label="FPS"
                         type="number"
-                        value={fileSinkForm.fps}
-                        onChange={(e) => handleFileSinkFormChange('fps', parseInt(e.target.value))}
+                        value={fileSourceForm.fps}
+                        onChange={(e) => handleFileSourceFormChange('fps', parseInt(e.target.value))}
                         fullWidth
                         margin="normal"
                       />
                     </Stack>
                     
-                    {/* JSON Preview */}
+                    <FormGroup sx={{ mt: 2 }}>
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={fileSourceForm.use_hw_accel}
+                            onChange={(e) => handleFileSourceFormChange('use_hw_accel', e.target.checked)}
+                          />
+                        }
+                        label="Use Hardware Acceleration"
+                      />
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={fileSourceForm.adaptive_timing}
+                            onChange={(e) => handleFileSourceFormChange('adaptive_timing', e.target.checked)}
+                          />
+                        }
+                        label="Adaptive Timing"
+                      />
+                    </FormGroup>
+                    
+                    {/* Advanced Settings Accordion */}
+                    <Accordion 
+                      expanded={advancedSettingsExpanded.fileSource}
+                      onChange={() => toggleAdvancedSettings('fileSource')}
+                      sx={{ mt: 2 }}
+                    >
+                      <AccordionSummary
+                        expandIcon={<ExpandMoreIcon />}
+                        aria-controls="file-source-advanced-settings-content"
+                        id="file-source-advanced-settings-header"
+                      >
+                        <Typography sx={{ display: 'flex', alignItems: 'center' }}>
+                          <SettingsIcon sx={{ mr: 1, fontSize: 'small' }} />
+                          Advanced Settings
+                        </Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        {/* JSON Preview */}
+                        <TextField
+                          label="Configuration Preview (JSON)"
+                          multiline
+                          rows={6}
+                          value={JSON.stringify({
+                            url: fileSourceForm.url,
+                            width: fileSourceForm.width,
+                            height: fileSourceForm.height,
+                            fps: fileSourceForm.fps,
+                            use_hw_accel: fileSourceForm.use_hw_accel,
+                            adaptive_timing: fileSourceForm.adaptive_timing
+                          }, null, 2)}
+                          fullWidth
+                          variant="outlined"
+                          InputProps={{
+                            readOnly: true,
+                          }}
+                        />
+                      </AccordionDetails>
+                    </Accordion>
+                  </Box>
+                )}
+                
+                {/* RTSP Source Form */}
+                {dialogType === 'source' && selectedComponentType === 'rtsp' && (
+                  <Box>
+                    <Typography variant="h6" gutterBottom>
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <VideoSettingsIcon sx={{ mr: 1, fontSize: 20 }} />
+                        RTSP Camera Configuration
+                      </Box>
+                    </Typography>
+                    
                     <TextField
-                      label="Configuration Preview (JSON)"
+                      label="RTSP URL"
+                      value={rtspSourceForm.url}
+                      onChange={(e) => handleRtspSourceFormChange('url', e.target.value)}
+                      fullWidth
+                      margin="normal"
+                      helperText="RTSP URL, e.g., rtsp://username:password@ip:port/stream"
+                    />
+                    
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 1 }}>
+                      <TextField
+                        label="Width"
+                        type="number"
+                        value={rtspSourceForm.width}
+                        onChange={(e) => handleRtspSourceFormChange('width', parseInt(e.target.value))}
+                        fullWidth
+                        margin="normal"
+                      />
+                      <TextField
+                        label="Height"
+                        type="number"
+                        value={rtspSourceForm.height}
+                        onChange={(e) => handleRtspSourceFormChange('height', parseInt(e.target.value))}
+                        fullWidth
+                        margin="normal"
+                      />
+                      <TextField
+                        label="FPS"
+                        type="number"
+                        value={rtspSourceForm.fps}
+                        onChange={(e) => handleRtspSourceFormChange('fps', parseInt(e.target.value))}
+                        fullWidth
+                        margin="normal"
+                      />
+                    </Stack>
+                    
+                    <FormGroup sx={{ mt: 2 }}>
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={rtspSourceForm.use_hw_accel}
+                            onChange={(e) => handleRtspSourceFormChange('use_hw_accel', e.target.checked)}
+                          />
+                        }
+                        label="Use Hardware Acceleration"
+                      />
+                    </FormGroup>
+                    
+                    {/* Advanced Settings Accordion */}
+                    <Accordion 
+                      expanded={advancedSettingsExpanded.rtspSource}
+                      onChange={() => toggleAdvancedSettings('rtspSource')}
+                      sx={{ mt: 2 }}
+                    >
+                      <AccordionSummary
+                        expandIcon={<ExpandMoreIcon />}
+                        aria-controls="rtsp-source-advanced-settings-content"
+                        id="rtsp-source-advanced-settings-header"
+                      >
+                        <Typography sx={{ display: 'flex', alignItems: 'center' }}>
+                          <SettingsIcon sx={{ mr: 1, fontSize: 'small' }} />
+                          Advanced Settings
+                        </Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 1, mb: 2 }}>
+                          <FormControl fullWidth margin="normal">
+                            <InputLabel id="rtsp-transport-label">RTSP Transport</InputLabel>
+                            <Select
+                              labelId="rtsp-transport-label"
+                              value={rtspSourceForm.rtsp_transport}
+                              onChange={(e) => handleRtspSourceFormChange('rtsp_transport', e.target.value)}
+                              label="RTSP Transport"
+                            >
+                              <MenuItem value="tcp">TCP</MenuItem>
+                              <MenuItem value="udp">UDP</MenuItem>
+                              <MenuItem value="http">HTTP</MenuItem>
+                              <MenuItem value="udp_multicast">UDP Multicast</MenuItem>
+                            </Select>
+                          </FormControl>
+                          <TextField
+                            label="Latency (ms)"
+                            type="number"
+                            value={rtspSourceForm.latency}
+                            onChange={(e) => handleRtspSourceFormChange('latency', parseInt(e.target.value))}
+                            fullWidth
+                            margin="normal"
+                            helperText="Lower values reduce delay but may increase jitter"
+                          />
+                        </Stack>
+                        
+                        {/* JSON Preview */}
+                        <TextField
+                          label="Configuration Preview (JSON)"
+                          multiline
+                          rows={6}
+                          value={JSON.stringify({
+                            url: rtspSourceForm.url,
+                            width: rtspSourceForm.width,
+                            height: rtspSourceForm.height,
+                            fps: rtspSourceForm.fps,
+                            use_hw_accel: rtspSourceForm.use_hw_accel,
+                            rtsp_transport: rtspSourceForm.rtsp_transport,
+                            latency: rtspSourceForm.latency
+                          }, null, 2)}
+                          fullWidth
+                          variant="outlined"
+                          InputProps={{
+                            readOnly: true,
+                          }}
+                        />
+                      </AccordionDetails>
+                    </Accordion>
+                  </Box>
+                )}
+                
+                {/* Object Detection Processor Form */}
+                {dialogType === 'processor' && selectedComponentType === 'object_detection' && (
+                  <Box>
+                    <Typography variant="h6" gutterBottom>
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <MemoryIcon sx={{ mr: 1, fontSize: 20 }} />
+                        Object Detection Configuration
+                      </Box>
+                    </Typography>
+                    
+                    <FormControl fullWidth sx={{ mb: 3, mt: 2 }}>
+                      <InputLabel id="model-label">Model</InputLabel>
+                      <Select
+                        labelId="model-label"
+                        value={objectDetectionForm.model_id}
+                        onChange={(e) => handleObjectDetectionFormChange('model_id', e.target.value)}
+                        label="Model"
+                      >
+                        {objectDetectionModels.map((model) => (
+                          <MenuItem key={model.id} value={model.id}>
+                            {model.id}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    
+                    <Box sx={{ width: '100%', px: 2, mt: 2 }}>
+                      <Typography variant="body2" gutterBottom>
+                        Confidence Threshold: {objectDetectionForm.confidence_threshold.toFixed(2)}
+                      </Typography>
+                      <Slider
+                        value={objectDetectionForm.confidence_threshold}
+                        onChange={(_, value) => handleObjectDetectionFormChange('confidence_threshold', value as number)}
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        valueLabelDisplay="auto"
+                      />
+                    </Box>
+                    
+                    <Typography variant="subtitle1" gutterBottom sx={{ mt: 3 }}>Visualization Options</Typography>
+                    
+                    <FormGroup sx={{ mt: 2 }}>
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={objectDetectionForm.draw_bounding_boxes}
+                            onChange={(e) => handleObjectDetectionFormChange('draw_bounding_boxes', e.target.checked)}
+                          />
+                        }
+                        label="Draw Bounding Boxes"
+                      />
+                    </FormGroup>
+                    
+                    <Typography variant="subtitle1" gutterBottom sx={{ mt: 3 }}>Classes to Detect</Typography>
+                    
+                    <Box sx={{ mb: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                      {objectDetectionForm.classes.length > 0 ? (
+                        objectDetectionForm.classes.map((cls, index) => (
+                          <Chip
+                            key={index}
+                            label={cls}
+                            onDelete={() => handleToggleClass(cls)}
+                            color="primary"
+                          />
+                        ))
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">
+                          No classes selected. Select from available classes below.
+                        </Typography>
+                      )}
+                    </Box>
+                    
+                    <Divider sx={{ my: 2 }} />
+                    
+                    <Typography variant="subtitle1" gutterBottom>Available Classes</Typography>
+                    
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, maxHeight: '200px', overflowY: 'auto', p: 1 }}>
+                      {selectedModelClasses.map((cls, index) => (
+                        <Chip
+                          key={index}
+                          label={cls}
+                          onClick={() => handleToggleClass(cls)}
+                          color={objectDetectionForm.classes.includes(cls) ? "primary" : "default"}
+                          variant={objectDetectionForm.classes.includes(cls) ? "filled" : "outlined"}
+                          sx={{ m: 0.5 }}
+                        />
+                      ))}
+                    </Box>
+                    
+                    {/* Advanced Settings Accordion */}
+                    <Accordion 
+                      expanded={advancedSettingsExpanded.objectDetection}
+                      onChange={() => toggleAdvancedSettings('objectDetection')}
+                      sx={{ mt: 2 }}
+                    >
+                      <AccordionSummary
+                        expandIcon={<ExpandMoreIcon />}
+                        aria-controls="object-detection-advanced-settings-content"
+                        id="object-detection-advanced-settings-header"
+                      >
+                        <Typography sx={{ display: 'flex', alignItems: 'center' }}>
+                          <SettingsIcon sx={{ mr: 1, fontSize: 'small' }} />
+                          Advanced Settings
+                        </Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <TextField
+                          label="Server URL"
+                          value={objectDetectionForm.server_url}
+                          onChange={(e) => handleObjectDetectionFormChange('server_url', e.target.value)}
+                          fullWidth
+                          margin="normal"
+                          helperText="URL of the AI server, e.g., http://localhost:8080"
+                        />
+                        
+                        <Box sx={{ width: '100%', px: 2, mt: 2 }}>
+                          <Typography variant="body2" gutterBottom>
+                            Label Font Scale: {objectDetectionForm.label_font_scale.toFixed(1)}
+                          </Typography>
+                          <Slider
+                            value={objectDetectionForm.label_font_scale}
+                            onChange={(_, value) => handleObjectDetectionFormChange('label_font_scale', value as number)}
+                            min={0.1}
+                            max={2.0}
+                            step={0.1}
+                            valueLabelDisplay="auto"
+                          />
+                        </Box>
+                        
+                        <FormGroup sx={{ mt: 2 }}>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={objectDetectionForm.use_shared_memory}
+                                onChange={(e) => handleObjectDetectionFormChange('use_shared_memory', e.target.checked)}
+                              />
+                            }
+                            label="Use Shared Memory"
+                          />
+                        </FormGroup>
+                        
+                        {/* JSON Preview */}
+                        <TextField
+                          label="Configuration Preview (JSON)"
+                          multiline
+                          rows={6}
+                          value={JSON.stringify({
+                            model_id: objectDetectionForm.model_id,
+                            server_url: objectDetectionForm.server_url,
+                            confidence_threshold: objectDetectionForm.confidence_threshold,
+                            draw_bounding_boxes: objectDetectionForm.draw_bounding_boxes,
+                            use_shared_memory: objectDetectionForm.use_shared_memory,
+                            label_font_scale: objectDetectionForm.label_font_scale,
+                            classes: objectDetectionForm.classes
+                          }, null, 2)}
+                          fullWidth
+                          variant="outlined"
+                          sx={{ mt: 3 }}
+                          InputProps={{
+                            readOnly: true,
+                          }}
+                        />
+                      </AccordionDetails>
+                    </Accordion>
+                  </Box>
+                )}
+                
+                {/* Object Tracking Processor Form */}
+                {dialogType === 'processor' && selectedComponentType === 'object_tracking' && (
+                  <Box>
+                    <Typography variant="h6" gutterBottom>
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <MemoryIcon sx={{ mr: 1, fontSize: 20 }} />
+                        Object Tracking Configuration
+                      </Box>
+                    </Typography>
+                    
+                    <Box sx={{ width: '100%', px: 2, mt: 2 }}>
+                      <Typography variant="body2" gutterBottom>
+                        Track Threshold: {objectTrackingForm.track_thresh.toFixed(2)}
+                      </Typography>
+                      <Slider
+                        value={objectTrackingForm.track_thresh}
+                        onChange={(_, value) => handleObjectTrackingFormChange('track_thresh', value as number)}
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        valueLabelDisplay="auto"
+                      />
+                    </Box>
+                    
+                    <Typography variant="subtitle1" gutterBottom sx={{ mt: 3 }}>Visualization Options</Typography>
+                    
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                      <FormGroup sx={{ width: '100%' }}>
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={objectTrackingForm.draw_tracking}
+                              onChange={(e) => handleObjectTrackingFormChange('draw_tracking', e.target.checked)}
+                            />
+                          }
+                          label="Draw Tracking"
+                        />
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={objectTrackingForm.draw_track_id}
+                              onChange={(e) => handleObjectTrackingFormChange('draw_track_id', e.target.checked)}
+                            />
+                          }
+                          label="Draw Track ID"
+                        />
+                      </FormGroup>
+                    </Stack>
+                    
+                    {/* Advanced Settings Accordion */}
+                    <Accordion 
+                      expanded={advancedSettingsExpanded.objectTracking}
+                      onChange={() => toggleAdvancedSettings('objectTracking')}
+                      sx={{ mt: 2 }}
+                    >
+                      <AccordionSummary
+                        expandIcon={<ExpandMoreIcon />}
+                        aria-controls="object-tracking-advanced-settings-content"
+                        id="object-tracking-advanced-settings-header"
+                      >
+                        <Typography sx={{ display: 'flex', alignItems: 'center' }}>
+                          <SettingsIcon sx={{ mr: 1, fontSize: 'small' }} />
+                          Advanced Settings
+                        </Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                          <TextField
+                            label="Frame Rate"
+                            type="number"
+                            value={objectTrackingForm.frame_rate}
+                            onChange={(e) => handleObjectTrackingFormChange('frame_rate', parseInt(e.target.value))}
+                            fullWidth
+                            margin="normal"
+                          />
+                          <TextField
+                            label="Track Buffer"
+                            type="number"
+                            value={objectTrackingForm.track_buffer}
+                            onChange={(e) => handleObjectTrackingFormChange('track_buffer', parseInt(e.target.value))}
+                            fullWidth
+                            margin="normal"
+                          />
+                        </Stack>
+                        
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 1 }}>
+                          <Box sx={{ width: '100%', px: 2, mt: 2 }}>
+                            <Typography variant="body2" gutterBottom>
+                              High Threshold: {objectTrackingForm.high_thresh.toFixed(2)}
+                            </Typography>
+                            <Slider
+                              value={objectTrackingForm.high_thresh}
+                              onChange={(_, value) => handleObjectTrackingFormChange('high_thresh', value as number)}
+                              min={0}
+                              max={1}
+                              step={0.01}
+                              valueLabelDisplay="auto"
+                            />
+                          </Box>
+                          <Box sx={{ width: '100%', px: 2, mt: 2 }}>
+                            <Typography variant="body2" gutterBottom>
+                              Match Threshold: {objectTrackingForm.match_thresh.toFixed(2)}
+                            </Typography>
+                            <Slider
+                              value={objectTrackingForm.match_thresh}
+                              onChange={(_, value) => handleObjectTrackingFormChange('match_thresh', value as number)}
+                              min={0}
+                              max={1}
+                              step={0.01}
+                              valueLabelDisplay="auto"
+                            />
+                          </Box>
+                        </Stack>
+                        
+                        <FormGroup sx={{ mt: 2 }}>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={objectTrackingForm.draw_track_trajectory}
+                                onChange={(e) => handleObjectTrackingFormChange('draw_track_trajectory', e.target.checked)}
+                              />
+                            }
+                            label="Draw Track Trajectory"
+                          />
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={objectTrackingForm.draw_semi_transparent_boxes}
+                                onChange={(e) => handleObjectTrackingFormChange('draw_semi_transparent_boxes', e.target.checked)}
+                              />
+                            }
+                            label="Draw Semi-Transparent Boxes"
+                          />
+                        </FormGroup>
+                        
+                        <Box sx={{ width: '100%', px: 2, mt: 2 }}>
+                          <Typography variant="body2" gutterBottom>
+                            Label Font Scale: {objectTrackingForm.label_font_scale.toFixed(1)}
+                          </Typography>
+                          <Slider
+                            value={objectTrackingForm.label_font_scale}
+                            onChange={(_, value) => handleObjectTrackingFormChange('label_font_scale', value as number)}
+                            min={0.1}
+                            max={2.0}
+                            step={0.1}
+                            valueLabelDisplay="auto"
+                          />
+                        </Box>
+                        
+                        {/* JSON Preview */}
+                        <TextField
+                          label="Configuration Preview (JSON)"
+                          multiline
+                          rows={6}
+                          value={JSON.stringify(objectTrackingForm, null, 2)}
+                          fullWidth
+                          variant="outlined"
+                          sx={{ mt: 3 }}
+                          InputProps={{
+                            readOnly: true,
+                          }}
+                        />
+                      </AccordionDetails>
+                    </Accordion>
+                  </Box>
+                )}
+                
+                {/* Line Zone Manager Processor Form */}
+                {dialogType === 'processor' && selectedComponentType === 'line_zone_manager' && (
+                  <Box>
+                    <Typography variant="h6" gutterBottom>
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <MemoryIcon sx={{ mr: 1, fontSize: 20 }} />
+                        Line Zone Manager Configuration
+                      </Box>
+                    </Typography>
+                    
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                      Line zones can be created and edited in the Live Preview section after the pipeline has been started at least once.
+                    </Alert>
+                    
+                    <FormGroup sx={{ width: '100%', mt: 2 }}>
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={lineZoneManagerForm.draw_zones}
+                            onChange={(e) => handleLineZoneManagerFormChange('draw_zones', e.target.checked)}
+                          />
+                        }
+                        label="Draw Zones"
+                      />
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={lineZoneManagerForm.draw_counts}
+                            onChange={(e) => handleLineZoneManagerFormChange('draw_counts', e.target.checked)}
+                          />
+                        }
+                        label="Draw Counts"
+                      />
+                    </FormGroup>
+                    
+                    {/* Advanced Settings Accordion */}
+                    <Accordion 
+                      expanded={advancedSettingsExpanded.lineZoneManager}
+                      onChange={() => toggleAdvancedSettings('lineZoneManager')}
+                      sx={{ mt: 2 }}
+                    >
+                      <AccordionSummary
+                        expandIcon={<ExpandMoreIcon />}
+                        aria-controls="line-zone-manager-advanced-settings-content"
+                        id="line-zone-manager-advanced-settings-header"
+                      >
+                        <Typography sx={{ display: 'flex', alignItems: 'center' }}>
+                          <SettingsIcon sx={{ mr: 1, fontSize: 'small' }} />
+                          Advanced Settings
+                        </Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <Box sx={{ width: '100%' }}>
+                          <TextField
+                            label="Line Thickness"
+                            type="number"
+                            value={lineZoneManagerForm.line_thickness}
+                            onChange={(e) => handleLineZoneManagerFormChange('line_thickness', parseInt(e.target.value))}
+                            fullWidth
+                            margin="normal"
+                          />
+                          <TextField
+                            label="Text Scale"
+                            type="number"
+                            value={lineZoneManagerForm.text_scale}
+                            onChange={(e) => handleLineZoneManagerFormChange('text_scale', parseFloat(e.target.value))}
+                            fullWidth
+                            margin="normal"
+                            inputProps={{ step: 0.1 }}
+                          />
+                          <TextField
+                            label="Text Thickness"
+                            type="number"
+                            value={lineZoneManagerForm.text_thickness}
+                            onChange={(e) => handleLineZoneManagerFormChange('text_thickness', parseInt(e.target.value))}
+                            fullWidth
+                            margin="normal"
+                          />
+                        </Box>
+                        
+                        {/* JSON Preview */}
+                        <TextField
+                          label="Configuration Preview (JSON)"
+                          multiline
+                          rows={6}
+                          value={JSON.stringify({
+                            draw_zones: lineZoneManagerForm.draw_zones,
+                            line_color: lineZoneManagerForm.line_color,
+                            line_thickness: lineZoneManagerForm.line_thickness,
+                            draw_counts: lineZoneManagerForm.draw_counts,
+                            text_color: lineZoneManagerForm.text_color,
+                            text_scale: lineZoneManagerForm.text_scale,
+                            text_thickness: lineZoneManagerForm.text_thickness,
+                            // Don't show zones in the preview
+                            zones: lineZoneManagerForm.zones.length + " zones configured"
+                          }, null, 2)}
+                          fullWidth
+                          variant="outlined"
+                          sx={{ mt: 3 }}
+                          InputProps={{
+                            readOnly: true,
+                          }}
+                        />
+                      </AccordionDetails>
+                    </Accordion>
+                  </Box>
+                )}
+                
+                {/* File Sink Form */}
+                {dialogType === 'sink' && selectedComponentType === 'file' && (
+                  <Box>
+                    <Typography variant="h6" gutterBottom>
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <SaveIcon sx={{ mr: 1, fontSize: 20 }} />
+                        Video File Output Configuration
+                      </Box>
+                    </Typography>
+                    
+                    <TextField
+                      label="Output File Path"
+                      value={fileSinkForm.path}
+                      onChange={(e) => handleFileSinkFormChange('path', e.target.value)}
+                      fullWidth
+                      margin="normal"
+                      helperText="Path to output file, e.g., /tmp/output.mp4"
+                    />
+                    
+                    <FormControl fullWidth sx={{ mb: 3, mt: 2 }}>
+                      <InputLabel id="fourcc-label">Codec (FourCC)</InputLabel>
+                      <Select
+                        labelId="fourcc-label"
+                        value={fileSinkForm.fourcc}
+                        onChange={(e) => handleFileSinkFormChange('fourcc', e.target.value)}
+                        label="Codec (FourCC)"
+                      >
+                        <MenuItem value="mp4v">MP4V (MPEG-4)</MenuItem>
+                        <MenuItem value="avc1">AVC1 (H.264)</MenuItem>
+                        <MenuItem value="hevc">HEVC (H.265)</MenuItem>
+                      </Select>
+                    </FormControl>
+                    
+                    {/* Advanced Settings Accordion */}
+                    <Accordion 
+                      expanded={advancedSettingsExpanded.fileSink}
+                      onChange={() => toggleAdvancedSettings('fileSink')}
+                      sx={{ mt: 2 }}
+                    >
+                      <AccordionSummary
+                        expandIcon={<ExpandMoreIcon />}
+                        aria-controls="file-sink-advanced-settings-content"
+                        id="file-sink-advanced-settings-header"
+                      >
+                        <Typography sx={{ display: 'flex', alignItems: 'center' }}>
+                          <SettingsIcon sx={{ mr: 1, fontSize: 'small' }} />
+                          Advanced Settings
+                        </Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 1 }}>
+                          <TextField
+                            label="Width"
+                            type="number"
+                            value={fileSinkForm.width}
+                            onChange={(e) => handleFileSinkFormChange('width', parseInt(e.target.value))}
+                            fullWidth
+                            margin="normal"
+                          />
+                          <TextField
+                            label="Height"
+                            type="number"
+                            value={fileSinkForm.height}
+                            onChange={(e) => handleFileSinkFormChange('height', parseInt(e.target.value))}
+                            fullWidth
+                            margin="normal"
+                          />
+                          <TextField
+                            label="FPS"
+                            type="number"
+                            value={fileSinkForm.fps}
+                            onChange={(e) => handleFileSinkFormChange('fps', parseInt(e.target.value))}
+                            fullWidth
+                            margin="normal"
+                          />
+                        </Stack>
+                        
+                        {/* JSON Preview */}
+                        <TextField
+                          label="Configuration Preview (JSON)"
+                          multiline
+                          rows={6}
+                          value={JSON.stringify({
+                            path: fileSinkForm.path,
+                            width: fileSinkForm.width,
+                            height: fileSinkForm.height,
+                            fps: fileSinkForm.fps,
+                            fourcc: fileSinkForm.fourcc
+                          }, null, 2)}
+                          fullWidth
+                          variant="outlined"
+                          sx={{ mt: 3 }}
+                          InputProps={{
+                            readOnly: true,
+                          }}
+                        />
+                      </AccordionDetails>
+                    </Accordion>
+                  </Box>
+                )}
+                
+                {/* Generic JSON Editor for unsupported component types */}
+                {((dialogType === 'source' && selectedComponentType !== 'file' && selectedComponentType !== 'rtsp') ||
+                  (dialogType === 'processor' && 
+                   selectedComponentType !== 'object_detection' && 
+                   selectedComponentType !== 'object_tracking' && 
+                   selectedComponentType !== 'line_zone_manager') ||
+                  (dialogType === 'sink' && selectedComponentType !== 'file')) && (
+                  <>
+                    <Typography variant="h6" gutterBottom>Advanced Configuration</Typography>
+                    <TextField
+                      label="Component Configuration (JSON)"
                       multiline
-                      rows={6}
-                      value={JSON.stringify({
-                        path: fileSinkForm.path,
-                        width: fileSinkForm.width,
-                        height: fileSinkForm.height,
-                        fps: fileSinkForm.fps,
-                        fourcc: fileSinkForm.fourcc
-                      }, null, 2)}
+                      rows={10}
+                      value={componentConfig}
+                      onChange={handleConfigChange}
                       fullWidth
                       variant="outlined"
-                      sx={{ mt: 3 }}
-                      InputProps={{
-                        readOnly: true,
-                      }}
+                      sx={{ mt: 2 }}
                     />
-                  </AccordionDetails>
-                </Accordion>
-              </Box>
-            )}
-            
-            {/* Generic JSON Editor for unsupported component types */}
-            {((dialogType === 'source' && selectedComponentType !== 'file' && selectedComponentType !== 'rtsp') ||
-              (dialogType === 'processor' && 
-               selectedComponentType !== 'object_detection' && 
-               selectedComponentType !== 'object_tracking' && 
-               selectedComponentType !== 'line_zone_manager') ||
-              (dialogType === 'sink' && selectedComponentType !== 'file')) && (
-              <>
-                <Typography variant="h6" gutterBottom>Advanced Configuration</Typography>
-                <TextField
-                  label="Component Configuration (JSON)"
-                  multiline
-                  rows={10}
-                  value={componentConfig}
-                  onChange={handleConfigChange}
-                  fullWidth
-                  variant="outlined"
-                  sx={{ mt: 2 }}
-                />
+                  </>
+                )}
               </>
             )}
           </Box>
@@ -3539,9 +3589,13 @@ const PipelineBuilder = () => {
             onClick={handleSubmit} 
             variant="contained" 
             color="primary"
-            disabled={(dialogType === 'source' && selectedComponentType === 'file' && !fileSourceForm.url) ||
-                     (dialogType === 'source' && selectedComponentType === 'rtsp' && !rtspSourceForm.url) ||
-                     (dialogType === 'sink' && selectedComponentType === 'file' && !fileSinkForm.path)}
+            disabled={
+              selectedComponentType === '' || 
+              (selectedComponentType !== '' && !canAddComponent(selectedComponentType, dialogType) && dialogMode === 'create') ||
+              (dialogType === 'source' && selectedComponentType === 'file' && !fileSourceForm.url) ||
+              (dialogType === 'source' && selectedComponentType === 'rtsp' && !rtspSourceForm.url) ||
+              (dialogType === 'sink' && selectedComponentType === 'file' && !fileSinkForm.path)
+            }
           >
             {dialogMode === 'create' ? 'Create' : 'Save'}
           </Button>
