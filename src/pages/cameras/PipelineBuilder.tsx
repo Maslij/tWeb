@@ -64,6 +64,7 @@ import PeopleIcon from '@mui/icons-material/People';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import TuneIcon from '@mui/icons-material/Tune';
+import StorageIcon from '@mui/icons-material/Storage';
 
 import apiService, { Camera, Component, ComponentInput } from '../../services/api';
 
@@ -115,6 +116,11 @@ const sinkTypeMapping: ComponentTypeMapping = {
     name: "Video File Output",
     description: "Save processed video to a file",
     icon: <SaveIcon />
+  },
+  "database": {
+    name: "Database Storage",
+    description: "Store telemetry data in a SQLite database",
+    icon: <StorageIcon />
   }
 };
 
@@ -218,6 +224,18 @@ interface FileSinkForm {
   height: number;
   fps: number;
   fourcc: string;
+}
+
+// Database Sink form interface
+interface DatabaseSinkForm {
+  db_path: string;
+  store_thumbnails: boolean;
+  thumbnail_width: number;
+  thumbnail_height: number;
+  retention_days: number;
+  store_detection_events: boolean;
+  store_tracking_events: boolean;
+  store_counting_events: boolean;
 }
 
 // Anchor options for line zones
@@ -476,6 +494,8 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
   const nextImageRef = useRef<HTMLImageElement | null>(null);
   const lastUpdateTimeRef = useRef<number>(0);
   const pendingZonesUpdateRef = useRef<Zone[] | null>(null);
+  // Add this line - create a ref to track active dragging that's accessible outside the component
+  const isActivelyDraggingRef = useRef<boolean>(false);
   
   // Throttling mechanism for zone updates
   const throttledZoneUpdate = (updatedZones: Zone[]) => {
@@ -873,6 +893,7 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
       if (distToStart < 10) {
         setSelectedZone(i);
         setDraggingPoint('start');
+        isActivelyDraggingRef.current = true; // Set active dragging flag
         return;
       }
       
@@ -881,6 +902,7 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
       if (distToEnd < 10) {
         setSelectedZone(i);
         setDraggingPoint('end');
+        isActivelyDraggingRef.current = true; // Set active dragging flag
         return;
       }
       
@@ -951,6 +973,7 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
       return;
     }
     
+    isActivelyDraggingRef.current = false; // Clear active dragging flag
     setDraggingPoint(null);
   };
 
@@ -999,7 +1022,7 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
       
       <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, height: 'calc(100% - 50px)' }}>
         <Box 
-          ref={containerRef} 
+          data-line-zone-editor="true"
           sx={{ 
             position: 'relative',
             flex: 1,
@@ -1008,6 +1031,13 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
             borderRadius: '4px',
             overflow: 'hidden',
             backgroundColor: '#f5f5f5'
+          }}
+          // Fix the ref callback to properly type the element
+          ref={(el: HTMLDivElement | null) => {
+            containerRef.current = el;
+            if (el) {
+              (el as any).__isActivelyDragging = isActivelyDraggingRef.current;
+            }
           }}
         >
           <canvas
@@ -1345,6 +1375,17 @@ const PipelineBuilder = () => {
     fourcc: "mp4v"
   });
 
+  const [databaseSinkForm, setDatabaseSinkForm] = useState<DatabaseSinkForm>({
+    db_path: "./data/telemetry.db",
+    store_thumbnails: false,
+    thumbnail_width: 320,
+    thumbnail_height: 180,
+    retention_days: 30,
+    store_detection_events: true,
+    store_tracking_events: true,
+    store_counting_events: true
+  });
+
   // After the existing state declarations, add frame refresh and interval state
   const [frameUrl, setFrameUrl] = useState<string>('');
   const [refreshInterval, setRefreshInterval] = useState<number | null>(null);
@@ -1376,6 +1417,9 @@ const PipelineBuilder = () => {
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [applyingTemplate, setApplyingTemplate] = useState(false);
+
+  // Add a state to track unsaved zone changes near the other state declarations in PipelineBuilder
+  const [hasUnsavedZoneChanges, setHasUnsavedZoneChanges] = useState<boolean>(false);
 
   // Define hasLineZoneManagerComponent and lineZoneManagerComponent here to ensure
   // our hooks are called in the same order every render
@@ -1618,8 +1662,14 @@ const PipelineBuilder = () => {
   }, [lineZoneManagerComponent]);
 
   // Use useCallback for fetchComponents
-  const fetchComponents = useCallback(async () => {
+  const fetchComponents = useCallback(async (forceUpdate: boolean = false) => {
     if (!cameraId) return;
+    
+    // Skip the update if there are unsaved zone changes, unless forceUpdate is true
+    if (hasUnsavedZoneChanges && !forceUpdate) {
+      console.log("Skipping component refresh due to unsaved zone changes");
+      return;
+    }
     
     try {
       setIsRefreshingComponents(true);
@@ -1681,10 +1731,13 @@ const PipelineBuilder = () => {
             console.log("Setting normalized zones after component refresh:", normalizedZones);
             
             // Update the line zone manager form with the normalized zones
-            setLineZoneManagerForm(prev => ({
-              ...prev,
-              zones: normalizedZones
-            }));
+            // Only if we don't have unsaved changes
+            if (!hasUnsavedZoneChanges || forceUpdate) {
+              setLineZoneManagerForm(prev => ({
+                ...prev,
+                zones: normalizedZones
+              }));
+            }
           }
         }
       }
@@ -1694,7 +1747,7 @@ const PipelineBuilder = () => {
     } finally {
       setIsRefreshingComponents(false);
     }
-  }, [cameraId, showSnackbar]);
+  }, [cameraId, showSnackbar, hasUnsavedZoneChanges]);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -1751,6 +1804,8 @@ const PipelineBuilder = () => {
         componentType = 'line_zone_manager';
       } else if (component.path && component.fourcc) {
         componentType = 'file'; // file sink
+      } else if ((component as any).db_path || (component.type_name === 'database')) {
+        componentType = 'database'; // database sink
       } else {
         componentType = 'unknown';
       }
@@ -1915,6 +1970,21 @@ const PipelineBuilder = () => {
         height: component.resolution?.height || component.height || configData.height || 480,
         fps: component.fps || configData.fps || 30,
         fourcc: component.fourcc || configData.fourcc || "mp4v"
+      });
+    } else if (type === 'sink' && componentType === 'database') {
+      setDatabaseSinkForm({
+        db_path: (component as any).db_path || configData.db_path || "./data/telemetry.db",
+        store_thumbnails: (component as any).store_thumbnails !== undefined ? (component as any).store_thumbnails : 
+                      configData.store_thumbnails !== undefined ? configData.store_thumbnails : false,
+        thumbnail_width: (component as any).thumbnail_width || configData.thumbnail_width || 320,
+        thumbnail_height: (component as any).thumbnail_height || configData.thumbnail_height || 180,
+        retention_days: (component as any).retention_days || configData.retention_days || 30,
+        store_detection_events: (component as any).store_detection_events !== undefined ? (component as any).store_detection_events : 
+                             configData.store_detection_events !== undefined ? configData.store_detection_events : true,
+        store_tracking_events: (component as any).store_tracking_events !== undefined ? (component as any).store_tracking_events : 
+                            configData.store_tracking_events !== undefined ? configData.store_tracking_events : true,
+        store_counting_events: (component as any).store_counting_events !== undefined ? (component as any).store_counting_events : 
+                            configData.store_counting_events !== undefined ? configData.store_counting_events : true
       });
     }
     
@@ -2096,6 +2166,13 @@ const PipelineBuilder = () => {
     }));
   };
 
+  const handleDatabaseSinkFormChange = (field: keyof DatabaseSinkForm, value: any) => {
+    setDatabaseSinkForm(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
   // Update the submit handler to use form data
   const handleSubmit = async () => {
     if (!cameraId) return;
@@ -2176,6 +2253,17 @@ const PipelineBuilder = () => {
           height: fileSinkForm.height,
           fps: fileSinkForm.fps,
           fourcc: fileSinkForm.fourcc
+        };
+      } else if (dialogType === 'sink' && selectedComponentType === 'database') {
+        config = {
+          db_path: databaseSinkForm.db_path,
+          store_thumbnails: databaseSinkForm.store_thumbnails,
+          thumbnail_width: databaseSinkForm.thumbnail_width,
+          thumbnail_height: databaseSinkForm.thumbnail_height,
+          retention_days: databaseSinkForm.retention_days,
+          store_detection_events: databaseSinkForm.store_detection_events,
+          store_tracking_events: databaseSinkForm.store_tracking_events,
+          store_counting_events: databaseSinkForm.store_counting_events
         };
       } else {
         // For unsupported component types, fall back to JSON editor
@@ -2718,6 +2806,9 @@ const PipelineBuilder = () => {
         zones: normalizedZones
       }));
       
+      // Track that we have unsaved changes
+      setHasUnsavedZoneChanges(true);
+      
       // If editing a component, update the component as well
       if (dialogMode === 'edit' && selectedComponent && selectedComponentType === 'line_zone_manager') {
         // Create a deep copy of the component config
@@ -2870,14 +2961,24 @@ const PipelineBuilder = () => {
     }
   };
 
-  // Add zone counts refresh interval
+  // Update the zone counts refresh interval to respect the unsaved changes flag
   useEffect(() => {
     let zoneCountsInterval: number | null = null;
     
     // Only start the interval if the camera is running and we have a line zone manager
     if (camera?.running && hasLineZoneManagerComponent && cameraId) {
       // Set up interval for refreshing zone counts (every 3 seconds)
-      zoneCountsInterval = window.setInterval(fetchComponents, 3000);
+      zoneCountsInterval = window.setInterval(() => {
+        // Get a reference to the LineZoneEditor's active dragging flag
+        const lineZoneEditorElement = document.querySelector('[data-line-zone-editor="true"]');
+        const isActivelyDragging = lineZoneEditorElement && 
+          (lineZoneEditorElement as any).__isActivelyDragging === true;
+        
+        // Only refresh if not actively dragging and no unsaved changes
+        if (!isActivelyDragging && !hasUnsavedZoneChanges) {
+          fetchComponents();
+        }
+      }, 3000);
     }
     
     // Clean up function
@@ -2886,7 +2987,7 @@ const PipelineBuilder = () => {
         clearInterval(zoneCountsInterval);
       }
     };
-  }, [camera?.running, hasLineZoneManagerComponent, cameraId, fetchComponents]);
+  }, [camera?.running, hasLineZoneManagerComponent, cameraId, fetchComponents, hasUnsavedZoneChanges]);
 
   if (loading) {
     return (
@@ -3895,82 +3996,66 @@ const PipelineBuilder = () => {
                 
                 {/* File Sink Form */}
                 {dialogType === 'sink' && selectedComponentType === 'file' && (
-                  <Box>
-                    <Typography variant="h6" gutterBottom>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <SaveIcon sx={{ mr: 1, fontSize: 20 }} />
-                        Video File Output Configuration
-                      </Box>
-                    </Typography>
-                    
-                    <TextField
-                      label="Output File Path"
-                      value={fileSinkForm.path}
-                      onChange={(e) => handleFileSinkFormChange('path', e.target.value)}
-                      fullWidth
-                      margin="normal"
-                      helperText="Path to output file, e.g., /tmp/output.mp4"
-                    />
-                    
-                    <FormControl fullWidth sx={{ mb: 3, mt: 2 }}>
-                      <InputLabel id="fourcc-label">Codec (FourCC)</InputLabel>
-                      <Select
-                        labelId="fourcc-label"
-                        value={fileSinkForm.fourcc}
-                        onChange={(e) => handleFileSinkFormChange('fourcc', e.target.value)}
-                        label="Codec (FourCC)"
-                      >
-                        <MenuItem value="mp4v">MP4V (MPEG-4)</MenuItem>
-                        <MenuItem value="avc1">AVC1 (H.264)</MenuItem>
-                        <MenuItem value="hevc">HEVC (H.265)</MenuItem>
-                      </Select>
-                    </FormControl>
-                    
-                    {/* Advanced Settings Accordion */}
-                    <Accordion 
-                      expanded={advancedSettingsExpanded.fileSink}
-                      onChange={() => toggleAdvancedSettings('fileSink')}
-                      sx={{ mt: 2 }}
-                    >
-                      <AccordionSummary
-                        expandIcon={<ExpandMoreIcon />}
-                        aria-controls="file-sink-advanced-settings-content"
-                        id="file-sink-advanced-settings-header"
-                      >
-                        <Typography sx={{ display: 'flex', alignItems: 'center' }}>
-                          <SettingsIcon sx={{ mr: 1, fontSize: 'small' }} />
-                          Advanced Settings
-                        </Typography>
+                  <Box sx={{ mt: 2 }}>
+                    <Accordion defaultExpanded>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Typography>File Sink Configuration</Typography>
                       </AccordionSummary>
                       <AccordionDetails>
-                        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mt: 1 }}>
+                        <FormControl fullWidth sx={{ mb: 2 }}>
+                          <TextField
+                            label="Output Path"
+                            value={fileSinkForm.path}
+                            onChange={(e) => handleFileSinkFormChange('path', e.target.value)}
+                            fullWidth
+                            variant="outlined"
+                          />
+                        </FormControl>
+                        
+                        <FormControl fullWidth sx={{ mb: 2 }}>
                           <TextField
                             label="Width"
                             type="number"
                             value={fileSinkForm.width}
                             onChange={(e) => handleFileSinkFormChange('width', parseInt(e.target.value))}
                             fullWidth
-                            margin="normal"
+                            variant="outlined"
                           />
+                        </FormControl>
+                        
+                        <FormControl fullWidth sx={{ mb: 2 }}>
                           <TextField
                             label="Height"
                             type="number"
                             value={fileSinkForm.height}
                             onChange={(e) => handleFileSinkFormChange('height', parseInt(e.target.value))}
                             fullWidth
-                            margin="normal"
+                            variant="outlined"
                           />
+                        </FormControl>
+                        
+                        <FormControl fullWidth sx={{ mb: 2 }}>
                           <TextField
                             label="FPS"
                             type="number"
                             value={fileSinkForm.fps}
                             onChange={(e) => handleFileSinkFormChange('fps', parseInt(e.target.value))}
                             fullWidth
-                            margin="normal"
+                            variant="outlined"
                           />
-                        </Stack>
+                        </FormControl>
                         
-                        {/* JSON Preview */}
+                        <FormControl fullWidth sx={{ mb: 2 }}>
+                          <TextField
+                            label="FourCC Code"
+                            value={fileSinkForm.fourcc}
+                            onChange={(e) => handleFileSinkFormChange('fourcc', e.target.value)}
+                            fullWidth
+                            variant="outlined"
+                            helperText="Video codec code (e.g., mp4v, avc1, H264)"
+                          />
+                        </FormControl>
+                        
                         <TextField
                           label="Configuration Preview (JSON)"
                           multiline
@@ -3981,6 +4066,140 @@ const PipelineBuilder = () => {
                             height: fileSinkForm.height,
                             fps: fileSinkForm.fps,
                             fourcc: fileSinkForm.fourcc
+                          }, null, 2)}
+                          fullWidth
+                          variant="outlined"
+                          sx={{ mt: 3 }}
+                          InputProps={{
+                            readOnly: true,
+                          }}
+                        />
+                      </AccordionDetails>
+                    </Accordion>
+                  </Box>
+                )}
+
+                {/* Database Sink Form */}
+                {dialogType === 'sink' && selectedComponentType === 'database' && (
+                  <Box sx={{ mt: 2 }}>
+                    <Accordion defaultExpanded>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Typography>Database Sink Configuration</Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <FormControl fullWidth sx={{ mb: 2 }}>
+                          <TextField
+                            label="Database Path"
+                            value={databaseSinkForm.db_path}
+                            onChange={(e) => handleDatabaseSinkFormChange('db_path', e.target.value)}
+                            fullWidth
+                            variant="outlined"
+                            helperText="Path to SQLite database file"
+                          />
+                        </FormControl>
+                        
+                        <FormControl fullWidth sx={{ mb: 2 }}>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={databaseSinkForm.store_thumbnails}
+                                onChange={(e) => handleDatabaseSinkFormChange('store_thumbnails', e.target.checked)}
+                              />
+                            }
+                            label="Store Frame Thumbnails"
+                          />
+                        </FormControl>
+                        
+                        {databaseSinkForm.store_thumbnails && (
+                          <>
+                            <FormControl fullWidth sx={{ mb: 2 }}>
+                              <TextField
+                                label="Thumbnail Width"
+                                type="number"
+                                value={databaseSinkForm.thumbnail_width}
+                                onChange={(e) => handleDatabaseSinkFormChange('thumbnail_width', parseInt(e.target.value))}
+                                fullWidth
+                                variant="outlined"
+                              />
+                            </FormControl>
+                            
+                            <FormControl fullWidth sx={{ mb: 2 }}>
+                              <TextField
+                                label="Thumbnail Height"
+                                type="number"
+                                value={databaseSinkForm.thumbnail_height}
+                                onChange={(e) => handleDatabaseSinkFormChange('thumbnail_height', parseInt(e.target.value))}
+                                fullWidth
+                                variant="outlined"
+                              />
+                            </FormControl>
+                          </>
+                        )}
+                        
+                        <FormControl fullWidth sx={{ mb: 2 }}>
+                          <TextField
+                            label="Data Retention (days)"
+                            type="number"
+                            value={databaseSinkForm.retention_days}
+                            onChange={(e) => handleDatabaseSinkFormChange('retention_days', parseInt(e.target.value))}
+                            fullWidth
+                            variant="outlined"
+                            helperText="Set to 0 to keep data indefinitely"
+                          />
+                        </FormControl>
+                        
+                        <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>Event Storage Settings</Typography>
+                        <Divider sx={{ mb: 2 }} />
+                        
+                        <FormControl fullWidth sx={{ mb: 2 }}>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={databaseSinkForm.store_detection_events}
+                                onChange={(e) => handleDatabaseSinkFormChange('store_detection_events', e.target.checked)}
+                              />
+                            }
+                            label="Store Detection Events"
+                          />
+                        </FormControl>
+                        
+                        <FormControl fullWidth sx={{ mb: 2 }}>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={databaseSinkForm.store_tracking_events}
+                                onChange={(e) => handleDatabaseSinkFormChange('store_tracking_events', e.target.checked)}
+                              />
+                            }
+                            label="Store Tracking Events"
+                          />
+                        </FormControl>
+                        
+                        <FormControl fullWidth sx={{ mb: 2 }}>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={databaseSinkForm.store_counting_events}
+                                onChange={(e) => handleDatabaseSinkFormChange('store_counting_events', e.target.checked)}
+                              />
+                            }
+                            label="Store Counting Events"
+                          />
+                        </FormControl>
+                        
+                        <TextField
+                          label="Configuration Preview (JSON)"
+                          multiline
+                          rows={6}
+                          value={JSON.stringify({
+                            db_path: databaseSinkForm.db_path,
+                            store_thumbnails: databaseSinkForm.store_thumbnails,
+                            thumbnail_width: databaseSinkForm.thumbnail_width,
+                            thumbnail_height: databaseSinkForm.thumbnail_height,
+                            retention_days: databaseSinkForm.retention_days,
+                            store_detection_events: databaseSinkForm.store_detection_events,
+                            store_tracking_events: databaseSinkForm.store_tracking_events,
+                            store_counting_events: databaseSinkForm.store_counting_events
                           }, null, 2)}
                           fullWidth
                           variant="outlined"
@@ -4125,7 +4344,7 @@ const PipelineBuilder = () => {
                   variant="outlined"
                   startIcon={<RedoIcon />}
                   disabled={isRefreshingComponents}
-                  onClick={fetchComponents}
+                  onClick={() => fetchComponents(true)}
                 >
                   Refresh Counts
                 </Button>
@@ -4194,7 +4413,10 @@ const PipelineBuilder = () => {
                       
                       if (result) {
                         showSnackbar('Line zones updated successfully');
-                        fetchComponents(); // Refresh components from the server
+                        // Clear the unsaved changes flag
+                        setHasUnsavedZoneChanges(false);
+                        // Force fetch the updated components from the server
+                        await fetchComponents(true);
                       } else {
                         showSnackbar('Failed to update line zones');
                       }
