@@ -265,10 +265,11 @@ interface TabPanelProps {
   children?: React.ReactNode;
   index: number;
   value: number;
+  sx?: object;
 }
 
 const TabPanel = (props: TabPanelProps) => {
-  const { children, value, index, ...other } = props;
+  const { children, value, index, sx = {}, ...other } = props;
 
   return (
     <div
@@ -278,7 +279,7 @@ const TabPanel = (props: TabPanelProps) => {
       aria-labelledby={`pipeline-tab-${index}`}
       {...other}
     >
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
+      {value === index && <Box sx={{ ...sx }}>{children}</Box>}
     </div>
   );
 };
@@ -1295,6 +1296,7 @@ const PipelineBuilder = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tabValue, setTabValue] = useState(0);
+  const [mainTabValue, setMainTabValue] = useState(0);
   
   // Component state
   const [componentTypes, setComponentTypes] = useState<ComponentTypes | null>(null);
@@ -1791,6 +1793,10 @@ const PipelineBuilder = () => {
     setTabValue(newValue);
   };
 
+  const handleMainTabChange = (_event: React.SyntheticEvent, newValue: number) => {
+    setMainTabValue(newValue);
+  };
+
   const openCreateDialog = (type: 'source' | 'processor' | 'sink') => {
     setDialogType(type);
     setDialogMode('create');
@@ -2038,8 +2044,8 @@ const PipelineBuilder = () => {
     // Check if the selected component type can be added
     if (!canAddComponent(selectedType, dialogType)) {
       // Find the next available component type
-      const availableTypes = componentTypes?.[dialogType === 'source' ? 'sources' : 
-                              dialogType === 'processor' ? 'processors' : 'sinks'] || [];
+      const availableTypes = componentTypes ? componentTypes[dialogType === 'source' ? 'sources' : 
+                              dialogType === 'processor' ? 'processors' : 'sinks'] : [];
       
       const nextAvailableType = availableTypes.find(type => canAddComponent(type, dialogType));
       
@@ -3049,10 +3055,10 @@ const PipelineBuilder = () => {
 
   // Load database records when tab changes to Database or pagination changes
   useEffect(() => {
-    if (tabValue === 3) {  // Database tab index
+    if (mainTabValue === 1) {  // Telemetry tab index
       fetchDatabaseRecords();
     }
-  }, [tabValue, page, rowsPerPage, fetchDatabaseRecords]);
+  }, [mainTabValue, page, rowsPerPage, fetchDatabaseRecords]);
 
   // Function to delete all records for this camera
   const handleDeleteAllRecords = async () => {
@@ -3170,176 +3176,368 @@ const PipelineBuilder = () => {
         </Box>
       </Box>
 
-      <Paper sx={{ width: '100%', mb: 4 }}>
-        <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tabs value={tabValue} onChange={handleTabChange} aria-label="pipeline tabs">
-            <Tab icon={<VideoSettingsIcon />} label="Source" {...a11yProps(0)} />
-            <Tab icon={<MemoryIcon />} label="Processors" {...a11yProps(1)} />
-            <Tab icon={<SaveIcon />} label="Sinks" {...a11yProps(2)} />
-            {dbComponentExists && (
-              <Tab icon={<DatabaseIcon />} label="Telemetry" {...a11yProps(3)} />
-            )}
+      <Box sx={{ width: '100%', mb: 4 }}>
+        <Paper elevation={3} sx={{ borderRadius: '4px 4px 0 0' }}>
+          <Tabs 
+            value={mainTabValue} 
+            onChange={handleMainTabChange} 
+            aria-label="main tabs"
+            variant="fullWidth"
+            sx={{ 
+              minHeight: '64px',
+              '& .MuiTab-root': { 
+                fontWeight: 'bold',
+                fontSize: '1rem'
+              }
+            }}
+          >
+            <Tab icon={<TuneIcon />} iconPosition="start" label="Pipeline Configuration" />
+            <Tab 
+              icon={<DatabaseIcon />} 
+              iconPosition="start"
+              label="Telemetry" 
+              disabled={!dbComponentExists}
+            />
           </Tabs>
-        </Box>
-        
-        <TabPanel value={tabValue} index={0}>
-          <Box sx={{ mb: 3 }}>
-            <Button 
-              variant="contained" 
-              startIcon={<AddIcon />} 
-              onClick={() => openCreateDialog('source')}
-              disabled={!!sourceComponent || camera.running}
-            >
-              Add Source
-            </Button>
-          </Box>
-          
-          <Box sx={{ minHeight: '400px' }}>
-            {sourceComponent ? (
-              renderComponentCard(sourceComponent, 'source')
-            ) : (
-              <Paper sx={{ p: 3, textAlign: 'center', minHeight: '200px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-                <VideoSettingsIcon sx={{ fontSize: 60, color: 'text.secondary', opacity: 0.5, mb: 2 }} />
-                <Typography variant="body1" color="text.secondary">
-                  No source component added yet. Add a source to start building your pipeline.
-                </Typography>
+        </Paper>
+
+        <TabPanel value={mainTabValue} index={0} sx={{ p: 0, mt: 3 }}>
+          {/* Pipeline Configuration Tab - Card-based layout */}
+          <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {/* Source Card */}
+            <Paper elevation={2} sx={{ p: 3, width: '100%' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <VideoSettingsIcon sx={{ mr: 1, color: 'primary.main' }} />
+                  <Typography variant="h6">Source</Typography>
+                </Box>
                 <Button 
                   variant="contained" 
-                  color="primary"
-                  startIcon={<AddIcon />}
+                  startIcon={<AddIcon />} 
                   onClick={() => openCreateDialog('source')}
                   disabled={!!sourceComponent || camera.running}
-                  sx={{ mt: 2 }}
+                  size="small"
                 >
                   Add Source
                 </Button>
-              </Paper>
-            )}
-          </Box>
-        </TabPanel>
-        
-        <TabPanel value={tabValue} index={1}>
-          <Box sx={{ mb: 3, display: 'flex', gap: 2 }}>
-            <Button 
-              variant="contained" 
-              startIcon={<AddIcon />} 
-              onClick={() => openCreateDialog('processor')}
-              disabled={!sourceComponent || camera.running || areAllComponentTypesUsed('processor')}
-            >
-              Add Processor
-            </Button>
-            
-            <Button
-              variant="outlined"
-              color="secondary"
-              startIcon={<AutoFixHighIcon />}
-              onClick={openTemplateDialog}
-              disabled={!sourceComponent || camera.running}
-            >
-              Use Template
-            </Button>
-            
-            {areAllComponentTypesUsed('processor') && sourceComponent && !camera.running && (
-              <Alert severity="info" sx={{ mt: 0, flex: 1 }}>
-                All available processor types have been added. Each processor type can only be added once.
-              </Alert>
-            )}
-          </Box>
-          
-          <Box sx={{ minHeight: '400px' }}>
-            {processorComponents.length > 0 ? (
-              <Stack spacing={2}>
-                {processorComponents.map(processor => (
-                  <Box key={processor.id}>
-                    {renderComponentCard(processor, 'processor')}
+              </Box>
+              
+              <Divider sx={{ mb: 2 }} />
+              
+              <Box sx={{ minHeight: sourceComponent ? 'auto' : '200px' }}>
+                {sourceComponent ? (
+                  renderComponentCard(sourceComponent, 'source')
+                ) : (
+                  <Box sx={{ p: 3, textAlign: 'center', minHeight: '200px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+                    <VideoSettingsIcon sx={{ fontSize: 60, color: 'text.secondary', opacity: 0.5, mb: 2 }} />
+                    <Typography variant="body1" color="text.secondary">
+                      No source component added yet. Add a source to start building your pipeline.
+                    </Typography>
                   </Box>
-                ))}
-              </Stack>
-            ) : (
-              <Paper sx={{ p: 3, textAlign: 'center', minHeight: '200px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-                <MemoryIcon sx={{ fontSize: 60, color: 'text.secondary', opacity: 0.5, mb: 2 }} />
-                <Typography variant="body1" color="text.secondary">
-                  {areAllComponentTypesUsed('processor') ? 
-                    "All available processor types have been added." : 
-                    "No processor components added yet. Add processors to process the video stream."
-                  }
-                </Typography>
+                )}
+              </Box>
+            </Paper>
+            
+            {/* Processors Card */}
+            <Paper elevation={2} sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <MemoryIcon sx={{ mr: 1, color: 'primary.main' }} />
+                  <Typography variant="h6">Processors</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button
+                    variant="outlined"
+                    color="secondary"
+                    startIcon={<AutoFixHighIcon />}
+                    onClick={openTemplateDialog}
+                    disabled={!sourceComponent || camera.running}
+                    size="small"
+                  >
+                    Use Template
+                  </Button>
+                  <Button 
+                    variant="contained" 
+                    startIcon={<AddIcon />} 
+                    onClick={() => openCreateDialog('processor')}
+                    disabled={!sourceComponent || camera.running || areAllComponentTypesUsed('processor')}
+                    size="small"
+                  >
+                    Add Processor
+                  </Button>
+                </Box>
+              </Box>
+              
+              <Divider sx={{ mb: 2 }} />
+              
+              {areAllComponentTypesUsed('processor') && sourceComponent && !camera.running && (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  All available processor types have been added. Each processor type can only be added once.
+                </Alert>
+              )}
+              
+              <Box sx={{ minHeight: processorComponents.length > 0 ? 'auto' : '200px' }}>
+                {processorComponents.length > 0 ? (
+                  <Stack spacing={2}>
+                    {processorComponents.map(processor => (
+                      <Box key={processor.id}>
+                        {renderComponentCard(processor, 'processor')}
+                      </Box>
+                    ))}
+                  </Stack>
+                ) : (
+                  <Box sx={{ p: 3, textAlign: 'center', minHeight: '200px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+                    <MemoryIcon sx={{ fontSize: 60, color: 'text.secondary', opacity: 0.5, mb: 2 }} />
+                    <Typography variant="body1" color="text.secondary">
+                      {!sourceComponent ? 
+                        "Add a source component first before adding processors." :
+                        "No processor components added yet. Add processors to process the video stream."
+                      }
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+            </Paper>
+            
+            {/* Sinks Card */}
+            <Paper elevation={2} sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <SaveIcon sx={{ mr: 1, color: 'primary.main' }} />
+                  <Typography variant="h6">Sinks</Typography>
+                </Box>
                 <Button 
                   variant="contained" 
-                  color="primary"
-                  startIcon={<AddIcon />}
-                  onClick={() => openCreateDialog('processor')}
-                  disabled={!sourceComponent || camera.running || areAllComponentTypesUsed('processor')}
-                  sx={{ mt: 2 }}
-                >
-                  Add Processor
-                </Button>
-              </Paper>
-            )}
-          </Box>
-        </TabPanel>
-        
-        <TabPanel value={tabValue} index={2}>
-          <Box sx={{ mb: 3 }}>
-            <Button 
-              variant="contained" 
-              startIcon={<AddIcon />} 
-              onClick={() => openCreateDialog('sink')}
-              disabled={!sourceComponent || camera.running || areAllComponentTypesUsed('sink')}
-            >
-              Add Sink
-            </Button>
-            {areAllComponentTypesUsed('sink') && sourceComponent && !camera.running && (
-              <Alert severity="info" sx={{ mt: 2 }}>
-                All available sink types have been added. Each sink type can only be added once.
-              </Alert>
-            )}
-          </Box>
-          
-          <Box sx={{ minHeight: '400px' }}>
-            {sinkComponents.length > 0 ? (
-              <Stack spacing={2}>
-                {sinkComponents.map(sink => (
-                  <Box key={sink.id}>
-                    {renderComponentCard(sink, 'sink')}
-                  </Box>
-                ))}
-              </Stack>
-            ) : (
-              <Paper sx={{ p: 3, textAlign: 'center', minHeight: '200px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-                <SaveIcon sx={{ fontSize: 60, color: 'text.secondary', opacity: 0.5, mb: 2 }} />
-                <Typography variant="body1" color="text.secondary">
-                  {areAllComponentTypesUsed('sink') ? 
-                    "All available sink types have been added." : 
-                    "No sink components added yet. Add sinks to save or stream the processed video."
-                  }
-                </Typography>
-                <Button 
-                  variant="contained" 
-                  color="primary"
-                  startIcon={<AddIcon />}
+                  startIcon={<AddIcon />} 
                   onClick={() => openCreateDialog('sink')}
                   disabled={!sourceComponent || camera.running || areAllComponentTypesUsed('sink')}
-                  sx={{ mt: 2 }}
+                  size="small"
                 >
                   Add Sink
                 </Button>
+              </Box>
+              
+              <Divider sx={{ mb: 2 }} />
+              
+              {areAllComponentTypesUsed('sink') && sourceComponent && !camera.running && (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  All available sink types have been added. Each sink type can only be added once.
+                </Alert>
+              )}
+              
+              <Box sx={{ minHeight: sinkComponents.length > 0 ? 'auto' : '200px' }}>
+                {sinkComponents.length > 0 ? (
+                  <Stack spacing={2}>
+                    {sinkComponents.map(sink => (
+                      <Box key={sink.id}>
+                        {renderComponentCard(sink, 'sink')}
+                      </Box>
+                    ))}
+                  </Stack>
+                ) : (
+                  <Box sx={{ p: 3, textAlign: 'center', minHeight: '200px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+                    <SaveIcon sx={{ fontSize: 60, color: 'text.secondary', opacity: 0.5, mb: 2 }} />
+                    <Typography variant="body1" color="text.secondary">
+                      {!sourceComponent ? 
+                        "Add a source component first before adding sinks." :
+                        "No sink components added yet. Add sinks to save or stream the processed video."
+                      }
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+            </Paper>
+            
+            {/* Live Preview / Line Zone Editor (kept the same) */}
+            {(camera?.running || pipelineHasRunOnce) && (
+              <Paper elevation={2} sx={{ p: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                  <VisibilityIcon sx={{ mr: 1, color: 'primary.main' }} />
+                  <Typography variant="h6">
+                    {hasLineZoneManagerComponent ? 'Line Zone Configuration' : 'Live Preview'} 
+                    {!camera?.running && pipelineHasRunOnce && " (Last Frame)"}
+                  </Typography>
+                </Box>
+                
+                <Divider sx={{ mb: 2 }} />
+                
+                {hasLineZoneManagerComponent && (
+                  <Typography variant="body2" color="text.secondary" paragraph>
+                    Draw crossing lines on the image to define detection zones. Objects crossing these lines will be counted.
+                    {camera?.running ? 
+                      " You can edit these zones in real-time while the pipeline is running." : 
+                      " The pipeline is currently stopped, but you can still edit the zones based on the last captured frame."}
+                  </Typography>
+                )}
+                
+                {hasLineZoneManagerComponent ? (
+                  // Line Zone Editor view
+                  <Box sx={{ height: '500px' }}>
+                    <LineZoneEditor 
+                      zones={lineZoneManagerForm.zones} 
+                      onZonesChange={handleLineZonesUpdate}
+                      imageUrl={(camera?.running ? frameUrl : lastFrameUrl) || "" as string}
+                      disabled={isSavingZones}
+                    />
+                  </Box>
+                ) : (
+                  // Simple Preview view
+                  <Box sx={{ width: '100%', textAlign: 'center' }}>
+                    {(camera?.running && frameUrl) || (!camera?.running && lastFrameUrl) ? (
+                      <img 
+                        src={camera?.running ? frameUrl : lastFrameUrl} 
+                        alt="Camera feed" 
+                        style={{ 
+                          maxWidth: '100%', 
+                          maxHeight: '500px', 
+                          border: '1px solid #ccc',
+                          borderRadius: '4px'
+                        }} 
+                      />
+                    ) : (
+                      <Box 
+                        sx={{ 
+                          width: '100%', 
+                          height: '500px', 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center',
+                          border: '1px solid #ccc',
+                          borderRadius: '4px',
+                          bgcolor: 'background.paper'
+                        }}
+                      >
+                        <Typography variant="body1" color="text.secondary">
+                          No image available
+                        </Typography>
+                      </Box>
+                    )}
+                  </Box>
+                )}
+                
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
+                  {camera?.running && !hasLineZoneManagerComponent && (
+                    <Button variant="outlined" onClick={refreshFrame}>
+                      Refresh Frame
+                    </Button>
+                  )}
+                  
+                  {hasLineZoneManagerComponent && (
+                    <Box sx={{ display: 'flex', gap: 2 }}>
+                      <Button 
+                        variant="outlined"
+                        startIcon={<RedoIcon />}
+                        disabled={isRefreshingComponents}
+                        onClick={() => fetchComponents(true)}
+                      >
+                        Refresh Counts
+                      </Button>
+                      
+                      <Button 
+                        variant="contained" 
+                        color="primary"
+                        disabled={isSavingZones}
+                        startIcon={isSavingZones ? <CircularProgress size={20} /> : null}
+                        onClick={async () => {
+                          if (!lineZoneManagerComponent || !cameraId) return;
+                          
+                          try {
+                            setIsSavingZones(true);
+                            
+                            // Normalize all zones to ensure they have proper values
+                            const normalizedZones = lineZoneManagerForm.zones.map(zone => ({
+                              id: zone.id || `zone${Math.random().toString(36).substr(2, 9)}`,
+                              start_x: typeof zone.start_x === 'number' ? zone.start_x : parseFloat(String(zone.start_x)) || 0.2,
+                              start_y: typeof zone.start_y === 'number' ? zone.start_y : parseFloat(String(zone.start_y)) || 0.5,
+                              end_x: typeof zone.end_x === 'number' ? zone.end_x : parseFloat(String(zone.end_x)) || 0.8,
+                              end_y: typeof zone.end_y === 'number' ? zone.end_y : parseFloat(String(zone.end_y)) || 0.5,
+                              min_crossing_threshold: zone.min_crossing_threshold || 1,
+                              triggering_anchors: Array.isArray(zone.triggering_anchors) ? 
+                                zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"],
+                              // Preserve the counts if they exist
+                              in_count: zone.in_count,
+                              out_count: zone.out_count
+                            }));
+                            
+                            console.log('Current zones in form:', lineZoneManagerForm.zones);
+                            console.log('Normalized zones to send:', normalizedZones);
+                            
+                            // Create a new config object without spreading the old config
+                            // This ensures we don't accidentally keep old zones data
+                            const config: Record<string, any> = {
+                              draw_zones: lineZoneManagerForm.draw_zones,
+                              line_color: lineZoneManagerForm.line_color,
+                              line_thickness: lineZoneManagerForm.line_thickness,
+                              draw_counts: lineZoneManagerForm.draw_counts,
+                              text_color: lineZoneManagerForm.text_color,
+                              text_scale: lineZoneManagerForm.text_scale,
+                              text_thickness: lineZoneManagerForm.text_thickness,
+                              zones: normalizedZones,
+                              remove_missing: true // Add this flag to tell the backend to remove zones not in this config
+                            };
+                            
+                            // Preserve any other config properties that aren't related to zones
+                            if (lineZoneManagerComponent.config) {
+                              Object.entries(lineZoneManagerComponent.config as Record<string, any>).forEach(([key, value]) => {
+                                // Only copy over properties that aren't already set and aren't 'zones'
+                                if (key !== 'zones' && config[key] === undefined) {
+                                  config[key] = value;
+                                }
+                              });
+                            }
+                            
+                            console.log('Sending config to API:', config);
+                            
+                            // Update the component
+                            const result = await apiService.components.processors.update(
+                              cameraId, 
+                              lineZoneManagerComponent.id, 
+                              { config }
+                            );
+                            
+                            if (result) {
+                              showSnackbar('Line zones updated successfully');
+                              // Clear the unsaved changes flag
+                              setHasUnsavedZoneChanges(false);
+                              // Force fetch the updated components from the server
+                              await fetchComponents(true);
+                            } else {
+                              showSnackbar('Failed to update line zones');
+                            }
+                          } catch (err) {
+                            console.error('Error updating line zones:', err);
+                            showSnackbar('Error updating line zones');
+                          } finally {
+                            setIsSavingZones(false);
+                          }
+                        }}
+                      >
+                        {isSavingZones ? 'Saving...' : 'Save Line Zones'}
+                      </Button>
+                    </Box>
+                  )}
+                </Box>
               </Paper>
             )}
           </Box>
         </TabPanel>
         
-        <TabPanel value={tabValue} index={3}>
-          <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="h6" component="div">
-              Telemetry Records
+        <TabPanel value={mainTabValue} index={1} sx={{ p: 0, mt: 3 }}>
+          {/* Telemetry Tab */}
+          <Paper elevation={2} sx={{ p: 3, width: '100%', mb: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <DatabaseIcon sx={{ mr: 1, color: 'primary.main' }} />
+              <Typography variant="h6">Telemetry Records</Typography>
               {totalEvents > 0 && (
                 <Typography variant="subtitle1" color="text.secondary" component="span" sx={{ ml: 2 }}>
                   {totalEvents} events from {totalFrames} frames
                 </Typography>
               )}
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 2 }}>
+            </Box>
+            
+            <Divider sx={{ mb: 2 }} />
+            
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3, gap: 2 }}>
               <Button
                 variant="outlined"
                 startIcon={isLoadingRecords ? <CircularProgress size={24} color="inherit" /> : <RedoIcon />}
@@ -3358,78 +3556,78 @@ const PipelineBuilder = () => {
                 {isDeletingRecords ? 'Deleting...' : 'Delete All Records'}
               </Button>
             </Box>
-          </Box>
-          
-          {!dbComponentExists ? (
-            <Alert severity="info" sx={{ mb: 2 }}>
-              No database sink component found. Add a database sink component to store and view telemetry data.
-            </Alert>
-          ) : isLoadingRecords ? (
-            <Box display="flex" justifyContent="center" my={5}>
-              <CircularProgress />
-            </Box>
-          ) : databaseRecords.length === 0 ? (
-            <Alert severity="info">
-              No telemetry records found for this camera.
-            </Alert>
-          ) : (
-            <>
-              <TableContainer component={Paper} sx={{ maxHeight: 440 }}>
-                <Table stickyHeader aria-label="telemetry records table">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>ID</TableCell>
-                      <TableCell>Type</TableCell>
-                      <TableCell>Timestamp</TableCell>
-                      <TableCell>Source</TableCell>
-                      <TableCell>Properties</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {databaseRecords.map((record) => (
-                      <TableRow
-                        key={record.id}
-                        sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
-                      >
-                        <TableCell component="th" scope="row">
-                          {record.id}
-                        </TableCell>
-                        <TableCell>
-                          <Chip 
-                            label={getEventTypeName(record.type)}
-                            color={
-                              record.type === 0 ? "primary" : 
-                              record.type === 1 ? "secondary" : 
-                              record.type === 2 ? "success" : "default"
-                            }
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell>{formatTimestamp(record.timestamp)}</TableCell>
-                        <TableCell>{record.source_id}</TableCell>
-                        <TableCell sx={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          <Tooltip title={record.properties} arrow>
-                            <span>{record.properties}</span>
-                          </Tooltip>
-                        </TableCell>
+            
+            {!dbComponentExists ? (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                No database sink component found. Add a database sink component to store and view telemetry data.
+              </Alert>
+            ) : isLoadingRecords ? (
+              <Box display="flex" justifyContent="center" my={5}>
+                <CircularProgress />
+              </Box>
+            ) : databaseRecords.length === 0 ? (
+              <Alert severity="info">
+                No telemetry records found for this camera.
+              </Alert>
+            ) : (
+              <>
+                <TableContainer component={Paper} sx={{ maxHeight: 440 }}>
+                  <Table stickyHeader aria-label="telemetry records table">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>ID</TableCell>
+                        <TableCell>Type</TableCell>
+                        <TableCell>Timestamp</TableCell>
+                        <TableCell>Source</TableCell>
+                        <TableCell>Properties</TableCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-              <TablePagination
-                component="div"
-                rowsPerPageOptions={[5, 10, 25, 50]}
-                count={totalEvents}
-                rowsPerPage={rowsPerPage}
-                page={page}
-                onPageChange={handlePageChange}
-                onRowsPerPageChange={handleChangeRowsPerPage}
-              />
-            </>
-          )}
+                    </TableHead>
+                    <TableBody>
+                      {databaseRecords.map((record) => (
+                        <TableRow
+                          key={record.id}
+                          sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
+                        >
+                          <TableCell component="th" scope="row">
+                            {record.id}
+                          </TableCell>
+                          <TableCell>
+                            <Chip 
+                              label={getEventTypeName(record.type)}
+                              color={
+                                record.type === 0 ? "primary" : 
+                                record.type === 1 ? "secondary" : 
+                                record.type === 2 ? "success" : "default"
+                              }
+                              size="small"
+                            />
+                          </TableCell>
+                          <TableCell>{formatTimestamp(record.timestamp)}</TableCell>
+                          <TableCell>{record.source_id}</TableCell>
+                          <TableCell sx={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <Tooltip title={record.properties} arrow>
+                              <span>{record.properties}</span>
+                            </Tooltip>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+                <TablePagination
+                  component="div"
+                  rowsPerPageOptions={[5, 10, 25, 50]}
+                  count={totalEvents}
+                  rowsPerPage={rowsPerPage}
+                  page={page}
+                  onPageChange={handlePageChange}
+                  onRowsPerPageChange={handleChangeRowsPerPage}
+                />
+              </>
+            )}
+          </Paper>
         </TabPanel>
-      </Paper>
+      </Box>
 
       {/* Dialog for creating/editing components */}
       <Dialog open={openDialog} onClose={handleDialogClose} maxWidth="md" fullWidth>
@@ -4483,173 +4681,6 @@ const PipelineBuilder = () => {
         message={snackbarMessage}
       />
 
-      {/* Replace the separate Live Preview and Line Zone Configuration sections with a combined section */}
-      {(camera?.running || pipelineHasRunOnce) && tabValue !== 3 && (
-        <Paper sx={{ width: '100%', mt: 4, p: 2 }}>
-          <Typography variant="h6" gutterBottom>
-            {hasLineZoneManagerComponent ? 'Line Zone Configuration' : 'Live Preview'} 
-            {!camera?.running && pipelineHasRunOnce && " (Last Frame)"}
-          </Typography>
-          
-          {hasLineZoneManagerComponent && (
-            <Typography variant="body2" color="text.secondary" paragraph>
-              Draw crossing lines on the image to define detection zones. Objects crossing these lines will be counted.
-              {camera?.running ? 
-                " You can edit these zones in real-time while the pipeline is running." : 
-                " The pipeline is currently stopped, but you can still edit the zones based on the last captured frame."}
-            </Typography>
-          )}
-          
-          {hasLineZoneManagerComponent ? (
-            // Line Zone Editor view
-            <Box sx={{ height: '500px' }}>
-              <LineZoneEditor 
-                zones={lineZoneManagerForm.zones} 
-                onZonesChange={handleLineZonesUpdate}
-                imageUrl={(camera?.running ? frameUrl : lastFrameUrl) || "" as string}
-                disabled={isSavingZones}
-              />
-            </Box>
-          ) : (
-            // Simple Preview view
-            <Box sx={{ width: '100%', textAlign: 'center' }}>
-              {(camera?.running && frameUrl) || (!camera?.running && lastFrameUrl) ? (
-                <img 
-                  src={camera?.running ? frameUrl : lastFrameUrl} 
-                  alt="Camera feed" 
-                  style={{ 
-                    maxWidth: '100%', 
-                    maxHeight: '500px', 
-                    border: '1px solid #ccc',
-                    borderRadius: '4px'
-                  }} 
-                />
-              ) : (
-                <Box 
-                  sx={{ 
-                    width: '100%', 
-                    height: '500px', 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center',
-                    border: '1px solid #ccc',
-                    borderRadius: '4px',
-                    bgcolor: 'background.paper'
-                  }}
-                >
-                  <Typography variant="body1" color="text.secondary">
-                    No image available
-                  </Typography>
-                </Box>
-              )}
-            </Box>
-          )}
-          
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-            {camera?.running && !hasLineZoneManagerComponent && (
-              <Button variant="outlined" onClick={refreshFrame}>
-                Refresh Frame
-              </Button>
-            )}
-            
-            {hasLineZoneManagerComponent && (
-              <Box sx={{ display: 'flex', gap: 2 }}>
-                <Button 
-                  variant="outlined"
-                  startIcon={<RedoIcon />}
-                  disabled={isRefreshingComponents}
-                  onClick={() => fetchComponents(true)}
-                >
-                  Refresh Counts
-                </Button>
-                
-                <Button 
-                  variant="contained" 
-                  color="primary"
-                  disabled={isSavingZones}
-                  startIcon={isSavingZones ? <CircularProgress size={20} /> : null}
-                  onClick={async () => {
-                    if (!lineZoneManagerComponent || !cameraId) return;
-                    
-                    try {
-                      setIsSavingZones(true);
-                      
-                      // Normalize all zones to ensure they have proper values
-                      const normalizedZones = lineZoneManagerForm.zones.map(zone => ({
-                        id: zone.id || `zone${Math.random().toString(36).substr(2, 9)}`,
-                        start_x: typeof zone.start_x === 'number' ? zone.start_x : parseFloat(String(zone.start_x)) || 0.2,
-                        start_y: typeof zone.start_y === 'number' ? zone.start_y : parseFloat(String(zone.start_y)) || 0.5,
-                        end_x: typeof zone.end_x === 'number' ? zone.end_x : parseFloat(String(zone.end_x)) || 0.8,
-                        end_y: typeof zone.end_y === 'number' ? zone.end_y : parseFloat(String(zone.end_y)) || 0.5,
-                        min_crossing_threshold: zone.min_crossing_threshold || 1,
-                        triggering_anchors: Array.isArray(zone.triggering_anchors) ? 
-                          zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"],
-                        // Preserve the counts if they exist
-                        in_count: zone.in_count,
-                        out_count: zone.out_count
-                      }));
-                      
-                      console.log('Current zones in form:', lineZoneManagerForm.zones);
-                      console.log('Normalized zones to send:', normalizedZones);
-                      
-                      // Create a new config object without spreading the old config
-                      // This ensures we don't accidentally keep old zones data
-                      const config: Record<string, any> = {
-                        draw_zones: lineZoneManagerForm.draw_zones,
-                        line_color: lineZoneManagerForm.line_color,
-                        line_thickness: lineZoneManagerForm.line_thickness,
-                        draw_counts: lineZoneManagerForm.draw_counts,
-                        text_color: lineZoneManagerForm.text_color,
-                        text_scale: lineZoneManagerForm.text_scale,
-                        text_thickness: lineZoneManagerForm.text_thickness,
-                        zones: normalizedZones,
-                        remove_missing: true // Add this flag to tell the backend to remove zones not in this config
-                      };
-                      
-                      // Preserve any other config properties that aren't related to zones
-                      if (lineZoneManagerComponent.config) {
-                        Object.entries(lineZoneManagerComponent.config as Record<string, any>).forEach(([key, value]) => {
-                          // Only copy over properties that aren't already set and aren't 'zones'
-                          if (key !== 'zones' && config[key] === undefined) {
-                            config[key] = value;
-                          }
-                        });
-                      }
-                      
-                      console.log('Sending config to API:', config);
-                      
-                      // Update the component
-                      const result = await apiService.components.processors.update(
-                        cameraId, 
-                        lineZoneManagerComponent.id, 
-                        { config }
-                      );
-                      
-                      if (result) {
-                        showSnackbar('Line zones updated successfully');
-                        // Clear the unsaved changes flag
-                        setHasUnsavedZoneChanges(false);
-                        // Force fetch the updated components from the server
-                        await fetchComponents(true);
-                      } else {
-                        showSnackbar('Failed to update line zones');
-                      }
-                    } catch (err) {
-                      console.error('Error updating line zones:', err);
-                      showSnackbar('Error updating line zones');
-                    } finally {
-                      setIsSavingZones(false);
-                    }
-                  }}
-                >
-                  {isSavingZones ? 'Saving...' : 'Save Line Zones'}
-                </Button>
-              </Box>
-            )}
-          </Box>
-        </Paper>
-      )}
-      
       {/* Add loading indicator for component refresh */}
       {isRefreshingComponents && (
         <Box sx={{ 
