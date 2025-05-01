@@ -3036,10 +3036,15 @@ const PipelineBuilder = () => {
 
   // Load database records when tab changes to Database or pagination changes
   useEffect(() => {
-    if (mainTabValue === 1) {  // Telemetry tab index
+    // Calculate the telemetry tab index dynamically based on available tabs
+    const telemetryTabIndex = sourceComponent ? 
+      (hasLineZoneManagerComponent ? 3 : 2) : 
+      (hasLineZoneManagerComponent ? 2 : 1);
+    
+    if (mainTabValue === telemetryTabIndex && dbComponentExists) {
       fetchDatabaseRecords();
     }
-  }, [mainTabValue, page, rowsPerPage, fetchDatabaseRecords]);
+  }, [mainTabValue, page, rowsPerPage, fetchDatabaseRecords, sourceComponent, hasLineZoneManagerComponent, dbComponentExists]);
 
   // Function to delete all records for this camera
   const handleDeleteAllRecords = async () => {
