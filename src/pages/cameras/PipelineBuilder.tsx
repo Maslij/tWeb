@@ -59,6 +59,11 @@ import CreateIcon from '@mui/icons-material/Create';
 import RedoIcon from '@mui/icons-material/Redo';
 import ClearIcon from '@mui/icons-material/Clear';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
+import PeopleIcon from '@mui/icons-material/People';
+import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import TuneIcon from '@mui/icons-material/Tune';
 
 import apiService, { Camera, Component, ComponentInput } from '../../services/api';
 
@@ -1065,6 +1070,162 @@ const defaultLineZone = {
   triggering_anchors: ["BOTTOM_LEFT", "BOTTOM_RIGHT"]
 };
 
+// Add Pipeline Template interfaces
+interface PipelineTemplate {
+  id: string;
+  name: string;
+  description: string;
+  icon: React.ReactNode;
+  components: {
+    processors: {
+      type: string;
+      config: any;
+    }[];
+  };
+}
+
+// Define available pipeline templates
+const pipelineTemplates: PipelineTemplate[] = [
+  {
+    id: 'object-detection',
+    name: 'Basic Object Detection',
+    description: 'Detect common objects in the video stream',
+    icon: <VisibilityIcon />,
+    components: {
+      processors: [
+        {
+          type: 'object_detection',
+          config: {
+            model_id: "yolov4-tiny",
+            server_url: "http://localhost:8080",
+            confidence_threshold: 0.5,
+            draw_bounding_boxes: true,
+            use_shared_memory: true,
+            label_font_scale: 0.5,
+            classes: ["person", "car", "truck", "bicycle", "motorcycle", "bus"]
+          }
+        }
+      ]
+    }
+  },
+  {
+    id: 'person-counting',
+    name: 'Person Counting',
+    description: 'Count people crossing defined lines/zones',
+    icon: <PeopleIcon />,
+    components: {
+      processors: [
+        {
+          type: 'object_detection',
+          config: {
+            model_id: "yolov4-tiny",
+            server_url: "http://localhost:8080",
+            confidence_threshold: 0.5,
+            draw_bounding_boxes: true,
+            use_shared_memory: true,
+            label_font_scale: 0.5,
+            classes: ["person"]
+          }
+        },
+        {
+          type: 'object_tracking',
+          config: {
+            frame_rate: 30,
+            track_buffer: 30,
+            track_thresh: 0.5,
+            high_thresh: 0.6,
+            match_thresh: 0.8,
+            draw_tracking: true,
+            draw_track_trajectory: true,
+            draw_track_id: true,
+            draw_semi_transparent_boxes: true,
+            label_font_scale: 0.6
+          }
+        },
+        {
+          type: 'line_zone_manager',
+          config: {
+            draw_zones: true,
+            line_color: [255, 255, 255],
+            line_thickness: 2,
+            draw_counts: true,
+            text_color: [0, 0, 0],
+            text_scale: 0.5,
+            text_thickness: 2,
+            zones: [{
+              id: "entrance",
+              start_x: 0.2,
+              start_y: 0.5,
+              end_x: 0.8,
+              end_y: 0.5,
+              min_crossing_threshold: 1,
+              triggering_anchors: ["BOTTOM_CENTER", "CENTER"]
+            }]
+          }
+        }
+      ]
+    }
+  },
+  {
+    id: 'traffic-analysis',
+    name: 'Traffic Analysis',
+    description: 'Track and count vehicles crossing defined lines',
+    icon: <DirectionsCarIcon />,
+    components: {
+      processors: [
+        {
+          type: 'object_detection',
+          config: {
+            model_id: "yolov4-tiny",
+            server_url: "http://localhost:8080",
+            confidence_threshold: 0.4,
+            draw_bounding_boxes: true,
+            use_shared_memory: true,
+            label_font_scale: 0.5,
+            classes: ["car", "truck", "motorcycle", "bus", "bicycle"]
+          }
+        },
+        {
+          type: 'object_tracking',
+          config: {
+            frame_rate: 30,
+            track_buffer: 30,
+            track_thresh: 0.5,
+            high_thresh: 0.6,
+            match_thresh: 0.8,
+            draw_tracking: true,
+            draw_track_trajectory: true,
+            draw_track_id: true,
+            draw_semi_transparent_boxes: true,
+            label_font_scale: 0.6
+          }
+        },
+        {
+          type: 'line_zone_manager',
+          config: {
+            draw_zones: true,
+            line_color: [255, 255, 255],
+            line_thickness: 2,
+            draw_counts: true,
+            text_color: [0, 0, 0],
+            text_scale: 0.5,
+            text_thickness: 2,
+            zones: [{
+              id: "traffic_line",
+              start_x: 0.1,
+              start_y: 0.5,
+              end_x: 0.9,
+              end_y: 0.5,
+              min_crossing_threshold: 1,
+              triggering_anchors: ["BOTTOM_CENTER", "CENTER"]
+            }]
+          }
+        }
+      ]
+    }
+  }
+];
+
 const PipelineBuilder = () => {
   const { cameraId } = useParams<{ cameraId: string }>();
   const navigate = useNavigate();
@@ -1182,6 +1343,11 @@ const PipelineBuilder = () => {
   // Add state to track if pipeline has been started at least once
   const [pipelineHasRunOnce, setPipelineHasRunOnce] = useState(false);
   const [lastFrameUrl, setLastFrameUrl] = useState<string>('');
+
+  // Add template dialog state
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
+  const [applyingTemplate, setApplyingTemplate] = useState(false);
 
   // Define hasLineZoneManagerComponent and lineZoneManagerComponent here to ensure
   // our hooks are called in the same order every render
@@ -2528,6 +2694,66 @@ const PipelineBuilder = () => {
     }
   };
 
+  // Add template dialog handlers
+  const openTemplateDialog = () => {
+    setSelectedTemplate(null);
+    setTemplateDialogOpen(true);
+  };
+  
+  const closeTemplateDialog = () => {
+    setTemplateDialogOpen(false);
+  };
+  
+  const selectTemplate = (templateId: string) => {
+    setSelectedTemplate(templateId);
+  };
+  
+  const applyTemplate = async () => {
+    if (!selectedTemplate || !cameraId) return;
+    
+    const template = pipelineTemplates.find(t => t.id === selectedTemplate);
+    if (!template) return;
+    
+    setApplyingTemplate(true);
+    
+    try {
+      // Check if there are existing processor components
+      if (processorComponents.length > 0) {
+        const shouldReplace = window.confirm(
+          `Applying the "${template.name}" template will replace your existing processor components. Continue?`
+        );
+        
+        if (!shouldReplace) {
+          setApplyingTemplate(false);
+          return;
+        }
+        
+        // Delete existing processors
+        for (const processor of processorComponents) {
+          await apiService.components.processors.delete(cameraId, processor.id);
+        }
+      }
+      
+      // Add components from the template
+      for (const processorConfig of template.components.processors) {
+        await apiService.components.processors.create(cameraId, {
+          type: processorConfig.type,
+          config: processorConfig.config
+        });
+      }
+      
+      // Refresh components
+      await fetchComponents();
+      showSnackbar(`Successfully applied "${template.name}" template`);
+      closeTemplateDialog();
+    } catch (err) {
+      console.error('Error applying template:', err);
+      showSnackbar('Failed to apply template');
+    } finally {
+      setApplyingTemplate(false);
+    }
+  };
+
   if (loading) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -2626,7 +2852,7 @@ const PipelineBuilder = () => {
         </TabPanel>
         
         <TabPanel value={tabValue} index={1}>
-          <Box sx={{ mb: 3 }}>
+          <Box sx={{ mb: 3, display: 'flex', gap: 2 }}>
             <Button 
               variant="contained" 
               startIcon={<AddIcon />} 
@@ -2635,8 +2861,19 @@ const PipelineBuilder = () => {
             >
               Add Processor
             </Button>
+            
+            <Button
+              variant="outlined"
+              color="secondary"
+              startIcon={<AutoFixHighIcon />}
+              onClick={openTemplateDialog}
+              disabled={!sourceComponent || camera.running}
+            >
+              Use Template
+            </Button>
+            
             {areAllComponentTypesUsed('processor') && sourceComponent && !camera.running && (
-              <Alert severity="info" sx={{ mt: 2 }}>
+              <Alert severity="info" sx={{ mt: 0, flex: 1 }}>
                 All available processor types have been added. Each processor type can only be added once.
               </Alert>
             )}
@@ -3811,6 +4048,92 @@ const PipelineBuilder = () => {
           </Box>
         </Paper>
       )}
+      
+      {/* Add Templates Dialog */}
+      <Dialog
+        open={templateDialogOpen}
+        onClose={closeTemplateDialog}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center' }}>
+          <AutoFixHighIcon sx={{ mr: 1 }} />
+          Pipeline Templates
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" paragraph>
+            Choose a template to automatically configure your pipeline for a specific use case.
+            This will add all necessary processor components with pre-configured settings.
+          </Typography>
+          
+          {!sourceComponent && (
+            <Alert severity="warning" sx={{ mb: 3 }}>
+              You need to add a source component before applying a template.
+            </Alert>
+          )}
+          
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
+            {pipelineTemplates.map((template) => (
+              <Card 
+                key={template.id}
+                variant="outlined"
+                sx={{ 
+                  cursor: 'pointer',
+                  border: selectedTemplate === template.id ? '2px solid' : '1px solid',
+                  borderColor: selectedTemplate === template.id ? 'primary.main' : 'divider',
+                  bgcolor: selectedTemplate === template.id ? 'action.selected' : 'background.paper'
+                }}
+                onClick={() => selectTemplate(template.id)}
+              >
+                <CardContent sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+                  <Box sx={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    p: 1.5, 
+                    bgcolor: 'primary.light', 
+                    color: 'primary.contrastText',
+                    borderRadius: 1
+                  }}>
+                    {template.icon}
+                  </Box>
+                  <Box>
+                    <Typography variant="h6" gutterBottom>{template.name}</Typography>
+                    <Typography variant="body2" color="text.secondary">{template.description}</Typography>
+                    
+                    <Typography variant="subtitle2" sx={{ mt: 1.5, mb: 0.5 }}>Includes:</Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                      {template.components.processors.map((processor) => (
+                        <Chip
+                          key={processor.type}
+                          label={getComponentTypeName(processor.type, 'processor')}
+                          size="small"
+                          icon={processorTypeMapping[processor.type]?.icon ? 
+                            <Box sx={{ display: 'flex', alignItems: 'center', ml: 0.5 }}>
+                              {processorTypeMapping[processor.type]?.icon}
+                            </Box> : undefined}
+                        />
+                      ))}
+                    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+            ))}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeTemplateDialog}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="primary"
+            disabled={!selectedTemplate || !sourceComponent || applyingTemplate}
+            onClick={applyTemplate}
+            startIcon={applyingTemplate ? <CircularProgress size={20} /> : <AutoFixHighIcon />}
+          >
+            {applyingTemplate ? 'Applying...' : 'Apply Template'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };
