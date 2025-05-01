@@ -1513,6 +1513,12 @@ const PipelineBuilder = () => {
           setProcessorComponents(components.processors || []);
           setSinkComponents(components.sinks || []);
           
+          // Check if a database sink component exists and set state accordingly
+          const hasDbSink = (components.sinks || []).some(
+            sink => sink.type === 'database' || sink.type_name === 'database'
+          );
+          setDbComponentExists(hasDbSink);
+          
           // Look for line zone manager component and initialize its zones if found
           const lineZoneManager = components.processors?.find(
             comp => (comp.type === 'line_zone_manager' || comp.type_name === 'line_zone_manager')
@@ -3170,7 +3176,9 @@ const PipelineBuilder = () => {
             <Tab icon={<VideoSettingsIcon />} label="Source" {...a11yProps(0)} />
             <Tab icon={<MemoryIcon />} label="Processors" {...a11yProps(1)} />
             <Tab icon={<SaveIcon />} label="Sinks" {...a11yProps(2)} />
-            <Tab icon={<DatabaseIcon />} label="Database" {...a11yProps(3)} />
+            {dbComponentExists && (
+              <Tab icon={<DatabaseIcon />} label="Telemetry" {...a11yProps(3)} />
+            )}
           </Tabs>
         </Box>
         
@@ -3324,22 +3332,32 @@ const PipelineBuilder = () => {
         <TabPanel value={tabValue} index={3}>
           <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="h6" component="div">
-              Database Records
+              Telemetry Records
               {totalEvents > 0 && (
                 <Typography variant="subtitle1" color="text.secondary" component="span" sx={{ ml: 2 }}>
                   {totalEvents} events from {totalFrames} frames
                 </Typography>
               )}
             </Typography>
-            <Button
-              variant="contained"
-              color="error"
-              startIcon={isDeletingRecords ? <CircularProgress size={24} color="inherit" /> : <DeleteIcon />}
-              onClick={handleDeleteAllRecords}
-              disabled={isDeletingRecords || isLoadingRecords || totalEvents === 0}
-            >
-              {isDeletingRecords ? 'Deleting...' : 'Delete All Records'}
-            </Button>
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <Button
+                variant="outlined"
+                startIcon={isLoadingRecords ? <CircularProgress size={24} color="inherit" /> : <RedoIcon />}
+                onClick={fetchDatabaseRecords}
+                disabled={isLoadingRecords || isDeletingRecords}
+              >
+                {isLoadingRecords ? 'Refreshing...' : 'Refresh'}
+              </Button>
+              <Button
+                variant="contained"
+                color="error"
+                startIcon={isDeletingRecords ? <CircularProgress size={24} color="inherit" /> : <DeleteIcon />}
+                onClick={handleDeleteAllRecords}
+                disabled={isDeletingRecords || isLoadingRecords || totalEvents === 0}
+              >
+                {isDeletingRecords ? 'Deleting...' : 'Delete All Records'}
+              </Button>
+            </Box>
           </Box>
           
           {!dbComponentExists ? (
@@ -3352,12 +3370,12 @@ const PipelineBuilder = () => {
             </Box>
           ) : databaseRecords.length === 0 ? (
             <Alert severity="info">
-              No database records found for this camera.
+              No telemetry records found for this camera.
             </Alert>
           ) : (
             <>
               <TableContainer component={Paper} sx={{ maxHeight: 440 }}>
-                <Table stickyHeader aria-label="database records table">
+                <Table stickyHeader aria-label="telemetry records table">
                   <TableHead>
                     <TableRow>
                       <TableCell>ID</TableCell>
@@ -4466,7 +4484,7 @@ const PipelineBuilder = () => {
       />
 
       {/* Replace the separate Live Preview and Line Zone Configuration sections with a combined section */}
-      {(camera?.running || pipelineHasRunOnce) && (
+      {(camera?.running || pipelineHasRunOnce) && tabValue !== 3 && (
         <Paper sx={{ width: '100%', mt: 4, p: 2 }}>
           <Typography variant="h6" gutterBottom>
             {hasLineZoneManagerComponent ? 'Line Zone Configuration' : 'Live Preview'} 
