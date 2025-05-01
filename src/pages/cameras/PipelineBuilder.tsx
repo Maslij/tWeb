@@ -40,7 +40,14 @@ import {
   Checkbox,
   Accordion,
   AccordionSummary,
-  AccordionDetails
+  AccordionDetails,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TablePagination
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import VideoSettingsIcon from '@mui/icons-material/VideoSettings';
@@ -65,8 +72,15 @@ import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import TuneIcon from '@mui/icons-material/Tune';
 import StorageIcon from '@mui/icons-material/Storage';
+import DatabaseIcon from '@mui/icons-material/Storage';
 
-import apiService, { Camera, Component, ComponentInput } from '../../services/api';
+import apiService, { 
+  Camera, 
+  Component, 
+  ComponentInput, 
+  EventRecord,
+  DatabaseRecordsResponse  
+} from '../../services/api';
 
 // Component type mapping interfaces
 interface ComponentTypeInfo {
@@ -228,7 +242,6 @@ interface FileSinkForm {
 
 // Database Sink form interface
 interface DatabaseSinkForm {
-  db_path: string;
   store_thumbnails: boolean;
   thumbnail_width: number;
   thumbnail_height: number;
@@ -1376,7 +1389,6 @@ const PipelineBuilder = () => {
   });
 
   const [databaseSinkForm, setDatabaseSinkForm] = useState<DatabaseSinkForm>({
-    db_path: "./data/telemetry.db",
     store_thumbnails: false,
     thumbnail_width: 320,
     thumbnail_height: 180,
@@ -1457,6 +1469,16 @@ const PipelineBuilder = () => {
   const handleSnackbarClose = useCallback(() => {
     setSnackbarOpen(false);
   }, []);
+
+  // Add Database tab state
+  const [databaseRecords, setDatabaseRecords] = useState<EventRecord[]>([]);
+  const [totalEvents, setTotalEvents] = useState<number>(0);
+  const [totalFrames, setTotalFrames] = useState<number>(0);
+  const [page, setPage] = useState<number>(0);
+  const [rowsPerPage, setRowsPerPage] = useState<number>(10);
+  const [isLoadingRecords, setIsLoadingRecords] = useState<boolean>(false);
+  const [isDeletingRecords, setIsDeletingRecords] = useState<boolean>(false);
+  const [dbComponentExists, setDbComponentExists] = useState<boolean>(false);
 
   // Fetch data on mount
   useEffect(() => {
@@ -1678,6 +1700,16 @@ const PipelineBuilder = () => {
         setSourceComponent(components.source);
         setProcessorComponents(components.processors || []);
         setSinkComponents(components.sinks || []);
+        
+        // Check if a database sink component exists
+        const hasDbSink = (components.sinks || []).some(
+          sink => {
+            console.log("Checking sink component:", sink);
+            return sink.type === 'database' || sink.type_name === 'database';
+          }
+        );
+        console.log("Database sink exists:", hasDbSink);
+        setDbComponentExists(hasDbSink);
         
         // Look for line zone manager component and initialize its zones if found
         const lineZoneManager = components.processors?.find(
@@ -1973,18 +2005,17 @@ const PipelineBuilder = () => {
       });
     } else if (type === 'sink' && componentType === 'database') {
       setDatabaseSinkForm({
-        db_path: (component as any).db_path || configData.db_path || "./data/telemetry.db",
         store_thumbnails: (component as any).store_thumbnails !== undefined ? (component as any).store_thumbnails : 
-                      configData.store_thumbnails !== undefined ? configData.store_thumbnails : false,
+                        configData.store_thumbnails !== undefined ? configData.store_thumbnails : false,
         thumbnail_width: (component as any).thumbnail_width || configData.thumbnail_width || 320,
         thumbnail_height: (component as any).thumbnail_height || configData.thumbnail_height || 180,
         retention_days: (component as any).retention_days || configData.retention_days || 30,
         store_detection_events: (component as any).store_detection_events !== undefined ? (component as any).store_detection_events : 
-                             configData.store_detection_events !== undefined ? configData.store_detection_events : true,
+                               configData.store_detection_events !== undefined ? configData.store_detection_events : true,
         store_tracking_events: (component as any).store_tracking_events !== undefined ? (component as any).store_tracking_events : 
-                            configData.store_tracking_events !== undefined ? configData.store_tracking_events : true,
+                              configData.store_tracking_events !== undefined ? configData.store_tracking_events : true,
         store_counting_events: (component as any).store_counting_events !== undefined ? (component as any).store_counting_events : 
-                            configData.store_counting_events !== undefined ? configData.store_counting_events : true
+                              configData.store_counting_events !== undefined ? configData.store_counting_events : true
       });
     }
     
@@ -2256,7 +2287,6 @@ const PipelineBuilder = () => {
         };
       } else if (dialogType === 'sink' && selectedComponentType === 'database') {
         config = {
-          db_path: databaseSinkForm.db_path,
           store_thumbnails: databaseSinkForm.store_thumbnails,
           thumbnail_width: databaseSinkForm.thumbnail_width,
           thumbnail_height: databaseSinkForm.thumbnail_height,
@@ -2989,6 +3019,92 @@ const PipelineBuilder = () => {
     };
   }, [camera?.running, hasLineZoneManagerComponent, cameraId, fetchComponents, hasUnsavedZoneChanges]);
 
+  // New function to fetch database records
+  const fetchDatabaseRecords = useCallback(async () => {
+    if (!cameraId || !dbComponentExists) return;
+    
+    try {
+      setIsLoadingRecords(true);
+      console.log("Fetching database records for camera:", cameraId);
+      const response = await apiService.database.getRecords(cameraId, page, rowsPerPage);
+      console.log("Received database records:", response);
+      if (response) {
+        setDatabaseRecords(response.events);
+        setTotalEvents(response.total_events);
+        setTotalFrames(response.total_frames);
+      }
+    } catch (err) {
+      console.error('Error fetching database records:', err);
+      showSnackbar('Failed to load database records');
+    } finally {
+      setIsLoadingRecords(false);
+    }
+  }, [cameraId, dbComponentExists, page, rowsPerPage, showSnackbar]);
+
+  // Load database records when tab changes to Database or pagination changes
+  useEffect(() => {
+    if (tabValue === 3) {  // Database tab index
+      fetchDatabaseRecords();
+    }
+  }, [tabValue, page, rowsPerPage, fetchDatabaseRecords]);
+
+  // Function to delete all records for this camera
+  const handleDeleteAllRecords = async () => {
+    if (!cameraId || !dbComponentExists) return;
+    
+    // Show confirmation dialog
+    const confirmed = window.confirm(
+      `Are you sure you want to delete all database records for camera ${camera?.name || cameraId}? This action cannot be undone.`
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+      setIsDeletingRecords(true);
+      const success = await apiService.database.deleteRecords(cameraId);
+      if (success) {
+        showSnackbar('All database records deleted successfully');
+        // Reset pagination and refetch
+        setPage(0);
+        fetchDatabaseRecords();
+      } else {
+        showSnackbar('Failed to delete database records');
+      }
+    } catch (err) {
+      console.error('Error deleting database records:', err);
+      showSnackbar('Failed to delete database records');
+    } finally {
+      setIsDeletingRecords(false);
+    }
+  };
+
+  // Handler for page change
+  const handlePageChange = (_event: unknown, newPage: number) => {
+    setPage(newPage);
+  };
+
+  // Handler for rows per page change
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
+  // Get event type name
+  const getEventTypeName = (type: number): string => {
+    switch(type) {
+      case 0: return 'Detection';
+      case 1: return 'Tracking';
+      case 2: return 'Crossing';
+      default: return `Unknown (${type})`;
+    }
+  };
+
+  // Format timestamp
+  const formatTimestamp = (timestamp: number): string => {
+    const date = new Date(timestamp);
+    return date.toLocaleString();
+  };
+
   if (loading) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -3054,6 +3170,7 @@ const PipelineBuilder = () => {
             <Tab icon={<VideoSettingsIcon />} label="Source" {...a11yProps(0)} />
             <Tab icon={<MemoryIcon />} label="Processors" {...a11yProps(1)} />
             <Tab icon={<SaveIcon />} label="Sinks" {...a11yProps(2)} />
+            <Tab icon={<DatabaseIcon />} label="Database" {...a11yProps(3)} />
           </Tabs>
         </Box>
         
@@ -3202,6 +3319,97 @@ const PipelineBuilder = () => {
               </Paper>
             )}
           </Box>
+        </TabPanel>
+        
+        <TabPanel value={tabValue} index={3}>
+          <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="h6" component="div">
+              Database Records
+              {totalEvents > 0 && (
+                <Typography variant="subtitle1" color="text.secondary" component="span" sx={{ ml: 2 }}>
+                  {totalEvents} events from {totalFrames} frames
+                </Typography>
+              )}
+            </Typography>
+            <Button
+              variant="contained"
+              color="error"
+              startIcon={isDeletingRecords ? <CircularProgress size={24} color="inherit" /> : <DeleteIcon />}
+              onClick={handleDeleteAllRecords}
+              disabled={isDeletingRecords || isLoadingRecords || totalEvents === 0}
+            >
+              {isDeletingRecords ? 'Deleting...' : 'Delete All Records'}
+            </Button>
+          </Box>
+          
+          {!dbComponentExists ? (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              No database sink component found. Add a database sink component to store and view telemetry data.
+            </Alert>
+          ) : isLoadingRecords ? (
+            <Box display="flex" justifyContent="center" my={5}>
+              <CircularProgress />
+            </Box>
+          ) : databaseRecords.length === 0 ? (
+            <Alert severity="info">
+              No database records found for this camera.
+            </Alert>
+          ) : (
+            <>
+              <TableContainer component={Paper} sx={{ maxHeight: 440 }}>
+                <Table stickyHeader aria-label="database records table">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>ID</TableCell>
+                      <TableCell>Type</TableCell>
+                      <TableCell>Timestamp</TableCell>
+                      <TableCell>Source</TableCell>
+                      <TableCell>Properties</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {databaseRecords.map((record) => (
+                      <TableRow
+                        key={record.id}
+                        sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
+                      >
+                        <TableCell component="th" scope="row">
+                          {record.id}
+                        </TableCell>
+                        <TableCell>
+                          <Chip 
+                            label={getEventTypeName(record.type)}
+                            color={
+                              record.type === 0 ? "primary" : 
+                              record.type === 1 ? "secondary" : 
+                              record.type === 2 ? "success" : "default"
+                            }
+                            size="small"
+                          />
+                        </TableCell>
+                        <TableCell>{formatTimestamp(record.timestamp)}</TableCell>
+                        <TableCell>{record.source_id}</TableCell>
+                        <TableCell sx={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <Tooltip title={record.properties} arrow>
+                            <span>{record.properties}</span>
+                          </Tooltip>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              <TablePagination
+                component="div"
+                rowsPerPageOptions={[5, 10, 25, 50]}
+                count={totalEvents}
+                rowsPerPage={rowsPerPage}
+                page={page}
+                onPageChange={handlePageChange}
+                onRowsPerPageChange={handleChangeRowsPerPage}
+              />
+            </>
+          )}
         </TabPanel>
       </Paper>
 
@@ -4088,17 +4296,6 @@ const PipelineBuilder = () => {
                       </AccordionSummary>
                       <AccordionDetails>
                         <FormControl fullWidth sx={{ mb: 2 }}>
-                          <TextField
-                            label="Database Path"
-                            value={databaseSinkForm.db_path}
-                            onChange={(e) => handleDatabaseSinkFormChange('db_path', e.target.value)}
-                            fullWidth
-                            variant="outlined"
-                            helperText="Path to SQLite database file"
-                          />
-                        </FormControl>
-                        
-                        <FormControl fullWidth sx={{ mb: 2 }}>
                           <FormControlLabel
                             control={
                               <Switch
@@ -4192,7 +4389,6 @@ const PipelineBuilder = () => {
                           multiline
                           rows={6}
                           value={JSON.stringify({
-                            db_path: databaseSinkForm.db_path,
                             store_thumbnails: databaseSinkForm.store_thumbnails,
                             thumbnail_width: databaseSinkForm.thumbnail_width,
                             thumbnail_height: databaseSinkForm.thumbnail_height,

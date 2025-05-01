@@ -69,10 +69,14 @@ const Dashboard = () => {
   };
 
   const handleDeleteCamera = async (cameraId: string) => {
-    if (window.confirm('Are you sure you want to delete this camera?')) {
+    if (window.confirm('Are you sure you want to delete this camera? All stored database records and analytics data for this camera will also be permanently deleted.')) {
       try {
-        await apiService.cameras.delete(cameraId);
-        fetchCameras(); // Refresh camera list
+        const result = await apiService.cameras.delete(cameraId);
+        if (result.success) {
+          fetchCameras(); // Refresh camera list
+        } else {
+          setError('Failed to delete camera. Please try again.');
+        }
       } catch (err) {
         console.error('Error deleting camera:', err);
         setError('Failed to delete camera. Please try again.');

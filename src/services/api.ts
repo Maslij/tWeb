@@ -138,6 +138,33 @@ export interface ComponentInput {
   config: any;
 }
 
+// Add the missing interfaces and database API methods to the file.
+// First, let's add interfaces for database records
+
+export interface FrameRecord {
+  id: number;
+  timestamp: number;
+  thumbnail?: string;
+  created_at: number;
+}
+
+export interface EventRecord {
+  id: number;
+  frame_id: number;
+  type: number;
+  source_id: string;
+  camera_id: string;
+  timestamp: number;
+  properties: string;
+  created_at: number;
+}
+
+export interface DatabaseRecordsResponse {
+  events: EventRecord[];
+  total_events: number;
+  total_frames: number;
+}
+
 // API Service
 const apiService = {
   // License related API calls
@@ -215,13 +242,16 @@ const apiService = {
     },
 
     // Delete a camera
-    delete: async (id: string): Promise<boolean> => {
+    delete: async (id: string): Promise<{success: boolean, databaseCleaned?: boolean}> => {
       try {
-        await axios.delete(getFullUrl(`/api/v1/cameras/${id}`));
-        return true;
+        const response = await axios.delete(getFullUrl(`/api/v1/cameras/${id}`));
+        return {
+          success: true,
+          databaseCleaned: response.data.database_cleaned
+        };
       } catch (error) {
         console.error(`Error deleting camera ${id}:`, error);
-        return false;
+        return { success: false };
       }
     },
 
@@ -415,6 +445,54 @@ const apiService = {
         return null;
       }
     },
+  },
+
+  // Add database service
+  database: {
+    /**
+     * Get database records for a specific camera
+     */
+    async getRecords(cameraId: string, page: number = 0, limit: number = 10): Promise<DatabaseRecordsResponse | null> {
+      try {
+        const url = getFullUrl(`/api/v1/cameras/${cameraId}/database/events?page=${page}&limit=${limit}`);
+        console.log("Fetching database records from URL:", url);
+        
+        const response = await fetch(url);
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("Database API error response:", response.status, errorText);
+          throw new Error(`Failed to fetch database records: ${response.statusText}`);
+        }
+        return await response.json();
+      } catch (error) {
+        console.error('Error fetching database records:', error);
+        return null;
+      }
+    },
+
+    /**
+     * Delete all database records for a specific camera
+     */
+    async deleteRecords(cameraId: string): Promise<boolean> {
+      try {
+        const url = getFullUrl(`/api/v1/cameras/${cameraId}/database/events`);
+        console.log("Deleting database records from URL:", url);
+        
+        const response = await fetch(url, {
+          method: 'DELETE',
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("Database delete API error response:", response.status, errorText);
+        }
+        
+        return response.ok;
+      } catch (error) {
+        console.error('Error deleting database records:', error);
+        return false;
+      }
+    }
   }
 };
 
