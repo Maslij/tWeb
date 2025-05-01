@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Container,
@@ -196,6 +196,8 @@ interface Zone {
   end_y: number;
   min_crossing_threshold: number;
   triggering_anchors: string[];
+  in_count?: number;  // Add optional in_count
+  out_count?: number; // Add optional out_count
 }
 
 interface LineZoneManagerForm {
@@ -378,6 +380,23 @@ const LineZoneList: React.FC<LineZoneListProps> = ({
                     disabled={disabled}
                     sx={{ width: '130px' }}
                   />
+                  {/* Display in/out counts if available */}
+                  {(zone.in_count !== undefined || zone.out_count !== undefined) && (
+                    <Box sx={{ ml: 2, display: 'flex', gap: 1 }}>
+                      <Chip
+                        size="small"
+                        label={`In: ${zone.in_count || 0}`}
+                        color="success"
+                        variant="outlined"
+                      />
+                      <Chip
+                        size="small"
+                        label={`Out: ${zone.out_count || 0}`}
+                        color="primary"
+                        variant="outlined"
+                      />
+                    </Box>
+                  )}
                 </Box>
               }
               secondary={
@@ -1384,6 +1403,17 @@ const PipelineBuilder = () => {
     }
   );
 
+  // Make showSnackbar a useCallback
+  const showSnackbar = useCallback((message: string) => {
+    setSnackbarMessage(message);
+    setSnackbarOpen(true);
+  }, []);
+
+  // Define handleSnackbarClose function
+  const handleSnackbarClose = useCallback(() => {
+    setSnackbarOpen(false);
+  }, []);
+
   // Fetch data on mount
   useEffect(() => {
     if (!cameraId) return;
@@ -1563,7 +1593,9 @@ const PipelineBuilder = () => {
           end_y,
           min_crossing_threshold: zone.min_crossing_threshold || 1,
           triggering_anchors: Array.isArray(zone.triggering_anchors) ? 
-            zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"]
+            zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"],
+          in_count: zone.in_count !== undefined ? zone.in_count : undefined,
+          out_count: zone.out_count !== undefined ? zone.out_count : undefined
         };
       });
       
@@ -1585,7 +1617,8 @@ const PipelineBuilder = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lineZoneManagerComponent]);
 
-  const fetchComponents = async () => {
+  // Use useCallback for fetchComponents
+  const fetchComponents = useCallback(async () => {
     if (!cameraId) return;
     
     try {
@@ -1639,7 +1672,9 @@ const PipelineBuilder = () => {
                 end_y,
                 min_crossing_threshold: zone.min_crossing_threshold || 1,
                 triggering_anchors: Array.isArray(zone.triggering_anchors) ? 
-                  zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"]
+                  zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"],
+                in_count: zone.in_count !== undefined ? zone.in_count : undefined,
+                out_count: zone.out_count !== undefined ? zone.out_count : undefined
               };
             });
             
@@ -1659,7 +1694,7 @@ const PipelineBuilder = () => {
     } finally {
       setIsRefreshingComponents(false);
     }
-  };
+  }, [cameraId, showSnackbar]);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -1850,7 +1885,9 @@ const PipelineBuilder = () => {
             end_y,
             min_crossing_threshold: zone.min_crossing_threshold || 1,
             triggering_anchors: Array.isArray(zone.triggering_anchors) ? 
-              zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"]
+              zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"],
+            in_count: zone.in_count !== undefined ? zone.in_count : undefined,
+            out_count: zone.out_count !== undefined ? zone.out_count : undefined
           };
         }) : [defaultLineZone];
         
@@ -1922,15 +1959,6 @@ const PipelineBuilder = () => {
 
   const handleConfigChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     setComponentConfig(event.target.value);
-  };
-
-  const showSnackbar = (message: string) => {
-    setSnackbarMessage(message);
-    setSnackbarOpen(true);
-  };
-
-  const handleSnackbarClose = () => {
-    setSnackbarOpen(false);
   };
 
   // Form handlers
@@ -2841,6 +2869,24 @@ const PipelineBuilder = () => {
       setApplyingTemplate(false);
     }
   };
+
+  // Add zone counts refresh interval
+  useEffect(() => {
+    let zoneCountsInterval: number | null = null;
+    
+    // Only start the interval if the camera is running and we have a line zone manager
+    if (camera?.running && hasLineZoneManagerComponent && cameraId) {
+      // Set up interval for refreshing zone counts (every 3 seconds)
+      zoneCountsInterval = window.setInterval(fetchComponents, 3000);
+    }
+    
+    // Clean up function
+    return () => {
+      if (zoneCountsInterval) {
+        clearInterval(zoneCountsInterval);
+      }
+    };
+  }, [camera?.running, hasLineZoneManagerComponent, cameraId, fetchComponents]);
 
   if (loading) {
     return (
@@ -4074,81 +4120,95 @@ const PipelineBuilder = () => {
             )}
             
             {hasLineZoneManagerComponent && (
-              <Button 
-                variant="contained" 
-                color="primary"
-                disabled={isSavingZones}
-                startIcon={isSavingZones ? <CircularProgress size={20} /> : null}
-                onClick={async () => {
-                  if (!lineZoneManagerComponent || !cameraId) return;
-                  
-                  try {
-                    setIsSavingZones(true);
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <Button 
+                  variant="outlined"
+                  startIcon={<RedoIcon />}
+                  disabled={isRefreshingComponents}
+                  onClick={fetchComponents}
+                >
+                  Refresh Counts
+                </Button>
+                
+                <Button 
+                  variant="contained" 
+                  color="primary"
+                  disabled={isSavingZones}
+                  startIcon={isSavingZones ? <CircularProgress size={20} /> : null}
+                  onClick={async () => {
+                    if (!lineZoneManagerComponent || !cameraId) return;
                     
-                    // Normalize all zones to ensure they have proper values
-                    const normalizedZones = lineZoneManagerForm.zones.map(zone => ({
-                      id: zone.id || `zone${Math.random().toString(36).substr(2, 9)}`,
-                      start_x: typeof zone.start_x === 'number' ? zone.start_x : parseFloat(String(zone.start_x)) || 0.2,
-                      start_y: typeof zone.start_y === 'number' ? zone.start_y : parseFloat(String(zone.start_y)) || 0.5,
-                      end_x: typeof zone.end_x === 'number' ? zone.end_x : parseFloat(String(zone.end_x)) || 0.8,
-                      end_y: typeof zone.end_y === 'number' ? zone.end_y : parseFloat(String(zone.end_y)) || 0.5,
-                      min_crossing_threshold: zone.min_crossing_threshold || 1,
-                      triggering_anchors: Array.isArray(zone.triggering_anchors) ? 
-                        zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"]
-                    }));
-                    
-                    console.log('Current zones in form:', lineZoneManagerForm.zones);
-                    console.log('Normalized zones to send:', normalizedZones);
-                    
-                    // Create a new config object without spreading the old config
-                    // This ensures we don't accidentally keep old zones data
-                    const config: Record<string, any> = {
-                      draw_zones: lineZoneManagerForm.draw_zones,
-                      line_color: lineZoneManagerForm.line_color,
-                      line_thickness: lineZoneManagerForm.line_thickness,
-                      draw_counts: lineZoneManagerForm.draw_counts,
-                      text_color: lineZoneManagerForm.text_color,
-                      text_scale: lineZoneManagerForm.text_scale,
-                      text_thickness: lineZoneManagerForm.text_thickness,
-                      zones: normalizedZones,
-                      remove_missing: true // Add this flag to tell the backend to remove zones not in this config
-                    };
-                    
-                    // Preserve any other config properties that aren't related to zones
-                    if (lineZoneManagerComponent.config) {
-                      Object.entries(lineZoneManagerComponent.config as Record<string, any>).forEach(([key, value]) => {
-                        // Only copy over properties that aren't already set and aren't 'zones'
-                        if (key !== 'zones' && config[key] === undefined) {
-                          config[key] = value;
-                        }
-                      });
+                    try {
+                      setIsSavingZones(true);
+                      
+                      // Normalize all zones to ensure they have proper values
+                      const normalizedZones = lineZoneManagerForm.zones.map(zone => ({
+                        id: zone.id || `zone${Math.random().toString(36).substr(2, 9)}`,
+                        start_x: typeof zone.start_x === 'number' ? zone.start_x : parseFloat(String(zone.start_x)) || 0.2,
+                        start_y: typeof zone.start_y === 'number' ? zone.start_y : parseFloat(String(zone.start_y)) || 0.5,
+                        end_x: typeof zone.end_x === 'number' ? zone.end_x : parseFloat(String(zone.end_x)) || 0.8,
+                        end_y: typeof zone.end_y === 'number' ? zone.end_y : parseFloat(String(zone.end_y)) || 0.5,
+                        min_crossing_threshold: zone.min_crossing_threshold || 1,
+                        triggering_anchors: Array.isArray(zone.triggering_anchors) ? 
+                          zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"],
+                        // Preserve the counts if they exist
+                        in_count: zone.in_count,
+                        out_count: zone.out_count
+                      }));
+                      
+                      console.log('Current zones in form:', lineZoneManagerForm.zones);
+                      console.log('Normalized zones to send:', normalizedZones);
+                      
+                      // Create a new config object without spreading the old config
+                      // This ensures we don't accidentally keep old zones data
+                      const config: Record<string, any> = {
+                        draw_zones: lineZoneManagerForm.draw_zones,
+                        line_color: lineZoneManagerForm.line_color,
+                        line_thickness: lineZoneManagerForm.line_thickness,
+                        draw_counts: lineZoneManagerForm.draw_counts,
+                        text_color: lineZoneManagerForm.text_color,
+                        text_scale: lineZoneManagerForm.text_scale,
+                        text_thickness: lineZoneManagerForm.text_thickness,
+                        zones: normalizedZones,
+                        remove_missing: true // Add this flag to tell the backend to remove zones not in this config
+                      };
+                      
+                      // Preserve any other config properties that aren't related to zones
+                      if (lineZoneManagerComponent.config) {
+                        Object.entries(lineZoneManagerComponent.config as Record<string, any>).forEach(([key, value]) => {
+                          // Only copy over properties that aren't already set and aren't 'zones'
+                          if (key !== 'zones' && config[key] === undefined) {
+                            config[key] = value;
+                          }
+                        });
+                      }
+                      
+                      console.log('Sending config to API:', config);
+                      
+                      // Update the component
+                      const result = await apiService.components.processors.update(
+                        cameraId, 
+                        lineZoneManagerComponent.id, 
+                        { config }
+                      );
+                      
+                      if (result) {
+                        showSnackbar('Line zones updated successfully');
+                        fetchComponents(); // Refresh components from the server
+                      } else {
+                        showSnackbar('Failed to update line zones');
+                      }
+                    } catch (err) {
+                      console.error('Error updating line zones:', err);
+                      showSnackbar('Error updating line zones');
+                    } finally {
+                      setIsSavingZones(false);
                     }
-                    
-                    console.log('Sending config to API:', config);
-                    
-                    // Update the component
-                    const result = await apiService.components.processors.update(
-                      cameraId, 
-                      lineZoneManagerComponent.id, 
-                      { config }
-                    );
-                    
-                    if (result) {
-                      showSnackbar('Line zones updated successfully');
-                      fetchComponents(); // Refresh components from the server
-                    } else {
-                      showSnackbar('Failed to update line zones');
-                    }
-                  } catch (err) {
-                    console.error('Error updating line zones:', err);
-                    showSnackbar('Error updating line zones');
-                  } finally {
-                    setIsSavingZones(false);
-                  }
-                }}
-              >
-                {isSavingZones ? 'Saving...' : 'Save Line Zones'}
-              </Button>
+                  }}
+                >
+                  {isSavingZones ? 'Saving...' : 'Save Line Zones'}
+                </Button>
+              </Box>
             )}
           </Box>
         </Paper>
