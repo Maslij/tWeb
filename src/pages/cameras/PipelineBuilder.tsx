@@ -2192,8 +2192,61 @@ const PipelineBuilder = () => {
       let success = false;
       
       if (type === 'source') {
+        // If we're deleting the source, delete all processors and sinks
+        // as they can't function without a source
+        if (processorComponents.length > 0 || sinkComponents.length > 0) {
+          const confirmMsg = "Deleting the source will also delete all processors and sinks. Continue?";
+          if (!window.confirm(confirmMsg)) {
+            return;
+          }
+          
+          // Delete all processors and sinks first
+          for (const proc of processorComponents) {
+            await apiService.components.processors.delete(cameraId, proc.id);
+          }
+          for (const sink of sinkComponents) {
+            await apiService.components.sinks.delete(cameraId, sink.id);
+          }
+        }
+        
         success = await apiService.components.source.delete(cameraId);
       } else if (type === 'processor') {
+        // Check if any other components depend on this one
+        const componentTypeName = component.type_name || component.type;
+        const dependentComponents = [];
+        
+        // Find all components that depend on this one
+        for (const [depType, requiredTypes] of Object.entries(dependencies)) {
+          if (requiredTypes.includes(String(componentTypeName))) {
+            // This component is a dependency for depType
+            // Find all components of type depType and mark them for deletion
+            const componentsToDelete = processorComponents.filter(proc => {
+              const procType = proc.type_name || proc.type;
+              return String(procType) === depType;
+            });
+            
+            dependentComponents.push(...componentsToDelete);
+          }
+        }
+        
+        // If we found dependent components, warn the user and handle cascading deletion
+        if (dependentComponents.length > 0) {
+          const dependentNames = dependentComponents.map(dep => {
+            const depType = dep.type_name || dep.type;
+            return getComponentTypeName(String(depType), 'processor');
+          }).join(", ");
+          
+          const confirmMsg = `Deleting this component will also delete dependent components: ${dependentNames}. Continue?`;
+          if (!window.confirm(confirmMsg)) {
+            return;
+          }
+          
+          // Delete dependent components first (recursive cascading deletion)
+          for (const dep of dependentComponents) {
+            await handleDeleteComponent(dep, 'processor');
+          }
+        }
+        
         success = await apiService.components.processors.delete(cameraId, component.id);
       } else if (type === 'sink') {
         success = await apiService.components.sinks.delete(cameraId, component.id);
