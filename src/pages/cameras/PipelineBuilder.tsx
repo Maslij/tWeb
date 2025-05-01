@@ -1240,6 +1240,15 @@ const PipelineBuilder = () => {
   const [processorComponents, setProcessorComponents] = useState<Component[]>([]);
   const [sinkComponents, setSinkComponents] = useState<Component[]>([]);
   
+  // Add loading state for various actions
+  const [isStartingPipeline, setIsStartingPipeline] = useState(false);
+  const [isStoppingPipeline, setIsStoppingPipeline] = useState(false);
+  const [isCreatingComponent, setIsCreatingComponent] = useState(false);
+  const [isUpdatingComponent, setIsUpdatingComponent] = useState(false);
+  const [isDeletingComponent, setIsDeletingComponent] = useState<string | null>(null);
+  const [isSavingZones, setIsSavingZones] = useState(false);
+  const [isRefreshingComponents, setIsRefreshingComponents] = useState(false);
+  
   // Dialog state
   const [openDialog, setOpenDialog] = useState(false);
   const [dialogType, setDialogType] = useState<'source' | 'processor' | 'sink'>('source');
@@ -1580,6 +1589,7 @@ const PipelineBuilder = () => {
     if (!cameraId) return;
     
     try {
+      setIsRefreshingComponents(true);
       const components = await apiService.components.getAll(cameraId);
       if (components) {
         setSourceComponent(components.source);
@@ -1646,6 +1656,8 @@ const PipelineBuilder = () => {
     } catch (err) {
       console.error('Error fetching components:', err);
       showSnackbar('Failed to refresh components');
+    } finally {
+      setIsRefreshingComponents(false);
     }
   };
 
@@ -2061,6 +2073,13 @@ const PipelineBuilder = () => {
     if (!cameraId) return;
     
     try {
+      // Set loading state based on dialog mode
+      if (dialogMode === 'create') {
+        setIsCreatingComponent(true);
+      } else {
+        setIsUpdatingComponent(true);
+      }
+      
       let config: any = {};
       
       // Build config based on component type
@@ -2182,6 +2201,10 @@ const PipelineBuilder = () => {
     } catch (err) {
       console.error('Error submitting component:', err);
       showSnackbar(`Failed to ${dialogMode} component: Invalid configuration`);
+    } finally {
+      // Reset loading states
+      setIsCreatingComponent(false);
+      setIsUpdatingComponent(false);
     }
   };
 
@@ -2189,6 +2212,9 @@ const PipelineBuilder = () => {
     if (!cameraId) return;
     
     try {
+      // Set the deleting state with the component ID
+      setIsDeletingComponent(component.id);
+      
       let success = false;
       
       if (type === 'source') {
@@ -2197,6 +2223,7 @@ const PipelineBuilder = () => {
         if (processorComponents.length > 0 || sinkComponents.length > 0) {
           const confirmMsg = "Deleting the source will also delete all processors and sinks. Continue?";
           if (!window.confirm(confirmMsg)) {
+            setIsDeletingComponent(null);
             return;
           }
           
@@ -2238,6 +2265,7 @@ const PipelineBuilder = () => {
           
           const confirmMsg = `Deleting this component will also delete dependent components: ${dependentNames}. Continue?`;
           if (!window.confirm(confirmMsg)) {
+            setIsDeletingComponent(null);
             return;
           }
           
@@ -2261,6 +2289,8 @@ const PipelineBuilder = () => {
     } catch (err) {
       console.error('Error deleting component:', err);
       showSnackbar('Error deleting component');
+    } finally {
+      setIsDeletingComponent(null);
     }
   };
 
@@ -2270,6 +2300,7 @@ const PipelineBuilder = () => {
     
     try {
       if (camera.running) {
+        setIsStoppingPipeline(true);
         const result = await apiService.cameras.stop(cameraId);
         if (result) {
           setCamera(result);
@@ -2284,6 +2315,7 @@ const PipelineBuilder = () => {
           return;
         }
         
+        setIsStartingPipeline(true);
         const result = await apiService.cameras.start(cameraId);
         if (result) {
           setCamera(result);
@@ -2296,6 +2328,9 @@ const PipelineBuilder = () => {
     } catch (err) {
       console.error('Error starting/stopping pipeline:', err);
       showSnackbar('Error toggling pipeline state');
+    } finally {
+      setIsStartingPipeline(false);
+      setIsStoppingPipeline(false);
     }
   };
 
@@ -2578,11 +2613,11 @@ const PipelineBuilder = () => {
           <Button 
             size="small" 
             color="error" 
-            startIcon={<DeleteIcon />}
+            startIcon={isDeletingComponent === component.id ? <CircularProgress size={16} color="error" /> : <DeleteIcon />}
             onClick={() => handleDeleteComponent(component, type)}
-            disabled={camera?.running}
+            disabled={camera?.running || isDeletingComponent !== null}
           >
-            Delete
+            {isDeletingComponent === component.id ? 'Deleting...' : 'Delete'}
           </Button>
         </CardActions>
       </Card>
@@ -2851,10 +2886,17 @@ const PipelineBuilder = () => {
           <Button
             variant="contained"
             color={camera.running ? "error" : "success"}
-            startIcon={camera.running ? <StopIcon /> : <PlayArrowIcon />}
+            startIcon={
+              isStartingPipeline || isStoppingPipeline ? 
+                <CircularProgress size={24} color="inherit" /> : 
+                camera.running ? <StopIcon /> : <PlayArrowIcon />
+            }
             onClick={handleStartStop}
+            disabled={isStartingPipeline || isStoppingPipeline}
           >
-            {camera.running ? "Stop Pipeline" : "Start Pipeline"}
+            {isStartingPipeline ? "Starting..." : 
+             isStoppingPipeline ? "Stopping..." :
+             camera.running ? "Stop Pipeline" : "Start Pipeline"}
           </Button>
         </Box>
       </Box>
@@ -3932,20 +3974,24 @@ const PipelineBuilder = () => {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleDialogClose}>Cancel</Button>
+          <Button onClick={handleDialogClose} disabled={isCreatingComponent || isUpdatingComponent}>Cancel</Button>
           <Button 
             onClick={handleSubmit} 
             variant="contained" 
             color="primary"
             disabled={
+              isCreatingComponent || isUpdatingComponent ||
               selectedComponentType === '' || 
               (selectedComponentType !== '' && !canAddComponent(selectedComponentType, dialogType) && dialogMode === 'create') ||
               (dialogType === 'source' && selectedComponentType === 'file' && !fileSourceForm.url) ||
               (dialogType === 'source' && selectedComponentType === 'rtsp' && !rtspSourceForm.url) ||
               (dialogType === 'sink' && selectedComponentType === 'file' && !fileSinkForm.path)
             }
+            startIcon={isCreatingComponent || isUpdatingComponent ? <CircularProgress size={20} /> : null}
           >
-            {dialogMode === 'create' ? 'Create' : 'Save'}
+            {isCreatingComponent ? 'Creating...' : 
+             isUpdatingComponent ? 'Saving...' :
+             dialogMode === 'create' ? 'Create' : 'Save'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -3982,7 +4028,7 @@ const PipelineBuilder = () => {
                 zones={lineZoneManagerForm.zones} 
                 onZonesChange={handleLineZonesUpdate}
                 imageUrl={(camera?.running ? frameUrl : lastFrameUrl) || "" as string}
-                disabled={false}
+                disabled={isSavingZones}
               />
             </Box>
           ) : (
@@ -4031,10 +4077,14 @@ const PipelineBuilder = () => {
               <Button 
                 variant="contained" 
                 color="primary"
+                disabled={isSavingZones}
+                startIcon={isSavingZones ? <CircularProgress size={20} /> : null}
                 onClick={async () => {
                   if (!lineZoneManagerComponent || !cameraId) return;
                   
                   try {
+                    setIsSavingZones(true);
+                    
                     // Normalize all zones to ensure they have proper values
                     const normalizedZones = lineZoneManagerForm.zones.map(zone => ({
                       id: zone.id || `zone${Math.random().toString(36).substr(2, 9)}`,
@@ -4092,14 +4142,36 @@ const PipelineBuilder = () => {
                   } catch (err) {
                     console.error('Error updating line zones:', err);
                     showSnackbar('Error updating line zones');
+                  } finally {
+                    setIsSavingZones(false);
                   }
                 }}
               >
-                Save Line Zones
+                {isSavingZones ? 'Saving...' : 'Save Line Zones'}
               </Button>
             )}
           </Box>
         </Paper>
+      )}
+      
+      {/* Add loading indicator for component refresh */}
+      {isRefreshingComponents && (
+        <Box sx={{ 
+          position: 'fixed', 
+          bottom: 16, 
+          right: 16, 
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          bgcolor: 'background.paper',
+          boxShadow: 2,
+          borderRadius: 1,
+          px: 2,
+          py: 1
+        }}>
+          <CircularProgress size={20} sx={{ mr: 1 }} />
+          <Typography variant="body2">Refreshing components...</Typography>
+        </Box>
       )}
       
       {/* Add Templates Dialog */}
