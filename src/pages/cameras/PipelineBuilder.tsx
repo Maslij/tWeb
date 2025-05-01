@@ -325,7 +325,15 @@ const LineZoneList: React.FC<LineZoneListProps> = ({
   disabled = false
 }) => {
   return (
-    <List sx={{ width: '100%', bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+    <List sx={{ 
+      width: '100%', 
+      bgcolor: 'background.paper', 
+      borderRadius: 1, 
+      border: '1px solid', 
+      borderColor: 'divider',
+      maxHeight: '500px',
+      overflow: 'auto'
+    }}>
       {zones.length === 0 ? (
         <ListItem>
           <ListItemText 
@@ -1015,29 +1023,31 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
           <Typography variant="subtitle2" gutterBottom>
             Zones
           </Typography>
-          <LineZoneList 
-            zones={zones}
-            selectedZoneIndex={selectedZone}
-            onSelectZone={(index) => setSelectedZone(index)}
-            onDeleteZone={(index) => {
-              const updatedZones = zones.filter((_, i) => i !== index);
-              onZonesChange(updatedZones);
-              if (selectedZone === index) {
-                setSelectedZone(null);
-              } else if (selectedZone !== null && selectedZone > index) {
-                setSelectedZone(selectedZone - 1);
-              }
-            }}
-            onUpdateZone={(index, field, value) => {
-              const updatedZones = [...zones];
-              updatedZones[index] = {
-                ...updatedZones[index],
-                [field]: value
-              };
-              onZonesChange(updatedZones);
-            }}
-            disabled={disabled}
-          />
+          <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+            <LineZoneList 
+              zones={zones}
+              selectedZoneIndex={selectedZone}
+              onSelectZone={(index) => setSelectedZone(index)}
+              onDeleteZone={(index) => {
+                const updatedZones = zones.filter((_, i) => i !== index);
+                onZonesChange(updatedZones);
+                if (selectedZone === index) {
+                  setSelectedZone(null);
+                } else if (selectedZone !== null && selectedZone > index) {
+                  setSelectedZone(selectedZone - 1);
+                }
+              }}
+              onUpdateZone={(index, field, value) => {
+                const updatedZones = [...zones];
+                updatedZones[index] = {
+                  ...updatedZones[index],
+                  [field]: value
+                };
+                onZonesChange(updatedZones);
+              }}
+              disabled={disabled}
+            />
+          </Box>
         </Box>
       </Box>
     </Box>
