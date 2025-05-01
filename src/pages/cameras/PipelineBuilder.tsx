@@ -442,6 +442,30 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
   const [hoveredPoint, setHoveredPoint] = useState<{ zoneIndex: number, point: 'start' | 'end' | 'line' } | null>(null);
   const [currentImageUrl, setCurrentImageUrl] = useState<string>("");
   const nextImageRef = useRef<HTMLImageElement | null>(null);
+  const lastUpdateTimeRef = useRef<number>(0);
+  const pendingZonesUpdateRef = useRef<Zone[] | null>(null);
+  
+  // Throttling mechanism for zone updates
+  const throttledZoneUpdate = (updatedZones: Zone[]) => {
+    const now = Date.now();
+    // Only send updates every 50ms during dragging to prevent too many rerenders
+    if (now - lastUpdateTimeRef.current > 50) {
+      onZonesChange(updatedZones);
+      lastUpdateTimeRef.current = now;
+      pendingZonesUpdateRef.current = null;
+    } else {
+      // Store the latest update to apply later
+      pendingZonesUpdateRef.current = updatedZones;
+    }
+  };
+  
+  // Apply any pending updates when dragging ends
+  useEffect(() => {
+    if (!draggingPoint && pendingZonesUpdateRef.current) {
+      onZonesChange(pendingZonesUpdateRef.current);
+      pendingZonesUpdateRef.current = null;
+    }
+  }, [draggingPoint, onZonesChange]);
   
   // Preload image to prevent flickering
   useEffect(() => {
@@ -721,7 +745,8 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
         };
       }
       
-      onZonesChange(updatedZones);
+      // Use the throttled update function instead of direct callback
+      throttledZoneUpdate(updatedZones);
       return;
     }
 
@@ -1359,12 +1384,20 @@ const PipelineBuilder = () => {
       
       console.log("Setting normalized zones in form:", normalizedZones);
       
-      // Update the line zone manager form with the normalized zones
-      setLineZoneManagerForm(prev => ({
-        ...prev,
-        zones: normalizedZones
-      }));
+      // Get a stringified version of the current zones to compare
+      const currentZonesString = JSON.stringify(lineZoneManagerForm.zones);
+      const newZonesString = JSON.stringify(normalizedZones);
+      
+      // Only update state if the zones have actually changed
+      if (currentZonesString !== newZonesString) {
+        // Update the line zone manager form with the normalized zones
+        setLineZoneManagerForm(prev => ({
+          ...prev,
+          zones: normalizedZones
+        }));
+      }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lineZoneManagerComponent]);
 
   const fetchComponents = async () => {
@@ -2382,20 +2415,27 @@ const PipelineBuilder = () => {
         zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"]
     }));
     
-    setLineZoneManagerForm(prev => ({
-      ...prev,
-      zones: normalizedZones
-    }));
+    // Get current zones string for comparison
+    const currentZonesString = JSON.stringify(lineZoneManagerForm.zones);
+    const newZonesString = JSON.stringify(normalizedZones);
     
-    // If editing a component, update the component as well
-    if (dialogMode === 'edit' && selectedComponent && selectedComponentType === 'line_zone_manager') {
-      // Create a deep copy of the component config
-      const updatedConfig = {
-        ...parseJson(componentConfig),
+    // Only update if the zones have actually changed
+    if (currentZonesString !== newZonesString) {
+      setLineZoneManagerForm(prev => ({
+        ...prev,
         zones: normalizedZones
-      };
+      }));
       
-      setComponentConfig(formatJson(updatedConfig));
+      // If editing a component, update the component as well
+      if (dialogMode === 'edit' && selectedComponent && selectedComponentType === 'line_zone_manager') {
+        // Create a deep copy of the component config
+        const updatedConfig = {
+          ...parseJson(componentConfig),
+          zones: normalizedZones
+        };
+        
+        setComponentConfig(formatJson(updatedConfig));
+      }
     }
   };
 
