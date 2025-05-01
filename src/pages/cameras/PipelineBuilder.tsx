@@ -3192,6 +3192,9 @@ const PipelineBuilder = () => {
             }}
           >
             <Tab icon={<TuneIcon />} iconPosition="start" label="Pipeline Configuration" />
+            {hasLineZoneManagerComponent && 
+              <Tab icon={<VisibilityIcon />} iconPosition="start" label="Line Zone Configuration" />
+            }
             <Tab 
               icon={<DatabaseIcon />} 
               iconPosition="start"
@@ -3348,181 +3351,193 @@ const PipelineBuilder = () => {
               </Box>
             </Paper>
             
-            {/* Live Preview / Line Zone Editor (kept the same) */}
-            {(camera?.running || pipelineHasRunOnce) && (
+            {/* Live Preview (only when no line zone manager) */}
+            {(camera?.running || pipelineHasRunOnce) && !hasLineZoneManagerComponent && (
               <Paper elevation={2} sx={{ p: 3 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                   <VisibilityIcon sx={{ mr: 1, color: 'primary.main' }} />
                   <Typography variant="h6">
-                    {hasLineZoneManagerComponent ? 'Line Zone Configuration' : 'Live Preview'} 
+                    Live Preview
                     {!camera?.running && pipelineHasRunOnce && " (Last Frame)"}
                   </Typography>
                 </Box>
                 
                 <Divider sx={{ mb: 2 }} />
                 
-                {hasLineZoneManagerComponent && (
-                  <Typography variant="body2" color="text.secondary" paragraph>
-                    Draw crossing lines on the image to define detection zones. Objects crossing these lines will be counted.
-                    {camera?.running ? 
-                      " You can edit these zones in real-time while the pipeline is running." : 
-                      " The pipeline is currently stopped, but you can still edit the zones based on the last captured frame."}
-                  </Typography>
-                )}
-                
-                {hasLineZoneManagerComponent ? (
-                  // Line Zone Editor view
-                  <Box sx={{ height: '500px' }}>
-                    <LineZoneEditor 
-                      zones={lineZoneManagerForm.zones} 
-                      onZonesChange={handleLineZonesUpdate}
-                      imageUrl={(camera?.running ? frameUrl : lastFrameUrl) || "" as string}
-                      disabled={isSavingZones}
+                <Box sx={{ width: '100%', textAlign: 'center' }}>
+                  {(camera?.running && frameUrl) || (!camera?.running && lastFrameUrl) ? (
+                    <img 
+                      src={camera?.running ? frameUrl : lastFrameUrl} 
+                      alt="Camera feed" 
+                      style={{ 
+                        maxWidth: '100%', 
+                        maxHeight: '500px', 
+                        border: '1px solid #ccc',
+                        borderRadius: '4px'
+                      }} 
                     />
-                  </Box>
-                ) : (
-                  // Simple Preview view
-                  <Box sx={{ width: '100%', textAlign: 'center' }}>
-                    {(camera?.running && frameUrl) || (!camera?.running && lastFrameUrl) ? (
-                      <img 
-                        src={camera?.running ? frameUrl : lastFrameUrl} 
-                        alt="Camera feed" 
-                        style={{ 
-                          maxWidth: '100%', 
-                          maxHeight: '500px', 
-                          border: '1px solid #ccc',
-                          borderRadius: '4px'
-                        }} 
-                      />
-                    ) : (
-                      <Box 
-                        sx={{ 
-                          width: '100%', 
-                          height: '500px', 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          justifyContent: 'center',
-                          border: '1px solid #ccc',
-                          borderRadius: '4px',
-                          bgcolor: 'background.paper'
-                        }}
-                      >
-                        <Typography variant="body1" color="text.secondary">
-                          No image available
-                        </Typography>
-                      </Box>
-                    )}
-                  </Box>
-                )}
+                  ) : (
+                    <Box 
+                      sx={{ 
+                        width: '100%', 
+                        height: '500px', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        border: '1px solid #ccc',
+                        borderRadius: '4px',
+                        bgcolor: 'background.paper'
+                      }}
+                    >
+                      <Typography variant="body1" color="text.secondary">
+                        No image available
+                      </Typography>
+                    </Box>
+                  )}
+                </Box>
                 
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-                  {camera?.running && !hasLineZoneManagerComponent && (
+                  {camera?.running && (
                     <Button variant="outlined" onClick={refreshFrame}>
                       Refresh Frame
                     </Button>
-                  )}
-                  
-                  {hasLineZoneManagerComponent && (
-                    <Box sx={{ display: 'flex', gap: 2 }}>
-                      <Button 
-                        variant="outlined"
-                        startIcon={<RedoIcon />}
-                        disabled={isRefreshingComponents}
-                        onClick={() => fetchComponents(true)}
-                      >
-                        Refresh Counts
-                      </Button>
-                      
-                      <Button 
-                        variant="contained" 
-                        color="primary"
-                        disabled={isSavingZones}
-                        startIcon={isSavingZones ? <CircularProgress size={20} /> : null}
-                        onClick={async () => {
-                          if (!lineZoneManagerComponent || !cameraId) return;
-                          
-                          try {
-                            setIsSavingZones(true);
-                            
-                            // Normalize all zones to ensure they have proper values
-                            const normalizedZones = lineZoneManagerForm.zones.map(zone => ({
-                              id: zone.id || `zone${Math.random().toString(36).substr(2, 9)}`,
-                              start_x: typeof zone.start_x === 'number' ? zone.start_x : parseFloat(String(zone.start_x)) || 0.2,
-                              start_y: typeof zone.start_y === 'number' ? zone.start_y : parseFloat(String(zone.start_y)) || 0.5,
-                              end_x: typeof zone.end_x === 'number' ? zone.end_x : parseFloat(String(zone.end_x)) || 0.8,
-                              end_y: typeof zone.end_y === 'number' ? zone.end_y : parseFloat(String(zone.end_y)) || 0.5,
-                              min_crossing_threshold: zone.min_crossing_threshold || 1,
-                              triggering_anchors: Array.isArray(zone.triggering_anchors) ? 
-                                zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"],
-                              // Preserve the counts if they exist
-                              in_count: zone.in_count,
-                              out_count: zone.out_count
-                            }));
-                            
-                            console.log('Current zones in form:', lineZoneManagerForm.zones);
-                            console.log('Normalized zones to send:', normalizedZones);
-                            
-                            // Create a new config object without spreading the old config
-                            // This ensures we don't accidentally keep old zones data
-                            const config: Record<string, any> = {
-                              draw_zones: lineZoneManagerForm.draw_zones,
-                              line_color: lineZoneManagerForm.line_color,
-                              line_thickness: lineZoneManagerForm.line_thickness,
-                              draw_counts: lineZoneManagerForm.draw_counts,
-                              text_color: lineZoneManagerForm.text_color,
-                              text_scale: lineZoneManagerForm.text_scale,
-                              text_thickness: lineZoneManagerForm.text_thickness,
-                              zones: normalizedZones,
-                              remove_missing: true // Add this flag to tell the backend to remove zones not in this config
-                            };
-                            
-                            // Preserve any other config properties that aren't related to zones
-                            if (lineZoneManagerComponent.config) {
-                              Object.entries(lineZoneManagerComponent.config as Record<string, any>).forEach(([key, value]) => {
-                                // Only copy over properties that aren't already set and aren't 'zones'
-                                if (key !== 'zones' && config[key] === undefined) {
-                                  config[key] = value;
-                                }
-                              });
-                            }
-                            
-                            console.log('Sending config to API:', config);
-                            
-                            // Update the component
-                            const result = await apiService.components.processors.update(
-                              cameraId, 
-                              lineZoneManagerComponent.id, 
-                              { config }
-                            );
-                            
-                            if (result) {
-                              showSnackbar('Line zones updated successfully');
-                              // Clear the unsaved changes flag
-                              setHasUnsavedZoneChanges(false);
-                              // Force fetch the updated components from the server
-                              await fetchComponents(true);
-                            } else {
-                              showSnackbar('Failed to update line zones');
-                            }
-                          } catch (err) {
-                            console.error('Error updating line zones:', err);
-                            showSnackbar('Error updating line zones');
-                          } finally {
-                            setIsSavingZones(false);
-                          }
-                        }}
-                      >
-                        {isSavingZones ? 'Saving...' : 'Save Line Zones'}
-                      </Button>
-                    </Box>
                   )}
                 </Box>
               </Paper>
             )}
           </Box>
         </TabPanel>
+
+        {/* Line Zone Configuration Tab */}
+        {hasLineZoneManagerComponent && (
+          <TabPanel value={mainTabValue} index={1} sx={{ p: 0, mt: 3 }}>
+            <Paper elevation={2} sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <VisibilityIcon sx={{ mr: 1, color: 'primary.main' }} />
+                <Typography variant="h6">
+                  Line Zone Configuration
+                  {!camera?.running && pipelineHasRunOnce && " (Last Frame)"}
+                </Typography>
+              </Box>
+              
+              <Divider sx={{ mb: 2 }} />
+              
+              <Typography variant="body2" color="text.secondary" paragraph>
+                Draw crossing lines on the image to define detection zones. Objects crossing these lines will be counted.
+                {camera?.running ? 
+                  " You can edit these zones in real-time while the pipeline is running." : 
+                  " The pipeline is currently stopped, but you can still edit the zones based on the last captured frame."}
+              </Typography>
+              
+              {/* Line Zone Editor view */}
+              <Box sx={{ height: '500px' }}>
+                <LineZoneEditor 
+                  zones={lineZoneManagerForm.zones} 
+                  onZonesChange={handleLineZonesUpdate}
+                  imageUrl={(camera?.running ? frameUrl : lastFrameUrl) || "" as string}
+                  disabled={isSavingZones}
+                />
+              </Box>
+              
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
+                <Box sx={{ display: 'flex', gap: 2 }}>
+                  <Button 
+                    variant="outlined"
+                    startIcon={<RedoIcon />}
+                    disabled={isRefreshingComponents}
+                    onClick={() => fetchComponents(true)}
+                  >
+                    Refresh Counts
+                  </Button>
+                  
+                  <Button 
+                    variant="contained" 
+                    color="primary"
+                    disabled={isSavingZones}
+                    startIcon={isSavingZones ? <CircularProgress size={20} /> : null}
+                    onClick={async () => {
+                      if (!lineZoneManagerComponent || !cameraId) return;
+                      
+                      try {
+                        setIsSavingZones(true);
+                        
+                        // Normalize all zones to ensure they have proper values
+                        const normalizedZones = lineZoneManagerForm.zones.map(zone => ({
+                          id: zone.id || `zone${Math.random().toString(36).substr(2, 9)}`,
+                          start_x: typeof zone.start_x === 'number' ? zone.start_x : parseFloat(String(zone.start_x)) || 0.2,
+                          start_y: typeof zone.start_y === 'number' ? zone.start_y : parseFloat(String(zone.start_y)) || 0.5,
+                          end_x: typeof zone.end_x === 'number' ? zone.end_x : parseFloat(String(zone.end_x)) || 0.8,
+                          end_y: typeof zone.end_y === 'number' ? zone.end_y : parseFloat(String(zone.end_y)) || 0.5,
+                          min_crossing_threshold: zone.min_crossing_threshold || 1,
+                          triggering_anchors: Array.isArray(zone.triggering_anchors) ? 
+                            zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"],
+                          // Preserve the counts if they exist
+                          in_count: zone.in_count,
+                          out_count: zone.out_count
+                        }));
+                        
+                        console.log('Current zones in form:', lineZoneManagerForm.zones);
+                        console.log('Normalized zones to send:', normalizedZones);
+                        
+                        // Create a new config object without spreading the old config
+                        // This ensures we don't accidentally keep old zones data
+                        const config: Record<string, any> = {
+                          draw_zones: lineZoneManagerForm.draw_zones,
+                          line_color: lineZoneManagerForm.line_color,
+                          line_thickness: lineZoneManagerForm.line_thickness,
+                          draw_counts: lineZoneManagerForm.draw_counts,
+                          text_color: lineZoneManagerForm.text_color,
+                          text_scale: lineZoneManagerForm.text_scale,
+                          text_thickness: lineZoneManagerForm.text_thickness,
+                          zones: normalizedZones,
+                          remove_missing: true // Add this flag to tell the backend to remove zones not in this config
+                        };
+                        
+                        // Preserve any other config properties that aren't related to zones
+                        if (lineZoneManagerComponent.config) {
+                          Object.entries(lineZoneManagerComponent.config as Record<string, any>).forEach(([key, value]) => {
+                            // Only copy over properties that aren't already set and aren't 'zones'
+                            if (key !== 'zones' && config[key] === undefined) {
+                              config[key] = value;
+                            }
+                          });
+                        }
+                        
+                        console.log('Sending config to API:', config);
+                        
+                        // Update the component
+                        const result = await apiService.components.processors.update(
+                          cameraId, 
+                          lineZoneManagerComponent.id, 
+                          { config }
+                        );
+                        
+                        if (result) {
+                          showSnackbar('Line zones updated successfully');
+                          // Clear the unsaved changes flag
+                          setHasUnsavedZoneChanges(false);
+                          // Force fetch the updated components from the server
+                          await fetchComponents(true);
+                        } else {
+                          showSnackbar('Failed to update line zones');
+                        }
+                      } catch (err) {
+                        console.error('Error updating line zones:', err);
+                        showSnackbar('Error updating line zones');
+                      } finally {
+                        setIsSavingZones(false);
+                      }
+                    }}
+                  >
+                    {isSavingZones ? 'Saving...' : 'Save Line Zones'}
+                  </Button>
+                </Box>
+              </Box>
+            </Paper>
+          </TabPanel>
+        )}
         
-        <TabPanel value={mainTabValue} index={1} sx={{ p: 0, mt: 3 }}>
+        <TabPanel value={mainTabValue} index={hasLineZoneManagerComponent ? 2 : 1} sx={{ p: 0, mt: 3 }}>
           {/* Telemetry Tab */}
           <Paper elevation={2} sx={{ p: 3, width: '100%', mb: 3 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
