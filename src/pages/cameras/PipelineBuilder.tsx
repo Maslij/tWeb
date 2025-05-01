@@ -73,6 +73,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import TuneIcon from '@mui/icons-material/Tune';
 import StorageIcon from '@mui/icons-material/Storage';
 import DatabaseIcon from '@mui/icons-material/Storage';
+import LiveTvIcon from '@mui/icons-material/LiveTv';
 
 import apiService, { 
   Camera, 
@@ -3192,15 +3193,19 @@ const PipelineBuilder = () => {
             }}
           >
             <Tab icon={<TuneIcon />} iconPosition="start" label="Pipeline Configuration" />
+            {sourceComponent && 
+              <Tab icon={<LiveTvIcon />} iconPosition="start" label="Live Playback" />
+            }
             {hasLineZoneManagerComponent && 
               <Tab icon={<VisibilityIcon />} iconPosition="start" label="Line Zone Configuration" />
             }
-            <Tab 
-              icon={<DatabaseIcon />} 
-              iconPosition="start"
-              label="Telemetry" 
-              disabled={!dbComponentExists}
-            />
+            {dbComponentExists && 
+              <Tab 
+                icon={<DatabaseIcon />} 
+                iconPosition="start"
+                label="Telemetry" 
+              />
+            }
           </Tabs>
         </Paper>
 
@@ -3350,67 +3355,122 @@ const PipelineBuilder = () => {
                 )}
               </Box>
             </Paper>
-            
-            {/* Live Preview (only when no line zone manager) */}
-            {(camera?.running || pipelineHasRunOnce) && !hasLineZoneManagerComponent && (
-              <Paper elevation={2} sx={{ p: 3 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                  <VisibilityIcon sx={{ mr: 1, color: 'primary.main' }} />
-                  <Typography variant="h6">
-                    Live Preview
-                    {!camera?.running && pipelineHasRunOnce && " (Last Frame)"}
-                  </Typography>
-                </Box>
-                
-                <Divider sx={{ mb: 2 }} />
-                
-                <Box sx={{ width: '100%', textAlign: 'center' }}>
-                  {(camera?.running && frameUrl) || (!camera?.running && lastFrameUrl) ? (
-                    <img 
-                      src={camera?.running ? frameUrl : lastFrameUrl} 
-                      alt="Camera feed" 
-                      style={{ 
-                        maxWidth: '100%', 
-                        maxHeight: '500px', 
-                        border: '1px solid #ccc',
-                        borderRadius: '4px'
-                      }} 
-                    />
-                  ) : (
-                    <Box 
-                      sx={{ 
-                        width: '100%', 
-                        height: '500px', 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center',
-                        border: '1px solid #ccc',
-                        borderRadius: '4px',
-                        bgcolor: 'background.paper'
-                      }}
-                    >
-                      <Typography variant="body1" color="text.secondary">
-                        No image available
-                      </Typography>
-                    </Box>
-                  )}
-                </Box>
-                
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-                  {camera?.running && (
-                    <Button variant="outlined" onClick={refreshFrame}>
-                      Refresh Frame
-                    </Button>
-                  )}
-                </Box>
-              </Paper>
-            )}
           </Box>
         </TabPanel>
 
+        {/* Live Playback Tab */}
+        {sourceComponent && (
+          <TabPanel value={mainTabValue} index={1} sx={{ p: 0, mt: 3 }}>
+            <Paper elevation={2} sx={{ p: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <LiveTvIcon sx={{ mr: 1, color: 'primary.main' }} />
+                  <Typography variant="h6">
+                    Live Playback
+                    {!camera?.running && pipelineHasRunOnce && " (Last Frame)"}
+                  </Typography>
+                </Box>
+                {camera?.running && (
+                  <Button 
+                    variant="outlined" 
+                    onClick={refreshFrame}
+                    startIcon={<RedoIcon />}
+                  >
+                    Refresh Frame
+                  </Button>
+                )}
+              </Box>
+              
+              <Divider sx={{ mb: 2 }} />
+              
+              <Box sx={{ width: '100%', textAlign: 'center' }}>
+                {(camera?.running && frameUrl) || (!camera?.running && lastFrameUrl) ? (
+                  <img 
+                    src={camera?.running ? frameUrl : lastFrameUrl} 
+                    alt="Camera feed" 
+                    style={{ 
+                      maxWidth: '100%', 
+                      maxHeight: '600px', 
+                      border: '1px solid #ccc',
+                      borderRadius: '4px'
+                    }} 
+                  />
+                ) : (
+                  <Box 
+                    sx={{ 
+                      width: '100%', 
+                      height: '600px', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      border: '1px solid #ccc',
+                      borderRadius: '4px',
+                      bgcolor: 'background.paper'
+                    }}
+                  >
+                    {pipelineHasRunOnce ? (
+                      <Typography variant="body1" color="text.secondary">
+                        No image available from the last session
+                      </Typography>
+                    ) : (
+                      <Box sx={{ textAlign: 'center', p: 3 }}>
+                        <LiveTvIcon sx={{ fontSize: 60, color: 'text.secondary', opacity: 0.5, mb: 2 }} />
+                        <Typography variant="h6" color="text.secondary" gutterBottom>
+                          Pipeline not started
+                        </Typography>
+                        <Typography variant="body1" color="text.secondary">
+                          Start the pipeline to see the live video feed
+                        </Typography>
+                        <Button
+                          variant="contained"
+                          color="success"
+                          startIcon={<PlayArrowIcon />}
+                          onClick={handleStartStop}
+                          disabled={isStartingPipeline || !sourceComponent}
+                          sx={{ mt: 2 }}
+                        >
+                          {isStartingPipeline ? "Starting..." : "Start Pipeline"}
+                        </Button>
+                      </Box>
+                    )}
+                  </Box>
+                )}
+              </Box>
+              
+              {camera?.running && (
+                <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
+                  <Button
+                    variant="contained"
+                    color="error"
+                    startIcon={<StopIcon />}
+                    onClick={handleStartStop}
+                    disabled={isStoppingPipeline}
+                  >
+                    {isStoppingPipeline ? "Stopping..." : "Stop Pipeline"}
+                  </Button>
+                </Box>
+              )}
+              
+              {!camera?.running && (
+                <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
+                  <Button
+                    variant="contained"
+                    color="success"
+                    startIcon={<PlayArrowIcon />}
+                    onClick={handleStartStop}
+                    disabled={isStartingPipeline || !sourceComponent}
+                  >
+                    {isStartingPipeline ? "Starting..." : "Start Pipeline"}
+                  </Button>
+                </Box>
+              )}
+            </Paper>
+          </TabPanel>
+        )}
+
         {/* Line Zone Configuration Tab */}
         {hasLineZoneManagerComponent && (
-          <TabPanel value={mainTabValue} index={1} sx={{ p: 0, mt: 3 }}>
+          <TabPanel value={mainTabValue} index={sourceComponent ? 2 : 1} sx={{ p: 0, mt: 3 }}>
             <Paper elevation={2} sx={{ p: 3 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                 <VisibilityIcon sx={{ mr: 1, color: 'primary.main' }} />
@@ -3537,110 +3597,108 @@ const PipelineBuilder = () => {
           </TabPanel>
         )}
         
-        <TabPanel value={mainTabValue} index={hasLineZoneManagerComponent ? 2 : 1} sx={{ p: 0, mt: 3 }}>
+        <TabPanel value={mainTabValue} index={sourceComponent ? (hasLineZoneManagerComponent ? 3 : 2) : (hasLineZoneManagerComponent ? 2 : 1)} sx={{ p: 0, mt: 3 }}>
           {/* Telemetry Tab */}
-          <Paper elevation={2} sx={{ p: 3, width: '100%', mb: 3 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-              <DatabaseIcon sx={{ mr: 1, color: 'primary.main' }} />
-              <Typography variant="h6">Telemetry Records</Typography>
-              {totalEvents > 0 && (
-                <Typography variant="subtitle1" color="text.secondary" component="span" sx={{ ml: 2 }}>
-                  {totalEvents} events from {totalFrames} frames
-                </Typography>
-              )}
-            </Box>
-            
-            <Divider sx={{ mb: 2 }} />
-            
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3, gap: 2 }}>
-              <Button
-                variant="outlined"
-                startIcon={isLoadingRecords ? <CircularProgress size={24} color="inherit" /> : <RedoIcon />}
-                onClick={fetchDatabaseRecords}
-                disabled={isLoadingRecords || isDeletingRecords}
-              >
-                {isLoadingRecords ? 'Refreshing...' : 'Refresh'}
-              </Button>
-              <Button
-                variant="contained"
-                color="error"
-                startIcon={isDeletingRecords ? <CircularProgress size={24} color="inherit" /> : <DeleteIcon />}
-                onClick={handleDeleteAllRecords}
-                disabled={isDeletingRecords || isLoadingRecords || totalEvents === 0}
-              >
-                {isDeletingRecords ? 'Deleting...' : 'Delete All Records'}
-              </Button>
-            </Box>
-            
-            {!dbComponentExists ? (
-              <Alert severity="info" sx={{ mb: 2 }}>
-                No database sink component found. Add a database sink component to store and view telemetry data.
-              </Alert>
-            ) : isLoadingRecords ? (
-              <Box display="flex" justifyContent="center" my={5}>
-                <CircularProgress />
+          {dbComponentExists && (
+            <Paper elevation={2} sx={{ p: 3, width: '100%', mb: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <DatabaseIcon sx={{ mr: 1, color: 'primary.main' }} />
+                <Typography variant="h6">Telemetry Records</Typography>
+                {totalEvents > 0 && (
+                  <Typography variant="subtitle1" color="text.secondary" component="span" sx={{ ml: 2 }}>
+                    {totalEvents} events from {totalFrames} frames
+                  </Typography>
+                )}
               </Box>
-            ) : databaseRecords.length === 0 ? (
-              <Alert severity="info">
-                No telemetry records found for this camera.
-              </Alert>
-            ) : (
-              <>
-                <TableContainer component={Paper} sx={{ maxHeight: 440 }}>
-                  <Table stickyHeader aria-label="telemetry records table">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>ID</TableCell>
-                        <TableCell>Type</TableCell>
-                        <TableCell>Timestamp</TableCell>
-                        <TableCell>Source</TableCell>
-                        <TableCell>Properties</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {databaseRecords.map((record) => (
-                        <TableRow
-                          key={record.id}
-                          sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
-                        >
-                          <TableCell component="th" scope="row">
-                            {record.id}
-                          </TableCell>
-                          <TableCell>
-                            <Chip 
-                              label={getEventTypeName(record.type)}
-                              color={
-                                record.type === 0 ? "primary" : 
-                                record.type === 1 ? "secondary" : 
-                                record.type === 2 ? "success" : "default"
-                              }
-                              size="small"
-                            />
-                          </TableCell>
-                          <TableCell>{formatTimestamp(record.timestamp)}</TableCell>
-                          <TableCell>{record.source_id}</TableCell>
-                          <TableCell sx={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            <Tooltip title={record.properties} arrow>
-                              <span>{record.properties}</span>
-                            </Tooltip>
-                          </TableCell>
+              
+              <Divider sx={{ mb: 2 }} />
+              
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3, gap: 2 }}>
+                <Button
+                  variant="outlined"
+                  startIcon={isLoadingRecords ? <CircularProgress size={24} color="inherit" /> : <RedoIcon />}
+                  onClick={fetchDatabaseRecords}
+                  disabled={isLoadingRecords || isDeletingRecords}
+                >
+                  {isLoadingRecords ? 'Refreshing...' : 'Refresh'}
+                </Button>
+                <Button
+                  variant="contained"
+                  color="error"
+                  startIcon={isDeletingRecords ? <CircularProgress size={24} color="inherit" /> : <DeleteIcon />}
+                  onClick={handleDeleteAllRecords}
+                  disabled={isDeletingRecords || isLoadingRecords || totalEvents === 0}
+                >
+                  {isDeletingRecords ? 'Deleting...' : 'Delete All Records'}
+                </Button>
+              </Box>
+              
+              {isLoadingRecords ? (
+                <Box display="flex" justifyContent="center" my={5}>
+                  <CircularProgress />
+                </Box>
+              ) : databaseRecords.length === 0 ? (
+                <Alert severity="info">
+                  No telemetry records found for this camera.
+                </Alert>
+              ) : (
+                <>
+                  <TableContainer component={Paper} sx={{ maxHeight: 440 }}>
+                    <Table stickyHeader aria-label="telemetry records table">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>ID</TableCell>
+                          <TableCell>Type</TableCell>
+                          <TableCell>Timestamp</TableCell>
+                          <TableCell>Source</TableCell>
+                          <TableCell>Properties</TableCell>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-                <TablePagination
-                  component="div"
-                  rowsPerPageOptions={[5, 10, 25, 50]}
-                  count={totalEvents}
-                  rowsPerPage={rowsPerPage}
-                  page={page}
-                  onPageChange={handlePageChange}
-                  onRowsPerPageChange={handleChangeRowsPerPage}
-                />
-              </>
-            )}
-          </Paper>
+                      </TableHead>
+                      <TableBody>
+                        {databaseRecords.map((record) => (
+                          <TableRow
+                            key={record.id}
+                            sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
+                          >
+                            <TableCell component="th" scope="row">
+                              {record.id}
+                            </TableCell>
+                            <TableCell>
+                              <Chip 
+                                label={getEventTypeName(record.type)}
+                                color={
+                                  record.type === 0 ? "primary" : 
+                                  record.type === 1 ? "secondary" : 
+                                  record.type === 2 ? "success" : "default"
+                                }
+                                size="small"
+                              />
+                            </TableCell>
+                            <TableCell>{formatTimestamp(record.timestamp)}</TableCell>
+                            <TableCell>{record.source_id}</TableCell>
+                            <TableCell sx={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              <Tooltip title={record.properties} arrow>
+                                <span>{record.properties}</span>
+                              </Tooltip>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                  <TablePagination
+                    component="div"
+                    rowsPerPageOptions={[5, 10, 25, 50]}
+                    count={totalEvents}
+                    rowsPerPage={rowsPerPage}
+                    page={page}
+                    onPageChange={handlePageChange}
+                    onRowsPerPageChange={handleChangeRowsPerPage}
+                  />
+                </>
+              )}
+            </Paper>
+          )}
         </TabPanel>
       </Box>
 
