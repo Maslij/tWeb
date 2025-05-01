@@ -1511,7 +1511,6 @@ const PipelineBuilder = () => {
         // Fetch camera components
         const components = await apiService.components.getAll(cameraId);
         if (components) {
-          console.log("Fetched components:", components);
           setSourceComponent(components.source);
           setProcessorComponents(components.processors || []);
           setSinkComponents(components.sinks || []);
@@ -1568,8 +1567,6 @@ const PipelineBuilder = () => {
                     zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"]
                 };
               });
-              
-              console.log("Setting normalized zones during initial load:", normalizedZones);
               
               // Update the line zone manager form with the normalized zones
               setLineZoneManagerForm(prev => ({
@@ -1629,8 +1626,6 @@ const PipelineBuilder = () => {
   useEffect(() => {
     if (!lineZoneManagerComponent) return;
     
-    console.log("LineZoneManagerComponent updated:", lineZoneManagerComponent);
-    
     // Extract zones from the component
     let zones: any[] = [];
     
@@ -1673,9 +1668,7 @@ const PipelineBuilder = () => {
           out_count: zone.out_count !== undefined ? zone.out_count : undefined
         };
       });
-      
-      console.log("Setting normalized zones in form:", normalizedZones);
-      
+            
       // Get a stringified version of the current zones to compare
       const currentZonesString = JSON.stringify(lineZoneManagerForm.zones);
       const newZonesString = JSON.stringify(normalizedZones);
@@ -1698,7 +1691,6 @@ const PipelineBuilder = () => {
     
     // Skip the update if there are unsaved zone changes, unless forceUpdate is true
     if (hasUnsavedZoneChanges && !forceUpdate) {
-      console.log("Skipping component refresh due to unsaved zone changes");
       return;
     }
     
@@ -1713,11 +1705,9 @@ const PipelineBuilder = () => {
         // Check if a database sink component exists
         const hasDbSink = (components.sinks || []).some(
           sink => {
-            console.log("Checking sink component:", sink);
             return sink.type === 'database' || sink.type_name === 'database';
           }
         );
-        console.log("Database sink exists:", hasDbSink);
         setDbComponentExists(hasDbSink);
         
         // Look for line zone manager component and initialize its zones if found
@@ -1768,8 +1758,6 @@ const PipelineBuilder = () => {
                 out_count: zone.out_count !== undefined ? zone.out_count : undefined
               };
             });
-            
-            console.log("Setting normalized zones after component refresh:", normalizedZones);
             
             // Update the line zone manager form with the normalized zones
             // Only if we don't have unsaved changes
@@ -1855,9 +1843,7 @@ const PipelineBuilder = () => {
         componentType = 'unknown';
       }
     }
-    
-    console.log("Editing component:", component, "extracted type:", componentType);
-    
+
     setSelectedComponentType(componentType);
     
     // The API returns the component status with properties directly on the object
@@ -1990,8 +1976,6 @@ const PipelineBuilder = () => {
             out_count: zone.out_count !== undefined ? zone.out_count : undefined
           };
         }) : [defaultLineZone];
-        
-        console.log("Setting normalized zones in dialog:", normalizedZones);
         
         setLineZoneManagerForm({
           draw_zones: component.draw_zones !== undefined ? component.draw_zones : 
@@ -2284,8 +2268,6 @@ const PipelineBuilder = () => {
               triggering_anchors: zone.triggering_anchors
             }))
           };
-          // Log the config for debugging purposes
-          console.log("Line zone manager config:", JSON.stringify(config, null, 2));
         } else {
           // For unsupported component types, fall back to JSON editor
           config = parseJson(componentConfig);
@@ -3038,9 +3020,7 @@ const PipelineBuilder = () => {
     
     try {
       setIsLoadingRecords(true);
-      console.log("Fetching database records for camera:", cameraId);
       const response = await apiService.database.getRecords(cameraId, page, rowsPerPage);
-      console.log("Received database records:", response);
       if (response) {
         setDatabaseRecords(response.events);
         setTotalEvents(response.total_events);
@@ -3535,10 +3515,7 @@ const PipelineBuilder = () => {
                           in_count: zone.in_count,
                           out_count: zone.out_count
                         }));
-                        
-                        console.log('Current zones in form:', lineZoneManagerForm.zones);
-                        console.log('Normalized zones to send:', normalizedZones);
-                        
+
                         // Create a new config object without spreading the old config
                         // This ensures we don't accidentally keep old zones data
                         const config: Record<string, any> = {
@@ -3562,8 +3539,6 @@ const PipelineBuilder = () => {
                             }
                           });
                         }
-                        
-                        console.log('Sending config to API:', config);
                         
                         // Update the component
                         const result = await apiService.components.processors.update(

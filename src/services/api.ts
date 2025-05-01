@@ -200,7 +200,6 @@ const apiService = {
     getAll: async (): Promise<Camera[]> => {
       try {
         const response = await axios.get(getFullUrl('/api/v1/cameras'));
-        console.log('API response:', response.data);
         return ensureArray(response.data);
       } catch (error) {
         console.error('Error fetching cameras:', error);
@@ -455,8 +454,7 @@ const apiService = {
     async getRecords(cameraId: string, page: number = 0, limit: number = 10): Promise<DatabaseRecordsResponse | null> {
       try {
         const url = getFullUrl(`/api/v1/cameras/${cameraId}/database/events?page=${page}&limit=${limit}`);
-        console.log("Fetching database records from URL:", url);
-        
+
         const response = await fetch(url);
         if (!response.ok) {
           const errorText = await response.text();
@@ -476,8 +474,7 @@ const apiService = {
     async deleteRecords(cameraId: string): Promise<boolean> {
       try {
         const url = getFullUrl(`/api/v1/cameras/${cameraId}/database/events`);
-        console.log("Deleting database records from URL:", url);
-        
+
         const response = await fetch(url, {
           method: 'DELETE',
         });
