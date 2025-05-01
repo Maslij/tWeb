@@ -368,7 +368,7 @@ const LineZoneList: React.FC<LineZoneListProps> = ({
                 </Box>
               }
               secondary={
-                <Box sx={{ mt: 1 }}>
+                <Box component="div" sx={{ mt: 1 }}>
                   <Box component="span" sx={{ display: 'flex', alignItems: 'center', color: 'text.secondary' }}>
                     Threshold: 
                     <TextField
@@ -419,6 +419,8 @@ const LineZoneList: React.FC<LineZoneListProps> = ({
               }
               onClick={() => onSelectZone(index)}
               sx={{ cursor: 'pointer' }}
+              primaryTypographyProps={{ component: 'div' }}
+              secondaryTypographyProps={{ component: 'div' }}
             />
           </ListItem>
         ))
@@ -2047,19 +2049,15 @@ const PipelineBuilder = () => {
 
   // Set up frame refresh when camera is running
   useEffect(() => {
+    let interval: number | null = null;
+    
     if (camera?.running && cameraId) {
       // Initial frame load
       refreshFrame();
       
       // Set up interval for frame refresh (every 1 second)
-      const interval = window.setInterval(refreshFrame, 1000);
+      interval = window.setInterval(refreshFrame, 1000);
       setRefreshInterval(interval);
-      
-      return () => {
-        if (refreshInterval) {
-          clearInterval(refreshInterval);
-        }
-      };
     } else {
       // Clear interval when camera stops
       if (refreshInterval) {
@@ -2068,7 +2066,17 @@ const PipelineBuilder = () => {
       }
       setFrameUrl('');
     }
-  }, [camera?.running, cameraId]);
+    
+    // Clean up function
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+      if (refreshInterval) {
+        clearInterval(refreshInterval);
+      }
+    };
+  }, [camera?.running, cameraId]); // Remove refreshInterval from dependencies
 
   // Clean up interval on component unmount
   useEffect(() => {
@@ -3617,16 +3625,35 @@ const PipelineBuilder = () => {
             Live Preview {!camera?.running && pipelineHasRunOnce && "(Last Frame)"}
           </Typography>
           <Box sx={{ width: '100%', textAlign: 'center' }}>
-            <img 
-              src={camera?.running ? (frameUrl || "") : (lastFrameUrl || "")} 
-              alt="Camera feed" 
-              style={{ 
-                maxWidth: '100%', 
-                maxHeight: '500px', 
-                border: '1px solid #ccc',
-                borderRadius: '4px'
-              }} 
-            />
+            {(camera?.running && frameUrl) || (!camera?.running && lastFrameUrl) ? (
+              <img 
+                src={camera?.running ? frameUrl : lastFrameUrl} 
+                alt="Camera feed" 
+                style={{ 
+                  maxWidth: '100%', 
+                  maxHeight: '500px', 
+                  border: '1px solid #ccc',
+                  borderRadius: '4px'
+                }} 
+              />
+            ) : (
+              <Box 
+                sx={{ 
+                  width: '100%', 
+                  height: '500px', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                  bgcolor: 'background.paper'
+                }}
+              >
+                <Typography variant="body1" color="text.secondary">
+                  No image available
+                </Typography>
+              </Box>
+            )}
           </Box>
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
             {camera?.running && (
