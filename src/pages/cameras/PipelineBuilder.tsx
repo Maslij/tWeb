@@ -1482,6 +1482,8 @@ const PipelineBuilder = () => {
   const [isLoadingRecords, setIsLoadingRecords] = useState<boolean>(false);
   const [isDeletingRecords, setIsDeletingRecords] = useState<boolean>(false);
   const [dbComponentExists, setDbComponentExists] = useState<boolean>(false);
+  // Add a ref to track if telemetry data has been loaded for the current tab session
+  const telemetryTabFirstLoadRef = useRef<boolean>(false);
 
   // Fetch data on mount
   useEffect(() => {
@@ -3042,9 +3044,16 @@ const PipelineBuilder = () => {
       (hasLineZoneManagerComponent ? 2 : 1);
     
     if (mainTabValue === telemetryTabIndex && dbComponentExists) {
-      fetchDatabaseRecords();
+      // Only fetch data when the tab is first selected
+      if (!telemetryTabFirstLoadRef.current) {
+        fetchDatabaseRecords();
+        telemetryTabFirstLoadRef.current = true;
+      }
+    } else {
+      // Reset the ref when navigating away from the tab
+      telemetryTabFirstLoadRef.current = false;
     }
-  }, [mainTabValue, page, rowsPerPage, fetchDatabaseRecords, sourceComponent, hasLineZoneManagerComponent, dbComponentExists]);
+  }, [mainTabValue, sourceComponent, hasLineZoneManagerComponent, dbComponentExists, fetchDatabaseRecords]);
 
   // Function to delete all records for this camera
   const handleDeleteAllRecords = async () => {
@@ -3079,12 +3088,16 @@ const PipelineBuilder = () => {
   // Handler for page change
   const handlePageChange = (_event: unknown, newPage: number) => {
     setPage(newPage);
+    // Force a refresh when changing pages
+    fetchDatabaseRecords();
   };
 
   // Handler for rows per page change
   const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
+    // Force a refresh when changing rows per page
+    fetchDatabaseRecords();
   };
 
   // Get event type name
