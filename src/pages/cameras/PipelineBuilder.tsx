@@ -3,16 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Container,
   Paper,
-  Button as MuiButton,
   Alert,
   CircularProgress,
   Tabs,
   Tab,
   Divider,
-  List,
-  ListItem,
-  ListItemText,
-  IconButton,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -25,7 +20,6 @@ import {
   Stack,
   Card,
   CardContent,
-  CardActions,
   Tooltip,
   Snackbar,
   SelectChangeEvent,
@@ -54,6 +48,41 @@ import { Button } from '../../components/ui/Button';
 import { IconButton as CustomIconButton } from '../../components/ui/IconButton';
 import { Divider as CustomDivider } from '../../components/ui/Divider';
 
+// Import extracted components
+import LineZoneEditor from '../../components/pipeline/LineZoneEditor';
+import { Zone } from '../../components/pipeline/LineZoneList';
+import TabPanel from '../../components/pipeline/TabPanel';
+import ComponentCard from '../../components/pipeline/ComponentCard';
+import { 
+  getComponentTypeName, 
+  getComponentTypeDescription,
+  sourceTypeMapping,
+  processorTypeMapping,
+  sinkTypeMapping
+} from '../../components/pipeline/ComponentTypeMapping';
+import { 
+  formatJson, 
+  parseJson,
+  FileSourceForm,
+  RtspSourceForm,
+  ObjectDetectionForm,
+  ObjectTrackingForm,
+  LineZoneManagerForm,
+  FileSinkForm,
+  DatabaseSinkForm
+} from '../../components/pipeline/FormTypes';
+import { 
+  pipelineTemplates,
+  defaultLineZone,
+} from '../../components/pipeline/PipelineTemplates';
+import {
+  ComponentCardSkeleton,
+  ImageSkeleton,
+  LineZoneEditorSkeleton,
+  TelemetryChartSkeleton,
+  DatabaseTableSkeleton
+} from '../../components/pipeline/SkeletonComponents';
+
 import { 
   Chart as ChartJS, 
   CategoryScale, 
@@ -66,7 +95,7 @@ import {
   Legend,
   TimeScale
 } from 'chart.js';
-import { Line, Bar, Scatter } from 'react-chartjs-2';
+import { Line } from 'react-chartjs-2';
 import 'chartjs-adapter-date-fns';
 import { enUS } from 'date-fns/locale';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
@@ -74,24 +103,15 @@ import VideoSettingsIcon from '@mui/icons-material/VideoSettings';
 import MemoryIcon from '@mui/icons-material/Memory';
 import SaveIcon from '@mui/icons-material/Save';
 import AddIcon from '@mui/icons-material/Add';
+import RedoIcon from '@mui/icons-material/Redo';
 import DeleteIcon from '@mui/icons-material/Delete';
-import EditIcon from '@mui/icons-material/Edit';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import StopIcon from '@mui/icons-material/Stop';
-import AddCircleIcon from '@mui/icons-material/AddCircle';
-import RemoveCircleIcon from '@mui/icons-material/RemoveCircle';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SettingsIcon from '@mui/icons-material/Settings';
-import CreateIcon from '@mui/icons-material/Create';
-import RedoIcon from '@mui/icons-material/Redo';
-import ClearIcon from '@mui/icons-material/Clear';
-import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
-import PeopleIcon from '@mui/icons-material/People';
-import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import TuneIcon from '@mui/icons-material/Tune';
-import StorageIcon from '@mui/icons-material/Storage';
 import DatabaseIcon from '@mui/icons-material/Storage';
 import LiveTvIcon from '@mui/icons-material/LiveTv';
 import WarningIcon from '@mui/icons-material/Warning';
@@ -101,228 +121,7 @@ import apiService, {
   Component, 
   ComponentInput, 
   EventRecord,
-  DatabaseRecordsResponse  
 } from '../../services/api';
-
-// Component type mapping interfaces
-interface ComponentTypeInfo {
-  name: string;
-  description: string;
-  icon?: React.ReactNode;
-}
-
-interface ComponentTypeMapping {
-  [key: string]: ComponentTypeInfo;
-}
-
-// Human-readable component type mappings
-const sourceTypeMapping: ComponentTypeMapping = {
-  "rtsp": {
-    name: "RTSP Camera Stream",
-    description: "Connect to an IP camera using the RTSP protocol",
-    icon: <VideoSettingsIcon />
-  },
-  "file": {
-    name: "Video File",
-    description: "Process a pre-recorded video file",
-    icon: <VideoSettingsIcon />
-  }
-};
-
-const processorTypeMapping: ComponentTypeMapping = {
-  "object_detection": {
-    name: "Object Detection",
-    description: "Detect objects in the video using deep learning models",
-    icon: <MemoryIcon />
-  },
-  "object_tracking": {
-    name: "Object Tracking",
-    description: "Track detected objects across video frames",
-    icon: <MemoryIcon />
-  },
-  "line_zone_manager": {
-    name: "Line Crossing Detection",
-    description: "Count objects crossing defined line zones",
-    icon: <MemoryIcon />
-  }
-};
-
-const sinkTypeMapping: ComponentTypeMapping = {
-  "file": {
-    name: "Video File Output",
-    description: "Save processed video to a file",
-    icon: <SaveIcon />
-  },
-  "database": {
-    name: "Database Storage",
-    description: "Store telemetry data in a SQLite database",
-    icon: <StorageIcon />
-  }
-};
-
-// Helper function to get human-readable name for a component type
-const getComponentTypeName = (type: string, componentCategory: 'source' | 'processor' | 'sink'): string => {
-  const mapping = componentCategory === 'source' 
-    ? sourceTypeMapping 
-    : componentCategory === 'processor' 
-      ? processorTypeMapping 
-      : sinkTypeMapping;
-  
-  return mapping[type]?.name || type;
-};
-
-// Helper function to get description for a component type
-const getComponentTypeDescription = (type: string, componentCategory: 'source' | 'processor' | 'sink'): string => {
-  const mapping = componentCategory === 'source' 
-    ? sourceTypeMapping 
-    : componentCategory === 'processor' 
-      ? processorTypeMapping 
-      : sinkTypeMapping;
-  
-  return mapping[type]?.description || '';
-};
-
-// File Source form interface
-interface FileSourceForm {
-  url: string;
-  width: number;
-  height: number;
-  fps: number;
-  use_hw_accel: boolean;
-  adaptive_timing: boolean;
-}
-
-// Add RTSP source form interface after FileSourceForm
-interface RtspSourceForm {
-  url: string;
-  width: number;
-  height: number;
-  fps: number;
-  use_hw_accel: boolean;
-  rtsp_transport: string;
-  latency: number;
-}
-
-// Object Detection form interface
-interface ObjectDetectionForm {
-  model_id: string;
-  server_url: string;
-  confidence_threshold: number;
-  draw_bounding_boxes: boolean;
-  use_shared_memory: boolean;
-  label_font_scale: number;
-  classes: string[];
-  newClass: string;
-}
-
-// Object Tracking form interface
-interface ObjectTrackingForm {
-  frame_rate: number;
-  track_buffer: number;
-  track_thresh: number;
-  high_thresh: number;
-  match_thresh: number;
-  draw_tracking: boolean;
-  draw_track_trajectory: boolean;
-  draw_track_id: boolean;
-  draw_semi_transparent_boxes: boolean;
-  label_font_scale: number;
-}
-
-// Line Zone Manager form interface
-interface Zone {
-  id: string;
-  start_x: number;
-  start_y: number;
-  end_x: number;
-  end_y: number;
-  min_crossing_threshold: number;
-  triggering_anchors: string[];
-  in_count?: number;  // Add optional in_count
-  out_count?: number; // Add optional out_count
-}
-
-interface LineZoneManagerForm {
-  draw_zones: boolean;
-  line_color: number[];
-  line_thickness: number;
-  draw_counts: boolean;
-  text_color: number[];
-  text_scale: number;
-  text_thickness: number;
-  zones: Zone[];
-}
-
-// File Sink form interface
-interface FileSinkForm {
-  path: string;
-  width: number;
-  height: number;
-  fps: number;
-  fourcc: string;
-}
-
-// Database Sink form interface
-interface DatabaseSinkForm {
-  store_thumbnails: boolean;
-  thumbnail_width: number;
-  thumbnail_height: number;
-  retention_days: number;
-  store_detection_events: boolean;
-  store_tracking_events: boolean;
-  store_counting_events: boolean;
-}
-
-// Anchor options for line zones
-const ANCHOR_OPTIONS = [
-  "BOTTOM_LEFT", 
-  "BOTTOM_RIGHT", 
-  "CENTER", 
-  "TOP_LEFT", 
-  "TOP_RIGHT", 
-  "BOTTOM_CENTER"
-];
-
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-  sx?: object;
-}
-
-const TabPanel = (props: TabPanelProps) => {
-  const { children, value, index, sx = {}, ...other } = props;
-
-  return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`pipeline-tabpanel-${index}`}
-      aria-labelledby={`pipeline-tab-${index}`}
-      {...other}
-    >
-      {value === index && <Box sx={{ ...sx }}>{children}</Box>}
-    </div>
-  );
-};
-
-// Helper to convert JSON to string with formatting
-const formatJson = (json: any): string => {
-  try {
-    return JSON.stringify(json, null, 2);
-  } catch (e) {
-    return JSON.stringify({});
-  }
-};
-
-// Helper to parse JSON string safely
-const parseJson = (jsonString: string): any => {
-  try {
-    return JSON.parse(jsonString);
-  } catch (e) {
-    return {};
-  }
-};
 
 // Add dependency type definitions
 interface ComponentDependencyMap {
@@ -346,995 +145,12 @@ interface AIModel {
   classes?: string[];
 }
 
-interface ModelsResponse {
-  models: AIModel[];
-  service: string;
-  status: string;
+// Add new interfaces for telemetry data
+interface ZoneLineCount {
+  timestamp: number;
+  zone_id: string;
+  count: number;
 }
-
-// After the existing interfaces, add a new interface for the LineZoneEditorProps
-interface LineZoneEditorProps {
-  zones: Zone[];
-  onZonesChange: (zones: Zone[]) => void;
-  imageUrl: string;
-  disabled?: boolean;
-}
-
-// Define a new component for the line zone list
-interface LineZoneListProps {
-  zones: Zone[];
-  selectedZoneIndex: number | null;
-  onSelectZone: (index: number) => void;
-  onDeleteZone: (index: number) => void;
-  onUpdateZone: (index: number, field: keyof Zone, value: any) => void;
-  disabled?: boolean;
-}
-
-const LineZoneList: React.FC<LineZoneListProps> = ({ 
-  zones, 
-  selectedZoneIndex, 
-  onSelectZone, 
-  onDeleteZone, 
-  onUpdateZone,
-  disabled = false
-}) => {
-  return (
-    <List sx={{ 
-      width: '100%', 
-      bgcolor: 'background.paper', 
-      borderRadius: 1, 
-      border: '1px solid', 
-      borderColor: 'divider',
-      maxHeight: '500px',
-      overflow: 'auto'
-    }}>
-      {zones.length === 0 ? (
-        <ListItem>
-          <ListItemText 
-            primary="No zones defined" 
-            secondary="Draw a line on the image to create a zone" 
-          />
-        </ListItem>
-      ) : (
-        zones.map((zone, index) => (
-          <ListItem 
-            key={index}
-            sx={{ 
-              borderBottom: index < zones.length - 1 ? '1px solid' : 'none', 
-              borderColor: 'divider',
-              bgcolor: selectedZoneIndex === index ? 'action.selected' : 'transparent'
-            }}
-            secondaryAction={
-              <IconButton 
-                edge="end" 
-                aria-label="delete" 
-                onClick={() => onDeleteZone(index)}
-                disabled={disabled}
-              >
-                <DeleteIcon />
-              </IconButton>
-            }
-          >
-            <ListItemText
-              primary={
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <TextField
-                    value={zone.id}
-                    size="small"
-                    variant="standard"
-                    onChange={(e) => onUpdateZone(index, 'id', e.target.value)}
-                    onClick={(e) => e.stopPropagation()}
-                    disabled={disabled}
-                    sx={{ width: '130px' }}
-                  />
-                  {/* Display in/out counts if available */}
-                  {(zone.in_count !== undefined || zone.out_count !== undefined) && (
-                    <Box sx={{ ml: 2, display: 'flex', gap: 1 }}>
-                      <Chip
-                        size="small"
-                        label={`In: ${zone.in_count || 0}`}
-                        color="success"
-                        variant="outlined"
-                      />
-                      <Chip
-                        size="small"
-                        label={`Out: ${zone.out_count || 0}`}
-                        color="primary"
-                        variant="outlined"
-                      />
-                    </Box>
-                  )}
-                </Box>
-              }
-              secondary={
-                <Box component="div" sx={{ mt: 1 }}>
-                  <Box component="span" sx={{ display: 'flex', alignItems: 'center', color: 'text.secondary' }}>
-                    Threshold: 
-                    <TextField
-                      type="number"
-                      size="small"
-                      variant="standard"
-                      value={zone.min_crossing_threshold}
-                      onChange={(e) => onUpdateZone(index, 'min_crossing_threshold', parseInt(e.target.value) || 1)}
-                      onClick={(e) => e.stopPropagation()}
-                      disabled={disabled}
-                      sx={{ width: '60px', mx: 1 }}
-                      inputProps={{ min: 1 }}
-                    />
-                  </Box>
-                  <Box component="span" sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
-                    {ANCHOR_OPTIONS.map((anchor) => (
-                      <Chip
-                        key={anchor}
-                        label={anchor.split('_').map(word => word.charAt(0) + word.slice(1).toLowerCase()).join(' ')}
-                        size="small"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (!disabled) {
-                            const currentAnchors = [...(zone.triggering_anchors || [])];
-                            if (currentAnchors.includes(anchor)) {
-                              onUpdateZone(
-                                index, 
-                                'triggering_anchors', 
-                                currentAnchors.filter(a => a !== anchor)
-                              );
-                            } else {
-                              onUpdateZone(
-                                index, 
-                                'triggering_anchors', 
-                                [...currentAnchors, anchor]
-                              );
-                            }
-                          }
-                        }}
-                        color={(zone.triggering_anchors || []).includes(anchor) ? "primary" : "default"}
-                        variant={(zone.triggering_anchors || []).includes(anchor) ? "filled" : "outlined"}
-                        disabled={disabled}
-                        sx={{ mt: 0.5 }}
-                      />
-                    ))}
-                  </Box>
-                </Box>
-              }
-              onClick={() => onSelectZone(index)}
-              sx={{ cursor: 'pointer' }}
-              primaryTypographyProps={{ component: 'div' }}
-              secondaryTypographyProps={{ component: 'div' }}
-            />
-          </ListItem>
-        ))
-      )}
-    </List>
-  );
-};
-
-// Update the LineZoneEditor component
-const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, imageUrl, disabled = false }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [selectedZone, setSelectedZone] = useState<number | null>(null);
-  const [draggingPoint, setDraggingPoint] = useState<'start' | 'end' | null>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [drawStartPos, setDrawStartPos] = useState<{ x: number, y: number } | null>(null);
-  const [imageSize, setImageSize] = useState<{ width: number, height: number } | null>(null);
-  const [drawMode, setDrawMode] = useState<boolean>(false);
-  const [hoveredPoint, setHoveredPoint] = useState<{ zoneIndex: number, point: 'start' | 'end' | 'line' } | null>(null);
-  const [currentImageUrl, setCurrentImageUrl] = useState<string>("");
-  const nextImageRef = useRef<HTMLImageElement | null>(null);
-  const lastUpdateTimeRef = useRef<number>(0);
-  const pendingZonesUpdateRef = useRef<Zone[] | null>(null);
-  // Add this line - create a ref to track active dragging that's accessible outside the component
-  const isActivelyDraggingRef = useRef<boolean>(false);
-  
-  // Throttling mechanism for zone updates
-  const throttledZoneUpdate = (updatedZones: Zone[]) => {
-    const now = Date.now();
-    // Only send updates every 50ms during dragging to prevent too many rerenders
-    if (now - lastUpdateTimeRef.current > 50) {
-      onZonesChange(updatedZones);
-      lastUpdateTimeRef.current = now;
-      pendingZonesUpdateRef.current = null;
-    } else {
-      // Store the latest update to apply later
-      pendingZonesUpdateRef.current = updatedZones;
-    }
-  };
-  
-  // Apply any pending updates when dragging ends
-  useEffect(() => {
-    if (!draggingPoint && pendingZonesUpdateRef.current) {
-      onZonesChange(pendingZonesUpdateRef.current);
-      pendingZonesUpdateRef.current = null;
-    }
-  }, [draggingPoint, onZonesChange]);
-  
-  // Preload image to prevent flickering
-  useEffect(() => {
-    if (!imageUrl || imageUrl === "") return;
-    
-    // Only update if the URL has changed
-    if (imageUrl === currentImageUrl) return;
-    
-    // Create a new image element for preloading
-    const newImg = new Image();
-    
-    newImg.onload = () => {
-      // Store the image size for accurate calculations
-      setImageSize({ width: newImg.width, height: newImg.height });
-      
-      // Store the loaded image reference and URL
-      nextImageRef.current = newImg;
-      setCurrentImageUrl(imageUrl);
-      
-      // Draw the canvas with the new image
-      drawCanvas();
-    };
-    
-    newImg.src = imageUrl;
-  }, [imageUrl]);
-  
-  // Initialize canvas on mount
-  useEffect(() => {
-    // Initialize canvas size
-    const container = containerRef.current;
-    if (container) {
-      const canvas = canvasRef.current;
-      if (canvas) {
-        canvas.width = container.clientWidth;
-        canvas.height = container.clientHeight;
-        drawCanvas();
-      }
-    }
-    
-    // Add window resize handler
-    const handleResize = () => {
-      const container = containerRef.current;
-      const canvas = canvasRef.current;
-      if (container && canvas) {
-        canvas.width = container.clientWidth;
-        canvas.height = container.clientHeight;
-        drawCanvas();
-      }
-    };
-    
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-  
-  // Redraw canvas when zones, selectedZone, or hover state changes
-  useEffect(() => {
-    drawCanvas();
-  }, [zones, selectedZone, hoveredPoint, currentImageUrl]);
-  
-  // Draw the canvas
-  const drawCanvas = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    
-    const container = containerRef.current;
-    if (!container) return;
-    
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // Draw the image if available
-    if (nextImageRef.current && currentImageUrl) {
-      // Stretch image to fill entire canvas (since we're using normalized coordinates)
-      ctx.drawImage(nextImageRef.current, 0, 0, canvas.width, canvas.height);
-      
-      // Draw zones
-      zones.forEach((zone, index) => {
-        // Convert normalized coordinates to canvas coordinates
-        const startX = zone.start_x * canvas.width;
-        const startY = zone.start_y * canvas.height;
-        const endX = zone.end_x * canvas.width;
-        const endY = zone.end_y * canvas.height;
-        
-        // Define styles based on selection state
-        const isSelected = index === selectedZone;
-        const isHovered = hoveredPoint && hoveredPoint.zoneIndex === index;
-        
-        // Draw line with different style if selected or hovered
-        ctx.beginPath();
-        ctx.moveTo(startX, startY);
-        ctx.lineTo(endX, endY);
-        ctx.lineWidth = isSelected ? 4 : isHovered && hoveredPoint?.point === 'line' ? 3 : 2;
-        ctx.strokeStyle = isSelected ? '#2196f3' : isHovered ? '#42a5f5' : '#64b5f6';
-        ctx.stroke();
-        
-        // Add a subtle glow effect for selected lines
-        if (isSelected) {
-          ctx.beginPath();
-          ctx.moveTo(startX, startY);
-          ctx.lineTo(endX, endY);
-          ctx.lineWidth = 8;
-          ctx.strokeStyle = 'rgba(33, 150, 243, 0.3)';
-          ctx.stroke();
-        }
-        
-        // Draw direction arrow
-        const angle = Math.atan2(endY - startY, endX - startX);
-        const arrowLength = 15;
-        const arrowWidth = 8;
-        
-        // Draw the arrow at 75% along the line
-        const arrowX = startX + (endX - startX) * 0.75;
-        const arrowY = startY + (endY - startY) * 0.75;
-        
-        ctx.beginPath();
-        ctx.moveTo(arrowX, arrowY);
-        ctx.lineTo(
-          arrowX - arrowLength * Math.cos(angle) + arrowWidth * Math.sin(angle),
-          arrowY - arrowLength * Math.sin(angle) - arrowWidth * Math.cos(angle)
-        );
-        ctx.lineTo(
-          arrowX - arrowLength * Math.cos(angle) - arrowWidth * Math.sin(angle),
-          arrowY - arrowLength * Math.sin(angle) + arrowWidth * Math.cos(angle)
-        );
-        ctx.closePath();
-        ctx.fillStyle = isSelected ? '#2196f3' : '#64b5f6';
-        ctx.fill();
-        
-        // Draw points with different colors and sizes based on state
-        const startPointIsHovered = isHovered && hoveredPoint?.point === 'start';
-        const endPointIsHovered = isHovered && hoveredPoint?.point === 'end';
-        
-        // Increase point size for selection and hover
-        const startPointRadius = isSelected || startPointIsHovered ? 8 : 6;
-        const endPointRadius = isSelected || endPointIsHovered ? 8 : 6;
-        
-        // Start point with glow effect
-        if (isSelected || startPointIsHovered) {
-          ctx.beginPath();
-          ctx.arc(startX, startY, startPointRadius + 4, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(76, 175, 80, 0.3)';
-          ctx.fill();
-        }
-        
-        // Start point
-        ctx.beginPath();
-        ctx.arc(startX, startY, startPointRadius, 0, Math.PI * 2);
-        ctx.fillStyle = '#4caf50'; // Green
-        ctx.fill();
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        
-        // End point with glow effect
-        if (isSelected || endPointIsHovered) {
-          ctx.beginPath();
-          ctx.arc(endX, endY, endPointRadius + 4, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(244, 67, 54, 0.3)';
-          ctx.fill();
-        }
-        
-        // End point
-        ctx.beginPath();
-        ctx.arc(endX, endY, endPointRadius, 0, Math.PI * 2);
-        ctx.fillStyle = '#f44336'; // Red
-        ctx.fill();
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        
-        // Draw zone ID
-        ctx.font = isSelected ? 'bold 14px Roboto' : '14px Roboto';
-        ctx.fillStyle = 'white';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        
-        // Calculate the middle point of the line
-        const midX = (startX + endX) / 2;
-        const midY = (startY + endY) / 2;
-        
-        // Draw a background for the text
-        const textMetrics = ctx.measureText(zone.id);
-        const textWidth = textMetrics.width;
-        const textHeight = 20;
-        
-        ctx.fillStyle = isSelected ? 'rgba(33, 150, 243, 0.8)' : 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(midX - textWidth / 2 - 5, midY - textHeight / 2 - 15, textWidth + 10, textHeight);
-        
-        // Draw the text
-        ctx.fillStyle = 'white';
-        ctx.fillText(zone.id, midX, midY - 15);
-      });
-    } else if (!nextImageRef.current) {
-      // Display message if no image is available
-      ctx.font = '16px Roboto';
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('No image available. Start the pipeline to see the camera feed.', canvas.width / 2, canvas.height / 2);
-    }
-  };
-
-  // Convert canvas coordinates to normalized coordinates
-  const canvasToNormalizedCoords = (x: number, y: number) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-    
-    // Simply normalize based on canvas size since we're stretching the image
-    const normalizedX = Math.max(0, Math.min(1, x / canvas.width));
-    const normalizedY = Math.max(0, Math.min(1, y / canvas.height));
-    
-    return { x: normalizedX, y: normalizedY };
-  };
-
-  // Handle mouse move for hover effects
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (disabled) return;
-    
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
-    // If in drawing mode and currently drawing
-    if (drawMode && isDrawing && drawStartPos) {
-      // Redraw the canvas
-      drawCanvas();
-      
-      // Get the canvas context
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      
-      // Draw the new line
-      ctx.beginPath();
-      ctx.moveTo(drawStartPos.x, drawStartPos.y);
-      ctx.lineTo(x, y);
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = '#ff9800';
-      ctx.stroke();
-      
-      // Draw the start point
-      ctx.beginPath();
-      ctx.arc(drawStartPos.x, drawStartPos.y, 6, 0, Math.PI * 2);
-      ctx.fillStyle = '#4caf50';
-      ctx.fill();
-      
-      // Draw the end point
-      ctx.beginPath();
-      ctx.arc(x, y, 6, 0, Math.PI * 2);
-      ctx.fillStyle = '#f44336';
-      ctx.fill();
-      
-      return;
-    }
-    
-    // If dragging a control point
-    if (selectedZone !== null && draggingPoint !== null) {
-      const normalized = canvasToNormalizedCoords(x, y);
-      
-      const updatedZones = [...zones];
-      if (draggingPoint === 'start') {
-        updatedZones[selectedZone] = {
-          ...updatedZones[selectedZone],
-          start_x: normalized.x,
-          start_y: normalized.y
-        };
-      } else if (draggingPoint === 'end') {
-        updatedZones[selectedZone] = {
-          ...updatedZones[selectedZone],
-          end_x: normalized.x,
-          end_y: normalized.y
-        };
-      }
-      
-      // Use the throttled update function instead of direct callback
-      throttledZoneUpdate(updatedZones);
-      return;
-    }
-
-    // Check if hovering over any control points or lines
-    let foundHover = false;
-    
-    for (let i = 0; i < zones.length; i++) {
-      const zone = zones[i];
-      
-      // Convert normalized coordinates to canvas coordinates
-      const startX = zone.start_x * canvas.width;
-      const startY = zone.start_y * canvas.height;
-      const endX = zone.end_x * canvas.width;
-      const endY = zone.end_y * canvas.height;
-      
-      // Check distance to start point
-      const distToStart = Math.sqrt((x - startX) ** 2 + (y - startY) ** 2);
-      if (distToStart < 10) {
-        setHoveredPoint({ zoneIndex: i, point: 'start' });
-        canvas.style.cursor = 'pointer';
-        foundHover = true;
-        break;
-      }
-      
-      // Check distance to end point
-      const distToEnd = Math.sqrt((x - endX) ** 2 + (y - endY) ** 2);
-      if (distToEnd < 10) {
-        setHoveredPoint({ zoneIndex: i, point: 'end' });
-        canvas.style.cursor = 'pointer';
-        foundHover = true;
-        break;
-      }
-      
-      // Check distance to line
-      const lineLength = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2);
-      if (lineLength === 0) continue;
-      
-      const dot = ((x - startX) * (endX - startX) + (y - startY) * (endY - startY)) / (lineLength ** 2);
-      
-      if (dot < 0 || dot > 1) continue;
-      
-      const closestX = startX + dot * (endX - startX);
-      const closestY = startY + dot * (endY - startY);
-      
-      const distToLine = Math.sqrt((x - closestX) ** 2 + (y - closestY) ** 2);
-      
-      if (distToLine < 10) {
-        setHoveredPoint({ zoneIndex: i, point: 'line' });
-        canvas.style.cursor = 'pointer';
-        foundHover = true;
-        break;
-      }
-    }
-    
-    if (!foundHover) {
-      setHoveredPoint(null);
-      canvas.style.cursor = drawMode ? 'crosshair' : 'default';
-    }
-  };
-
-  // Handle mouse down event
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (disabled) return;
-    
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    
-    // If in draw mode, start drawing
-    if (drawMode) {
-      setIsDrawing(true);
-      setDrawStartPos({ x, y });
-      setSelectedZone(null);
-      return;
-    }
-    
-    // Check if clicking on any control points
-    for (let i = 0; i < zones.length; i++) {
-      const zone = zones[i];
-      
-      // Convert normalized coordinates to canvas coordinates
-      const startX = zone.start_x * canvas.width;
-      const startY = zone.start_y * canvas.height;
-      const endX = zone.end_x * canvas.width;
-      const endY = zone.end_y * canvas.height;
-      
-      // Check distance to start point
-      const distToStart = Math.sqrt((x - startX) ** 2 + (y - startY) ** 2);
-      if (distToStart < 10) {
-        setSelectedZone(i);
-        setDraggingPoint('start');
-        isActivelyDraggingRef.current = true; // Set active dragging flag
-        return;
-      }
-      
-      // Check distance to end point
-      const distToEnd = Math.sqrt((x - endX) ** 2 + (y - endY) ** 2);
-      if (distToEnd < 10) {
-        setSelectedZone(i);
-        setDraggingPoint('end');
-        isActivelyDraggingRef.current = true; // Set active dragging flag
-        return;
-      }
-      
-      // Check distance to line
-      const lineLength = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2);
-      if (lineLength === 0) continue;
-      
-      const dot = ((x - startX) * (endX - startX) + (y - startY) * (endY - startY)) / (lineLength ** 2);
-      
-      if (dot < 0 || dot > 1) continue;
-      
-      const closestX = startX + dot * (endX - startX);
-      const closestY = startY + dot * (endY - startY);
-      
-      const distToLine = Math.sqrt((x - closestX) ** 2 + (y - closestY) ** 2);
-      
-      if (distToLine < 10) {
-        setSelectedZone(i);
-        return;
-      }
-    }
-    
-    // If not clicking on any control points, deselect
-    setSelectedZone(null);
-    setDraggingPoint(null);
-  };
-
-  // Handle mouse up event
-  const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (disabled) return;
-    
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    // If in drawing mode and finishing a line
-    if (drawMode && isDrawing && drawStartPos) {
-      const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      
-      const startNormalized = canvasToNormalizedCoords(drawStartPos.x, drawStartPos.y);
-      const endNormalized = canvasToNormalizedCoords(x, y);
-      
-      // Check if line is long enough
-      const dx = x - drawStartPos.x;
-      const dy = y - drawStartPos.y;
-      const lineLength = Math.sqrt(dx * dx + dy * dy);
-      
-      if (lineLength > 20) {
-        // Create a new zone
-        const newZone: Zone = {
-          id: `zone${zones.length + 1}`,
-          start_x: startNormalized.x,
-          start_y: startNormalized.y,
-          end_x: endNormalized.x,
-          end_y: endNormalized.y,
-          min_crossing_threshold: 1,
-          triggering_anchors: ["BOTTOM_CENTER", "CENTER"]
-        };
-        
-        onZonesChange([...zones, newZone]);
-        setSelectedZone(zones.length);
-      }
-      
-      setIsDrawing(false);
-      setDrawStartPos(null);
-      setDrawMode(false);
-      return;
-    }
-    
-    isActivelyDraggingRef.current = false; // Clear active dragging flag
-    setDraggingPoint(null);
-  };
-
-  const handleDeleteSelectedZone = () => {
-    if (selectedZone === null) return;
-    
-    const updatedZones = zones.filter((_, i) => i !== selectedZone);
-    onZonesChange(updatedZones);
-    setSelectedZone(null);
-  };
-
-  return (
-    <Box sx={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Paper sx={{ p: 1, mb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Box>
-          <Typography variant="subtitle1">Line Zone Editor</Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button
-            variant={drawMode ? "contained" : "outlined"}
-            color="primary"
-            startIcon={<CreateIcon />}
-            onClick={() => setDrawMode(true)}
-            disabled={disabled}
-            size="small"
-          >
-            Draw Line
-          </Button>
-          <Button
-            variant="outlined"
-            color="error"
-            startIcon={<DeleteIcon />}
-            onClick={handleDeleteSelectedZone}
-            disabled={selectedZone === null || disabled}
-            size="small"
-          >
-            Delete Selected
-          </Button>
-          <Tooltip title="Draw lines by clicking and dragging. Click on lines or endpoints to select and edit them.">
-            <IconButton size="small">
-              <HelpOutlineIcon />
-            </IconButton>
-          </Tooltip>
-        </Box>
-      </Paper>
-      
-      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, height: 'calc(100% - 50px)' }}>
-        <Box 
-          data-line-zone-editor="true"
-          sx={{ 
-            position: 'relative',
-            flex: 1,
-            height: { xs: '300px', md: '100%' },
-            border: '1px solid #ccc',
-            borderRadius: '4px',
-            overflow: 'hidden',
-            backgroundColor: '#f5f5f5'
-          }}
-          // Fix the ref callback to properly type the element
-          ref={(el: HTMLDivElement | null) => {
-            containerRef.current = el;
-            if (el) {
-              (el as any).__isActivelyDragging = isActivelyDraggingRef.current;
-            }
-          }}
-        >
-          <canvas
-            ref={canvasRef}
-            style={{ width: '100%', height: '100%' }}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={() => {
-              setDraggingPoint(null);
-              setHoveredPoint(null);
-            }}
-          />
-          
-          {!currentImageUrl && (
-            <Box 
-              sx={{ 
-                position: 'absolute', 
-                top: 0, 
-                left: 0, 
-                right: 0, 
-                bottom: 0, 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center',
-                flexDirection: 'column'
-              }}
-            >
-              <Typography variant="body1" color="text.secondary">
-                No image available. Start the pipeline to see the camera feed.
-              </Typography>
-            </Box>
-          )}
-        </Box>
-        
-        <Box sx={{ width: { xs: '100%', md: '300px' }, height: { xs: 'auto', md: '100%' }, display: 'flex', flexDirection: 'column' }}>
-          <Typography variant="subtitle2" gutterBottom>
-            Zones
-          </Typography>
-          <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-            <LineZoneList 
-              zones={zones}
-              selectedZoneIndex={selectedZone}
-              onSelectZone={(index) => setSelectedZone(index)}
-              onDeleteZone={(index) => {
-                const updatedZones = zones.filter((_, i) => i !== index);
-                onZonesChange(updatedZones);
-                if (selectedZone === index) {
-                  setSelectedZone(null);
-                } else if (selectedZone !== null && selectedZone > index) {
-                  setSelectedZone(selectedZone - 1);
-                }
-              }}
-              onUpdateZone={(index, field, value) => {
-                const updatedZones = [...zones];
-                updatedZones[index] = {
-                  ...updatedZones[index],
-                  [field]: value
-                };
-                onZonesChange(updatedZones);
-              }}
-              disabled={disabled}
-            />
-          </Box>
-        </Box>
-      </Box>
-    </Box>
-  );
-};
-
-// Define defaultLineZone outside of component
-const defaultLineZone = {
-  id: "zone1",
-  start_x: 0.2, // Normalized (0-1) instead of pixel value
-  start_y: 0.5, // Normalized (0-1) instead of pixel value
-  end_x: 0.8,   // Normalized (0-1) instead of pixel value
-  end_y: 0.5,   // Normalized (0-1) instead of pixel value
-  min_crossing_threshold: 1,
-  triggering_anchors: ["BOTTOM_LEFT", "BOTTOM_RIGHT"]
-};
-
-// Add Pipeline Template interfaces
-interface PipelineTemplate {
-  id: string;
-  name: string;
-  description: string;
-  icon: React.ReactNode;
-  components: {
-    processors: {
-      type: string;
-      config: any;
-    }[];
-    sinks?: {
-      type: string;
-      config: any;
-    }[];
-  };
-}
-
-// Define available pipeline templates
-const pipelineTemplates: PipelineTemplate[] = [
-  {
-    id: 'object-detection',
-    name: 'Basic Object Detection',
-    description: 'Detect common objects in the video stream',
-    icon: <VisibilityIcon />,
-    components: {
-      processors: [
-        {
-          type: 'object_detection',
-          config: {
-            model_id: "yolov4-tiny",
-            server_url: "http://localhost:8080",
-            confidence_threshold: 0.5,
-            draw_bounding_boxes: true,
-            use_shared_memory: true,
-            label_font_scale: 0.5,
-            classes: ["person", "car", "truck", "bicycle", "motorcycle", "bus"]
-          }
-        }
-      ]
-    }
-  },
-  {
-    id: 'person-counting',
-    name: 'Person Counting',
-    description: 'Count people crossing defined lines/zones',
-    icon: <PeopleIcon />,
-    components: {
-      processors: [
-        {
-          type: 'object_detection',
-          config: {
-            model_id: "yolov4-tiny",
-            server_url: "http://localhost:8080",
-            confidence_threshold: 0.5,
-            draw_bounding_boxes: true,
-            use_shared_memory: true,
-            label_font_scale: 0.5,
-            classes: ["person"]
-          }
-        },
-        {
-          type: 'object_tracking',
-          config: {
-            frame_rate: 30,
-            track_buffer: 30,
-            track_thresh: 0.5,
-            high_thresh: 0.6,
-            match_thresh: 0.8,
-            draw_tracking: true,
-            draw_track_trajectory: true,
-            draw_track_id: true,
-            draw_semi_transparent_boxes: true,
-            label_font_scale: 0.6
-          }
-        },
-        {
-          type: 'line_zone_manager',
-          config: {
-            draw_zones: true,
-            line_color: [255, 255, 255],
-            line_thickness: 2,
-            draw_counts: true,
-            text_color: [0, 0, 0],
-            text_scale: 0.5,
-            text_thickness: 2,
-            zones: [{
-              id: "entrance",
-              start_x: 0.2,
-              start_y: 0.5,
-              end_x: 0.8,
-              end_y: 0.5,
-              min_crossing_threshold: 1,
-              triggering_anchors: ["BOTTOM_CENTER", "CENTER"]
-            }]
-          }
-        }
-      ],
-      sinks: [
-        {
-          type: 'database',
-          config: {
-            store_thumbnails: false,
-            thumbnail_width: 320,
-            thumbnail_height: 180,
-            retention_days: 30,
-            store_detection_events: false,
-            store_tracking_events: false,
-            store_counting_events: true
-          }
-        }
-      ]
-    }
-  },
-  {
-    id: 'traffic-analysis',
-    name: 'Traffic Analysis',
-    description: 'Track and count vehicles crossing defined lines',
-    icon: <DirectionsCarIcon />,
-    components: {
-      processors: [
-        {
-          type: 'object_detection',
-          config: {
-            model_id: "yolov4-tiny",
-            server_url: "http://localhost:8080",
-            confidence_threshold: 0.4,
-            draw_bounding_boxes: true,
-            use_shared_memory: true,
-            label_font_scale: 0.5,
-            classes: ["car", "truck", "motorcycle", "bus", "bicycle"]
-          }
-        },
-        {
-          type: 'object_tracking',
-          config: {
-            frame_rate: 30,
-            track_buffer: 30,
-            track_thresh: 0.5,
-            high_thresh: 0.6,
-            match_thresh: 0.8,
-            draw_tracking: true,
-            draw_track_trajectory: true,
-            draw_track_id: true,
-            draw_semi_transparent_boxes: true,
-            label_font_scale: 0.6
-          }
-        },
-        {
-          type: 'line_zone_manager',
-          config: {
-            draw_zones: true,
-            line_color: [255, 255, 255],
-            line_thickness: 2,
-            draw_counts: true,
-            text_color: [0, 0, 0],
-            text_scale: 0.5,
-            text_thickness: 2,
-            zones: [{
-              id: "traffic_line",
-              start_x: 0.1,
-              start_y: 0.5,
-              end_x: 0.9,
-              end_y: 0.5,
-              min_crossing_threshold: 1,
-              triggering_anchors: ["BOTTOM_CENTER", "CENTER"]
-            }]
-          }
-        }
-      ],
-      sinks: [
-        {
-          type: 'database',
-          config: {
-            store_thumbnails: false,
-            thumbnail_width: 320,
-            thumbnail_height: 180,
-            retention_days: 30,
-            store_detection_events: false,
-            store_tracking_events: true,
-            store_counting_events: true
-          }
-        }
-      ]
-    }
-  }
-];
 
 // Register Chart.js components
 ChartJS.register(
@@ -1349,129 +165,12 @@ ChartJS.register(
   TimeScale
 );
 
-// Add new interfaces for telemetry data
-interface ZoneLineCount {
-  timestamp: number;
-  zone_id: string;
-  count: number;
-}
-
-interface ClassHeatmapPoint {
-  x: number;
-  y: number;
-  value: number;
-  class: string;
-}
-
-// Skeleton components for loading states
-const ComponentCardSkeleton = () => (
-  <Card sx={{ mb: 2 }}>
-    <CardContent>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-        <Skeleton variant="circular" width={24} height={24} sx={{ mr: 2 }} />
-        <Skeleton variant="text" width="60%" height={32} />
-      </Box>
-      <Skeleton variant="text" width="80%" sx={{ mb: 1 }} />
-      <Divider sx={{ my: 1 }} />
-      <Skeleton variant="text" width="40%" />
-      <Skeleton variant="text" width="30%" />
-    </CardContent>
-    <CardActions>
-      <Skeleton variant="rounded" width={80} height={32} />
-      <Skeleton variant="rounded" width={80} height={32} />
-    </CardActions>
-  </Card>
-);
-
-const ImageSkeleton = () => (
-  <Box 
-    sx={{ 
-      width: '100%', 
-      height: '600px', 
-      display: 'flex', 
-      flexDirection: 'column',
-      alignItems: 'center', 
-      justifyContent: 'center',
-      border: '1px solid #ccc',
-      borderRadius: '4px',
-      bgcolor: 'background.paper'
-    }}
-  >
-    <Skeleton variant="rectangular" width="100%" height="100%" animation="wave" />
-  </Box>
-);
-
-const LineZoneEditorSkeleton = () => (
-  <Box sx={{ height: '500px' }}>
-    <Paper sx={{ p: 1, mb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-      <Box>
-        <Skeleton variant="text" width={150} />
-      </Box>
-      <Box sx={{ display: 'flex', gap: 1 }}>
-        <Skeleton variant="rounded" width={100} height={32} />
-        <Skeleton variant="rounded" width={120} height={32} />
-        <Skeleton variant="circular" width={24} height={24} />
-      </Box>
-    </Paper>
-    <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, height: 'calc(100% - 50px)' }}>
-      <Skeleton variant="rectangular" height="100%" width="70%" animation="wave" />
-      <Box sx={{ width: { xs: '100%', md: '30%' }, height: { xs: 'auto', md: '100%' } }}>
-        <Skeleton variant="text" width="80%" />
-        <Skeleton variant="rectangular" height={400} width="100%" animation="wave" />
-      </Box>
-    </Box>
-  </Box>
-);
-
-const TelemetryChartSkeleton = () => (
-  <Box height={400} width="100%">
-    <Skeleton variant="rectangular" height="100%" width="100%" animation="wave" />
-  </Box>
-);
-
-const DatabaseTableSkeleton = () => (
-  <>
-    <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3, gap: 2 }}>
-      <Skeleton variant="rounded" width={100} height={36} />
-      <Skeleton variant="rounded" width={150} height={36} />
-    </Box>
-    <TableContainer component={Paper} sx={{ maxHeight: 440 }}>
-      <Table stickyHeader>
-        <TableHead>
-          <TableRow>
-            {[...Array(5)].map((_, i) => (
-              <TableCell key={i}>
-                <Skeleton variant="text" />
-              </TableCell>
-            ))}
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {[...Array(5)].map((_, rowIndex) => (
-            <TableRow key={rowIndex}>
-              {[...Array(5)].map((_, cellIndex) => (
-                <TableCell key={cellIndex}>
-                  <Skeleton variant="text" />
-                </TableCell>
-              ))}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </TableContainer>
-    <Box sx={{ display: 'flex', justifyContent: 'flex-end', pt: 2 }}>
-      <Skeleton variant="rectangular" width={300} height={40} />
-    </Box>
-  </>
-);
-
 const PipelineBuilder = () => {
   const { cameraId } = useParams<{ cameraId: string }>();
   const navigate = useNavigate();
   const [camera, setCamera] = useState<Camera | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tabValue, setTabValue] = useState(0);
   const [mainTabValue, setMainTabValue] = useState(0);
   
   // Component state
@@ -1662,7 +361,6 @@ const PipelineBuilder = () => {
 
   // Add new state for telemetry visualization data
   const [zoneLineCounts, setZoneLineCounts] = useState<ZoneLineCount[]>([]);
-  const [classHeatmapData, setClassHeatmapData] = useState<ClassHeatmapPoint[]>([]);
   const [isLoadingZoneData, setIsLoadingZoneData] = useState<boolean>(false);
   const [isLoadingHeatmapData, setIsLoadingHeatmapData] = useState<boolean>(false);
   const [timeRange, setTimeRange] = useState<{start: number, end: number} | null>(null);
@@ -2292,64 +990,6 @@ const PipelineBuilder = () => {
     }));
   };
 
-  const handleZoneChange = (index: number, field: keyof Zone, value: any) => {
-    setLineZoneManagerForm(prev => ({
-      ...prev,
-      zones: prev.zones.map((zone, i) => {
-        if (i === index) {
-          return { ...zone, [field]: value };
-        }
-        return zone;
-      })
-    }));
-  };
-
-  const handleAddZone = () => {
-    setLineZoneManagerForm(prev => ({
-      ...prev,
-      zones: [
-        ...prev.zones,
-        {
-          id: `zone${prev.zones.length + 1}`,
-          start_x: 100,
-          start_y: 240,
-          end_x: 400,
-          end_y: 240,
-          min_crossing_threshold: 1,
-          triggering_anchors: ["CENTER"]
-        }
-      ]
-    }));
-  };
-
-  const handleDeleteZone = (index: number) => {
-    setLineZoneManagerForm(prev => ({
-      ...prev,
-      zones: prev.zones.filter((_, i) => i !== index)
-    }));
-  };
-
-  const handleToggleAnchor = (zoneIndex: number, anchor: string) => {
-    setLineZoneManagerForm(prev => ({
-      ...prev,
-      zones: prev.zones.map((zone, i) => {
-        if (i === zoneIndex) {
-          const anchors = [...zone.triggering_anchors];
-          const anchorIndex = anchors.indexOf(anchor);
-          
-          if (anchorIndex >= 0) {
-            anchors.splice(anchorIndex, 1);
-          } else {
-            anchors.push(anchor);
-          }
-          
-          return { ...zone, triggering_anchors: anchors };
-        }
-        return zone;
-      })
-    }));
-  };
-
   const handleFileSinkFormChange = (field: keyof FileSinkForm, value: any) => {
     setFileSinkForm(prev => ({
       ...prev,
@@ -2942,70 +1582,16 @@ const PipelineBuilder = () => {
 
   // Render component card
   const renderComponentCard = (component: Component, type: 'source' | 'processor' | 'sink') => {
-    // Determine display name for component type
-    let componentType = component.type_name || component.type;
-    if (typeof componentType !== 'string') {
-      componentType = `${componentType}`;
-    }
-    
-    const displayName = getComponentTypeName(componentType, type);
-    const description = getComponentTypeDescription(componentType, type);
-    const mapping = type === 'source' 
-      ? sourceTypeMapping 
-      : type === 'processor' 
-        ? processorTypeMapping 
-        : sinkTypeMapping;
-    const icon = mapping[componentType]?.icon;
-    
     return (
-      <Card key={component.id} sx={{ mb: 2 }}>
-        <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-            {icon && (
-              <Box sx={{ mr: 2, color: 'primary.main' }}>
-                {icon}
-              </Box>
-            )}
-            <Typography variant="h6" gutterBottom sx={{ mb: 0 }}>
-              {displayName}
-            </Typography>
-          </Box>
-          {description && (
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              {description}
-            </Typography>
-          )}
-          <Divider sx={{ my: 1 }} />
-          <Typography variant="body2" color="text.secondary">
-            ID: {component.id}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" component="div">
-            Status: {component.running ? 
-              <Chip size="small" color="success" label="Running" /> : 
-              <Chip size="small" color="default" label="Stopped" />
-            }
-          </Typography>
-        </CardContent>
-        <CardActions>
-          <Button 
-            size="small" 
-            startIcon={<EditIcon />}
-            onClick={() => openEditDialog(component, type)}
-            disabled={camera?.running}
-          >
-            Edit
-          </Button>
-          <Button 
-            size="small" 
-            color="error" 
-            startIcon={isDeletingComponent === component.id ? <CircularProgress size={16} color="error" /> : <DeleteIcon />}
-            onClick={() => handleDeleteComponent(component, type)}
-            disabled={camera?.running || isDeletingComponent !== null}
-          >
-            {isDeletingComponent === component.id ? 'Deleting...' : 'Delete'}
-          </Button>
-        </CardActions>
-      </Card>
+      <ComponentCard
+        key={component.id}
+        component={component}
+        type={type}
+        onEdit={openEditDialog}
+        onDelete={handleDeleteComponent}
+        isDeletingComponent={isDeletingComponent}
+        pipelineRunning={!!camera?.running}
+      />
     );
   };
 
@@ -3423,13 +2009,6 @@ const PipelineBuilder = () => {
   }, [mainTabValue, sourceComponent, hasLineZoneManagerComponent, dbComponentExists, 
       fetchDatabaseRecords, fetchZoneLineCounts, fetchClassHeatmapData]);
 
-  // Add function to set time range for data filtering
-  const handleTimeRangeChange = (range: {start: number, end: number}) => {
-    setTimeRange(range);
-    // Trigger data refresh with new time range
-    fetchZoneLineCounts();
-  };
-
   // Add Zone Line Counts Chart component
   const ZoneLineCountsChart = () => {
     if (isLoadingZoneData) {
@@ -3714,7 +2293,7 @@ const PipelineBuilder = () => {
           </Typography>
         </Box>
         <Box>
-          <MuiButton
+          <Button
             variant="contained"
             color={camera.running ? "error" : "success"}
             startIcon={
@@ -3728,7 +2307,7 @@ const PipelineBuilder = () => {
             {isStartingPipeline ? "Starting..." : 
              isStoppingPipeline ? "Stopping..." :
              camera.running ? "Stop Pipeline" : "Start Pipeline"}
-          </MuiButton>
+          </Button>
         </Box>
       </Box>
 
@@ -3819,7 +2398,7 @@ const PipelineBuilder = () => {
                   >
                     Use Template
                   </Button>
-                  <MuiButton 
+                  <Button 
                     variant="contained" 
                     startIcon={<AddIcon />} 
                     onClick={() => openCreateDialog('processor')}
@@ -3827,7 +2406,7 @@ const PipelineBuilder = () => {
                     size="small"
                   >
                     Add Processor
-                  </MuiButton>
+                  </Button>
                 </Box>
               </Box>
               
@@ -5572,7 +4151,7 @@ const PipelineBuilder = () => {
           </Box>
         </DialogContent>
         <DialogActions>
-          <MuiButton onClick={closeTemplateDialog}>Cancel</MuiButton>
+          <Button onClick={closeTemplateDialog}>Cancel</Button>
           <Button
             variant="contained"
             color="primary"
