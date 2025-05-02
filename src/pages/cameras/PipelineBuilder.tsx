@@ -165,6 +165,12 @@ ChartJS.register(
   TimeScale
 );
 
+// Import extracted tab components
+import PipelineConfigTab from '../../components/pipeline/PipelineConfigTab';
+import LivePlaybackTab from '../../components/pipeline/LivePlaybackTab';
+import LineZoneConfigTab from '../../components/pipeline/LineZoneConfigTab';
+import TelemetryTab from '../../components/pipeline/TelemetryTab';
+
 const PipelineBuilder = () => {
   const { cameraId } = useParams<{ cameraId: string }>();
   const navigate = useNavigate();
@@ -1580,21 +1586,6 @@ const PipelineBuilder = () => {
     }));
   };
 
-  // Render component card
-  const renderComponentCard = (component: Component, type: 'source' | 'processor' | 'sink') => {
-    return (
-      <ComponentCard
-        key={component.id}
-        component={component}
-        type={type}
-        onEdit={openEditDialog}
-        onDelete={handleDeleteComponent}
-        isDeletingComponent={isDeletingComponent}
-        pipelineRunning={!!camera?.running}
-      />
-    );
-  };
-
   // Add function to check if all component types of a category have been added
   const areAllComponentTypesUsed = (category: 'processor' | 'sink'): boolean => {
     if (!componentTypes) return false;
@@ -2009,195 +2000,6 @@ const PipelineBuilder = () => {
   }, [mainTabValue, sourceComponent, hasLineZoneManagerComponent, dbComponentExists, 
       fetchDatabaseRecords, fetchZoneLineCounts, fetchClassHeatmapData]);
 
-  // Add Zone Line Counts Chart component
-  const ZoneLineCountsChart = () => {
-    if (isLoadingZoneData) {
-      return <TelemetryChartSkeleton />;
-    }
-
-    if (!zoneLineCounts || zoneLineCounts.length === 0) {
-      return (
-        <Box 
-          sx={{ 
-            height: '400px', 
-            display: 'flex', 
-            justifyContent: 'center',
-            alignItems: 'center',
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 1,
-            backgroundColor: 'background.paper'
-          }}
-        >
-          <Typography color="text.secondary">
-            No zone crossing data available
-          </Typography>
-        </Box>
-      );
-    }
-
-    // Group data by zone_id
-    const zones = [...new Set(zoneLineCounts.map(item => item.zone_id))];
-    
-    // Prepare datasets for the chart
-    const datasets = zones.map((zoneId, index) => {
-      const zoneData = zoneLineCounts.filter(item => item.zone_id === zoneId);
-      
-      // Generate a color based on index
-      const hue = (index * 137) % 360;
-      const color = `hsl(${hue}, 70%, 50%)`;
-      
-      return {
-        label: `Zone: ${zoneId}`,
-        data: zoneData.map(item => ({
-          x: item.timestamp,
-          y: item.count
-        })),
-        borderColor: color,
-        backgroundColor: `${color}80`,
-        fill: false,
-        tension: 0.1
-      };
-    });
-    
-    const chartData = {
-      datasets
-    };
-    
-    const options = {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        x: {
-          type: 'time' as const,
-          time: {
-            unit: 'hour' as const,
-            tooltipFormat: 'MMM d, yyyy HH:mm',
-            displayFormats: {
-              hour: 'MMM d, HH:mm'
-            }
-          },
-          title: {
-            display: true,
-            text: 'Time'
-          },
-          adapters: {
-            date: {
-              locale: enUS
-            }
-          }
-        },
-        y: {
-          beginAtZero: true,
-          title: {
-            display: true,
-            text: 'Count'
-          }
-        }
-      },
-      plugins: {
-        legend: {
-          position: 'top' as const,
-        },
-        title: {
-          display: true,
-          text: 'Zone Crossing Counts Over Time'
-        },
-        tooltip: {
-          callbacks: {
-            title: function(tooltipItems: any) {
-              // Format the timestamp
-              const date = new Date(tooltipItems[0].parsed.x);
-              return date.toLocaleString();
-            }
-          }
-        }
-      }
-    };
-    
-    return (
-      <Box height={400} width="100%">
-        <Line data={chartData} options={options} />
-      </Box>
-    );
-  };
-
-  // Add Class Heatmap Visualization component
-  const ClassHeatmapVisualization = () => {
-    if (isLoadingHeatmapData) {
-      return <TelemetryChartSkeleton />;
-    }
-
-    // Generate the heatmap image URL
-    const heatmapImageUrl = cameraId ? 
-      `/api/v1/cameras/${cameraId}/database/heatmap-image?quality=90` : '';
-
-    if (!heatmapImageUrl) {
-      return (
-        <Box 
-          sx={{ 
-            height: '400px', 
-            display: 'flex', 
-            justifyContent: 'center',
-            alignItems: 'center',
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 1,
-            backgroundColor: 'background.paper',
-            flexDirection: 'column',
-            gap: 2
-          }}
-        >
-          <Typography color="text.secondary">
-            No heatmap data available
-          </Typography>
-          <Typography color="text.secondary" variant="body2">
-            Camera ID is required to generate a heatmap
-          </Typography>
-        </Box>
-      );
-    }
-
-    return (
-      <Box 
-        sx={{ 
-          height: 400, 
-          width: "100%", 
-          display: 'flex', 
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          border: '1px solid',
-          borderColor: 'divider',
-          borderRadius: 1,
-          position: 'relative'
-        }}
-      >
-        <img 
-          src={`${heatmapImageUrl}&t=${new Date().getTime()}`} // Add timestamp to prevent caching
-          alt="Detection Heatmap" 
-          style={{ 
-            maxWidth: '100%', 
-            maxHeight: '100%', 
-            objectFit: 'contain'
-          }}
-          onError={(e) => {
-            // Handle image load error
-            const target = e.target as HTMLImageElement;
-            target.style.display = 'none';
-            // Show error message
-            const errorDiv = document.createElement('div');
-            errorDiv.textContent = 'Failed to load heatmap image. No data may be available yet.';
-            errorDiv.style.color = '#666';
-            errorDiv.style.textAlign = 'center';
-            errorDiv.style.padding = '20px';
-            target.parentNode?.appendChild(errorDiv);
-          }}
-        />
-      </Box>
-    );
-  };
-
   if (loading) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -2344,590 +2146,86 @@ const PipelineBuilder = () => {
         </Paper>
 
         <TabPanel value={mainTabValue} index={0} sx={{ p: 0, mt: 3 }}>
-          {/* Pipeline Configuration Tab - Card-based layout */}
-          <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {/* Source Card */}
-            <Paper elevation={2} sx={{ p: 3, width: '100%' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <VideoSettingsIcon sx={{ mr: 1, color: 'primary.main' }} />
-                  <Typography variant="h6">Source</Typography>
-                </Box>
-                <Button 
-                  variant="contained" 
-                  startIcon={<AddIcon />} 
-                  onClick={() => openCreateDialog('source')}
-                  disabled={!!sourceComponent || camera.running}
-                  size="small"
-                >
-                  Add Source
-                </Button>
-              </Box>
-              
-              <Divider sx={{ mb: 2 }} />
-              
-              <Box sx={{ minHeight: sourceComponent ? 'auto' : '200px' }}>
-                {sourceComponent ? (
-                  renderComponentCard(sourceComponent, 'source')
-                ) : (
-                  <Box sx={{ p: 3, textAlign: 'center', minHeight: '200px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-                    <VideoSettingsIcon sx={{ fontSize: 60, color: 'text.secondary', opacity: 0.5, mb: 2 }} />
-                    <Typography variant="body1" color="text.secondary">
-                      No source component added yet. Add a source to start building your pipeline.
-                    </Typography>
-                  </Box>
-                )}
-              </Box>
-            </Paper>
-            
-            {/* Processors Card */}
-            <Paper elevation={2} sx={{ p: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <MemoryIcon sx={{ mr: 1, color: 'primary.main' }} />
-                  <Typography variant="h6">Processors</Typography>
-                </Box>
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                  <Button
-                    variant="outlined"
-                    color="secondary"
-                    icon={<AutoFixHighIcon />}
-                    onClick={openTemplateDialog}
-                    disabled={!sourceComponent || camera.running}
-                    size="small"
-                  >
-                    Use Template
-                  </Button>
-                  <Button 
-                    variant="contained" 
-                    startIcon={<AddIcon />} 
-                    onClick={() => openCreateDialog('processor')}
-                    disabled={!sourceComponent || camera.running || areAllComponentTypesUsed('processor')}
-                    size="small"
-                  >
-                    Add Processor
-                  </Button>
-                </Box>
-              </Box>
-              
-              <Divider sx={{ mb: 2 }} />
-              
-              {areAllComponentTypesUsed('processor') && sourceComponent && !camera.running && (
-                <Alert severity="info" sx={{ mb: 2 }}>
-                  All available processor types have been added. Each processor type can only be added once.
-                </Alert>
-              )}
-              
-              <Box sx={{ minHeight: processorComponents.length > 0 ? 'auto' : '200px' }}>
-                {processorComponents.length > 0 ? (
-                  <Stack spacing={2}>
-                    {processorComponents.map(processor => (
-                      <Box key={processor.id}>
-                        {renderComponentCard(processor, 'processor')}
-                      </Box>
-                    ))}
-                  </Stack>
-                ) : (
-                  <Box sx={{ p: 3, textAlign: 'center', minHeight: '200px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-                    <MemoryIcon sx={{ fontSize: 60, color: 'text.secondary', opacity: 0.5, mb: 2 }} />
-                    <Typography variant="body1" color="text.secondary">
-                      {!sourceComponent ? 
-                        "Add a source component first before adding processors." :
-                        "No processor components added yet. Add processors to process the video stream."
-                      }
-                    </Typography>
-                  </Box>
-                )}
-              </Box>
-            </Paper>
-            
-            {/* Sinks Card */}
-            <Paper elevation={2} sx={{ p: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <SaveIcon sx={{ mr: 1, color: 'primary.main' }} />
-                  <Typography variant="h6">Sinks</Typography>
-                </Box>
-                <Button 
-                  variant="contained" 
-                  startIcon={<AddIcon />} 
-                  onClick={() => openCreateDialog('sink')}
-                  disabled={!sourceComponent || camera.running || areAllComponentTypesUsed('sink')}
-                  size="small"
-                >
-                  Add Sink
-                </Button>
-              </Box>
-              
-              <Divider sx={{ mb: 2 }} />
-              
-              {areAllComponentTypesUsed('sink') && sourceComponent && !camera.running && (
-                <Alert severity="info" sx={{ mb: 2 }}>
-                  All available sink types have been added. Each sink type can only be added once.
-                </Alert>
-              )}
-              
-              <Box sx={{ minHeight: sinkComponents.length > 0 ? 'auto' : '200px' }}>
-                {sinkComponents.length > 0 ? (
-                  <Stack spacing={2}>
-                    {sinkComponents.map(sink => (
-                      <Box key={sink.id}>
-                        {renderComponentCard(sink, 'sink')}
-                      </Box>
-                    ))}
-                  </Stack>
-                ) : (
-                  <Box sx={{ p: 3, textAlign: 'center', minHeight: '200px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-                    <SaveIcon sx={{ fontSize: 60, color: 'text.secondary', opacity: 0.5, mb: 2 }} />
-                    <Typography variant="body1" color="text.secondary">
-                      {!sourceComponent ? 
-                        "Add a source component first before adding sinks." :
-                        "No sink components added yet. Add sinks to save or stream the processed video."
-                      }
-                    </Typography>
-                  </Box>
-                )}
-              </Box>
-            </Paper>
-          </Box>
+          <PipelineConfigTab 
+            sourceComponent={sourceComponent}
+            processorComponents={processorComponents}
+            sinkComponents={sinkComponents}
+            openCreateDialog={openCreateDialog}
+            openEditDialog={openEditDialog}
+            handleDeleteComponent={handleDeleteComponent}
+            isDeletingComponent={isDeletingComponent}
+            camera={camera}
+            areAllComponentTypesUsed={areAllComponentTypesUsed}
+            openTemplateDialog={openTemplateDialog}
+          />
         </TabPanel>
 
         {/* Live Playback Tab */}
         {sourceComponent && (
           <TabPanel value={mainTabValue} index={1} sx={{ p: 0, mt: 3 }}>
-            <Paper elevation={2} sx={{ p: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <LiveTvIcon sx={{ mr: 1, color: 'primary.main' }} />
-                  <Typography variant="h6">
-                    Live Playback
-                    {!camera?.running && pipelineHasRunOnce && " (Last Frame)"}
-                  </Typography>
-                </Box>
-                {(camera?.running || pipelineHasRunOnce) && (
-                  <Button 
-                    variant="contained" 
-                    onClick={refreshFrame}
-                    icon={<RedoIcon />}
-                    disabled={!camera?.running}
-                  >
-                    Refresh Frame
-                  </Button>
-                )}
-              </Box>
-              
-              <Divider sx={{ mb: 2 }} />
-              
-              {camera?.running && (
-                <Alert severity="info" sx={{ mb: 2 }}>
-                  Automatic refreshing has been disabled. Click the "Refresh Frame" button to manually update the view.
-                </Alert>
-              )}
-              
-              <Box sx={{ width: '100%', textAlign: 'center' }}>
-                {(camera?.running && !frameUrl) && (
-                  <ImageSkeleton />
-                )}
-                {(camera?.running && frameUrl) && (
-                  <img 
-                    src={frameUrl} 
-                    alt="Camera feed" 
-                    style={{ 
-                      maxWidth: '100%', 
-                      maxHeight: '600px', 
-                      border: '1px solid #ccc',
-                      borderRadius: '4px'
-                    }} 
-                  />
-                )}
-                {(!camera?.running && lastFrameUrl) && (
-                  <img 
-                    src={lastFrameUrl} 
-                    alt="Camera feed (last frame)" 
-                    style={{ 
-                      maxWidth: '100%', 
-                      maxHeight: '600px', 
-                      border: '1px solid #ccc',
-                      borderRadius: '4px'
-                    }} 
-                  />
-                )}
-                {(!camera?.running && !lastFrameUrl && pipelineHasRunOnce) && (
-                  <Box 
-                    sx={{ 
-                      width: '100%', 
-                      height: '600px', 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'center',
-                      border: '1px solid #ccc',
-                      borderRadius: '4px',
-                      bgcolor: 'background.paper'
-                    }}
-                  >
-                    <Typography variant="body1" color="text.secondary">
-                      No image available from the last session
-                    </Typography>
-                  </Box>
-                )}
-                {(!camera?.running && !lastFrameUrl && !pipelineHasRunOnce) && (
-                  <Box sx={{ 
-                    textAlign: 'center', 
-                    p: 3, 
-                    border: '1px solid #ccc', 
-                    borderRadius: '4px', 
-                    height: '600px', 
-                    display: 'flex', 
-                    flexDirection: 'column', 
-                    justifyContent: 'center', 
-                    alignItems: 'center' 
-                  }}>
-                    <LiveTvIcon sx={{ fontSize: 60, color: 'text.secondary', opacity: 0.5, mb: 2 }} />
-                    <Typography variant="h6" color="text.secondary" gutterBottom>
-                      Pipeline not started
-                    </Typography>
-                    <Typography variant="body1" color="text.secondary">
-                      Start the pipeline to see the live video feed
-                    </Typography>
-                    <Button
-                      variant="contained"
-                      color="success"
-                      startIcon={<PlayArrowIcon />}
-                      onClick={handleStartStop}
-                      disabled={isStartingPipeline || !sourceComponent}
-                      sx={{ mt: 2 }}
-                    >
-                      {isStartingPipeline ? "Starting..." : "Start Pipeline"}
-                    </Button>
-                  </Box>
-                )}
-              </Box>
-            </Paper>
+            <LivePlaybackTab
+              camera={camera}
+              frameUrl={frameUrl}
+              lastFrameUrl={lastFrameUrl}
+              pipelineHasRunOnce={pipelineHasRunOnce}
+              refreshFrame={refreshFrame}
+              handleStartStop={handleStartStop}
+              isStartingPipeline={isStartingPipeline}
+              sourceComponent={sourceComponent}
+            />
           </TabPanel>
         )}
 
         {/* Line Zone Configuration Tab */}
         {hasLineZoneManagerComponent && (
           <TabPanel value={mainTabValue} index={sourceComponent ? 2 : 1} sx={{ p: 0, mt: 3 }}>
-            <Paper elevation={2} sx={{ p: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                <VisibilityIcon sx={{ mr: 1, color: 'primary.main' }} />
-                <Typography variant="h6">
-                  Line Zone Configuration
-                  {!camera?.running && pipelineHasRunOnce && " (Last Frame)"}
-                </Typography>
-              </Box>
-              
-              <Divider sx={{ mb: 2 }} />
-              
-              {camera?.running && (
-                <Alert severity="info" sx={{ mb: 2 }}>
-                  Automatic refreshing has been disabled. Use the "Refresh Counts" button to manually update zone counts.
-                </Alert>
-              )}
-              
-              <Typography variant="body2" color="text.secondary" paragraph>
-                Draw crossing lines on the image to define detection zones. Objects crossing these lines will be counted.
-                {camera?.running ? 
-                  " You can edit these zones in real-time while the pipeline is running." : 
-                  " The pipeline is currently stopped, but you can still edit the zones based on the last captured frame."}
-              </Typography>
-              
-              {/* Line Zone Editor view */}
-              <Box sx={{ height: '500px' }}>
-                {(!camera?.running && !pipelineHasRunOnce) ? (
-                  <Box sx={{ 
-                    textAlign: 'center', 
-                    p: 3, 
-                    border: '1px solid #ccc', 
-                    borderRadius: '4px', 
-                    height: '100%', 
-                    display: 'flex', 
-                    flexDirection: 'column', 
-                    justifyContent: 'center', 
-                    alignItems: 'center' 
-                  }}>
-                    <VisibilityIcon sx={{ fontSize: 60, color: 'text.secondary', opacity: 0.5, mb: 2 }} />
-                    <Typography variant="h6" color="text.secondary" gutterBottom>
-                      Pipeline not started
-                    </Typography>
-                    <Typography variant="body1" color="text.secondary">
-                      Start the pipeline at least once to see the camera feed and configure line zones
-                    </Typography>
-                    <Button
-                      variant="contained"
-                      color="success"
-                      startIcon={<PlayArrowIcon />}
-                      onClick={handleStartStop}
-                      disabled={isStartingPipeline || !sourceComponent}
-                      sx={{ mt: 2 }}
-                    >
-                      {isStartingPipeline ? "Starting..." : "Start Pipeline"}
-                    </Button>
-                  </Box>
-                ) : (camera?.running && !frameUrl) || (!camera?.running && !lastFrameUrl) ? (
-                  <LineZoneEditorSkeleton />
-                ) : (
-                  <LineZoneEditor 
-                    zones={lineZoneManagerForm.zones} 
-                    onZonesChange={handleLineZonesUpdate}
-                    imageUrl={(camera?.running ? frameUrl : lastFrameUrl) || "" as string}
-                    disabled={isSavingZones}
-                  />
-                )}
-              </Box>
-              
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-                <Box sx={{ display: 'flex', gap: 2 }}>
-                  <Button 
-                    variant="contained"
-                    startIcon={<RedoIcon />}
-                    disabled={isRefreshingComponents || (!camera?.running && !pipelineHasRunOnce)}
-                    onClick={() => fetchComponents(true)}
-                  >
-                    Refresh Counts
-                  </Button>
-                  
-                  <Button 
-                    variant="contained" 
-                    color="primary"
-                    disabled={isSavingZones || (!camera?.running && !pipelineHasRunOnce)}
-                    startIcon={isSavingZones ? <CircularProgress size={20} /> : null}
-                    onClick={async () => {
-                      if (!lineZoneManagerComponent || !cameraId) return;
-                      
-                      try {
-                        setIsSavingZones(true);
-                        
-                        // Normalize all zones to ensure they have proper values
-                        const normalizedZones = lineZoneManagerForm.zones.map(zone => ({
-                          id: zone.id || `zone${Math.random().toString(36).substr(2, 9)}`,
-                          start_x: typeof zone.start_x === 'number' ? zone.start_x : parseFloat(String(zone.start_x)) || 0.2,
-                          start_y: typeof zone.start_y === 'number' ? zone.start_y : parseFloat(String(zone.start_y)) || 0.5,
-                          end_x: typeof zone.end_x === 'number' ? zone.end_x : parseFloat(String(zone.end_x)) || 0.8,
-                          end_y: typeof zone.end_y === 'number' ? zone.end_y : parseFloat(String(zone.end_y)) || 0.5,
-                          min_crossing_threshold: zone.min_crossing_threshold || 1,
-                          triggering_anchors: Array.isArray(zone.triggering_anchors) ? 
-                            zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"],
-                          // Preserve the counts if they exist
-                          in_count: zone.in_count,
-                          out_count: zone.out_count
-                        }));
-
-                        // Create a new config object without spreading the old config
-                        // This ensures we don't accidentally keep old zones data
-                        const config: Record<string, any> = {
-                          draw_zones: lineZoneManagerForm.draw_zones,
-                          line_color: lineZoneManagerForm.line_color,
-                          line_thickness: lineZoneManagerForm.line_thickness,
-                          draw_counts: lineZoneManagerForm.draw_counts,
-                          text_color: lineZoneManagerForm.text_color,
-                          text_scale: lineZoneManagerForm.text_scale,
-                          text_thickness: lineZoneManagerForm.text_thickness,
-                          zones: normalizedZones,
-                          remove_missing: true // Add this flag to tell the backend to remove zones not in this config
-                        };
-                        
-                        // Preserve any other config properties that aren't related to zones
-                        if (lineZoneManagerComponent.config) {
-                          Object.entries(lineZoneManagerComponent.config as Record<string, any>).forEach(([key, value]) => {
-                            // Only copy over properties that aren't already set and aren't 'zones'
-                            if (key !== 'zones' && config[key] === undefined) {
-                              config[key] = value;
-                            }
-                          });
-                        }
-                        
-                        // Update the component
-                        const result = await apiService.components.processors.update(
-                          cameraId, 
-                          lineZoneManagerComponent.id, 
-                          { config }
-                        );
-                        
-                        if (result) {
-                          showSnackbar('Line zones updated successfully');
-                          // Clear the unsaved changes flag
-                          setHasUnsavedZoneChanges(false);
-                          // Force fetch the updated components from the server
-                          await fetchComponents(true);
-                        } else {
-                          showSnackbar('Failed to update line zones');
-                        }
-                      } catch (err) {
-                        console.error('Error updating line zones:', err);
-                        showSnackbar('Error updating line zones');
-                      } finally {
-                        setIsSavingZones(false);
-                      }
-                    }}
-                  >
-                    {isSavingZones ? 'Saving...' : 'Save Line Zones'}
-                  </Button>
-                </Box>
-              </Box>
-            </Paper>
+            <LineZoneConfigTab
+              camera={camera}
+              frameUrl={frameUrl}
+              lastFrameUrl={lastFrameUrl}
+              pipelineHasRunOnce={pipelineHasRunOnce}
+              lineZoneManagerForm={lineZoneManagerForm}
+              handleLineZonesUpdate={handleLineZonesUpdate}
+              isSavingZones={isSavingZones}
+              handleStartStop={handleStartStop}
+              isStartingPipeline={isStartingPipeline}
+              sourceComponent={sourceComponent}
+              isRefreshingComponents={isRefreshingComponents}
+              fetchComponents={fetchComponents}
+              lineZoneManagerComponent={lineZoneManagerComponent}
+              hasUnsavedZoneChanges={hasUnsavedZoneChanges}
+              setHasUnsavedZoneChanges={setHasUnsavedZoneChanges}
+              showSnackbar={showSnackbar}
+              cameraId={cameraId}
+            />
           </TabPanel>
         )}
         
         <TabPanel value={mainTabValue} index={sourceComponent ? (hasLineZoneManagerComponent ? 3 : 2) : (hasLineZoneManagerComponent ? 2 : 1)} sx={{ p: 0, mt: 3 }}>
           {/* Telemetry Tab */}
           {dbComponentExists && (
-            <>
-              {/* Analytics Section */}
-              <Accordion defaultExpanded sx={{ mb: 2 }}>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <TuneIcon sx={{ mr: 1, color: 'primary.main' }} />
-                    <Typography variant="h6">Analytics</Typography>
-                  </Box>
-                </AccordionSummary>
-                <AccordionDetails>
-                  {camera?.running && (
-                    <Alert severity="info" sx={{ mb: 3 }}>
-                      Automatic refreshing has been disabled. Use the refresh buttons to manually update the data.
-                    </Alert>
-                  )}
-                  
-                  <Box sx={{ mb: 3 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                      <Typography variant="subtitle1">
-                        Line Zone Crossing Counts
-                      </Typography>
-                      <Button
-                        variant="contained"
-                        startIcon={isLoadingZoneData ? <CircularProgress size={20} /> : <RedoIcon />}
-                        onClick={fetchZoneLineCounts}
-                        disabled={isLoadingZoneData}
-                        size="small"
-                      >
-                        Refresh
-                      </Button>
-                    </Box>
-                    <ZoneLineCountsChart />
-                  </Box>
-                  
-                  <Divider sx={{ my: 3 }} />
-                  
-                  <Box sx={{ mt: 3 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                      <Typography variant="subtitle1">
-                        Object Detection Heatmap
-                      </Typography>
-                      <Button
-                        variant="contained"
-                        startIcon={isLoadingHeatmapData ? <CircularProgress size={20} /> : <RedoIcon />}
-                        onClick={fetchClassHeatmapData}
-                        disabled={isLoadingHeatmapData}
-                        size="small"
-                      >
-                        Refresh
-                      </Button>
-                    </Box>
-                    <ClassHeatmapVisualization />
-                  </Box>
-                </AccordionDetails>
-              </Accordion>
-
-              {/* Telemetry Records Section */}
-              <Accordion>
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <DatabaseIcon sx={{ mr: 1, color: 'primary.main' }} />
-                    <Typography variant="h6">Telemetry Records</Typography>
-                    {totalEvents > 0 && (
-                      <Typography variant="subtitle1" color="text.secondary" component="span" sx={{ ml: 2 }}>
-                        {totalEvents} events from {totalFrames} frames
-                      </Typography>
-                    )}
-                  </Box>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3, gap: 2 }}>
-                    <Button
-                      variant="outlined"
-                      startIcon={isLoadingRecords ? <CircularProgress size={24} color="inherit" /> : <RedoIcon />}
-                      onClick={fetchDatabaseRecords}
-                      disabled={isLoadingRecords || isDeletingRecords}
-                    >
-                      {isLoadingRecords ? 'Refreshing...' : 'Refresh'}
-                    </Button>
-                    <Button
-                      variant="contained"
-                      color="error"
-                      startIcon={isDeletingRecords ? <CircularProgress size={24} color="inherit" /> : <DeleteIcon />}
-                      onClick={handleDeleteAllRecords}
-                      disabled={isDeletingRecords || isLoadingRecords || totalEvents === 0}
-                    >
-                      {isDeletingRecords ? 'Deleting...' : 'Delete All Records'}
-                    </Button>
-                  </Box>
-                  
-                  {isLoadingRecords ? (
-                    <DatabaseTableSkeleton />
-                  ) : databaseRecords.length === 0 ? (
-                    <Alert severity="info">
-                      No telemetry records found for this camera.
-                    </Alert>
-                  ) : (
-                    <>
-                      <TableContainer component={Paper} sx={{ maxHeight: 440 }}>
-                        <Table stickyHeader aria-label="telemetry records table">
-                          <TableHead>
-                            <TableRow>
-                              <TableCell>ID</TableCell>
-                              <TableCell>Type</TableCell>
-                              <TableCell>Timestamp</TableCell>
-                              <TableCell>Source</TableCell>
-                              <TableCell>Properties</TableCell>
-                            </TableRow>
-                          </TableHead>
-                          <TableBody>
-                            {databaseRecords.map((record) => (
-                              <TableRow
-                                key={record.id}
-                                sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
-                              >
-                                <TableCell component="th" scope="row">
-                                  {record.id}
-                                </TableCell>
-                                <TableCell>
-                                  <Chip 
-                                    label={getEventTypeName(record.type)}
-                                    color={
-                                      record.type === 0 ? "primary" : 
-                                      record.type === 1 ? "secondary" : 
-                                      record.type === 2 ? "success" : "default"
-                                    }
-                                    size="small"
-                                  />
-                                </TableCell>
-                                <TableCell>{formatTimestamp(record.timestamp)}</TableCell>
-                                <TableCell>{record.source_id}</TableCell>
-                                <TableCell sx={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  <Tooltip title={record.properties} arrow>
-                                    <span>{record.properties}</span>
-                                  </Tooltip>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </TableContainer>
-                      <TablePagination
-                        component="div"
-                        rowsPerPageOptions={[5, 10, 25, 50]}
-                        count={totalEvents}
-                        rowsPerPage={rowsPerPage}
+            <TelemetryTab
+              camera={camera}
+              cameraId={cameraId || ''}
+              zoneLineCounts={zoneLineCounts}
+              isLoadingZoneData={isLoadingZoneData}
+              isLoadingHeatmapData={isLoadingHeatmapData}
+              fetchZoneLineCounts={fetchZoneLineCounts}
+              fetchClassHeatmapData={fetchClassHeatmapData}
+              databaseRecords={databaseRecords}
+              isLoadingRecords={isLoadingRecords}
+              isDeletingRecords={isDeletingRecords}
+              totalEvents={totalEvents}
+              totalFrames={totalFrames}
                         page={page}
-                        onPageChange={handlePageChange}
-                        onRowsPerPageChange={handleChangeRowsPerPage}
-                      />
-                    </>
-                  )}
-                </AccordionDetails>
-              </Accordion>
-            </>
+              rowsPerPage={rowsPerPage}
+              handlePageChange={handlePageChange}
+              handleChangeRowsPerPage={handleChangeRowsPerPage}
+              fetchDatabaseRecords={fetchDatabaseRecords}
+              handleDeleteAllRecords={handleDeleteAllRecords}
+              getEventTypeName={getEventTypeName}
+              formatTimestamp={formatTimestamp}
+            />
           )}
         </TabPanel>
       </Box>
