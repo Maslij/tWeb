@@ -47,7 +47,8 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TablePagination
+  TablePagination,
+  FormHelperText
 } from '@mui/material';
 import { 
   Chart as ChartJS, 
@@ -3472,234 +3473,280 @@ const PipelineBuilder = () => {
 
   // Add Class Heatmap Visualization component
   const ClassHeatmapVisualization = () => {
-    // Group data by class
-    const classes = [...new Set(classHeatmapData.map(item => item.class))];
+    // Use refs to prevent unnecessary re-renders
+    const loadingRef = useRef(false);
+    const mountedRef = useRef(false);
+    const initialFetchDoneRef = useRef(false);
     
-    // Find max value for scaling
-    const maxValue = Math.max(...classHeatmapData.map(item => item.value), 1);
+    // State
+    const [heatmapImageUrl, setHeatmapImageUrl] = useState<string>('');
+    const [selectedAnchor, setSelectedAnchor] = useState<string>("CENTER");
+    const [imageQuality, setImageQuality] = useState<number>(90);
+    const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
+    const [availableClasses, setAvailableClasses] = useState<string[]>([]);
+    const [imageLoadError, setImageLoadError] = useState<boolean>(false);
+    const [loading, setLoading] = useState(false);
     
-    // Log data for debugging
+    // Extract classes from object detection processor only once
     useEffect(() => {
-      if (classHeatmapData.length > 0) {
-        console.log("Heatmap data:", classHeatmapData.slice(0, 5));
-        console.log("Total points:", classHeatmapData.length);
-        console.log("Max value:", maxValue);
+      const objectDetectionProcessor = processorComponents.find(
+        comp => comp.type === 'object_detection' || comp.type_name === 'object_detection'
+      );
+      
+      if (objectDetectionProcessor) {
+        let classes: string[] = [];
+        
+        if (Array.isArray(objectDetectionProcessor.classes)) {
+          classes = objectDetectionProcessor.classes;
+        } else if (objectDetectionProcessor.config && Array.isArray(objectDetectionProcessor.config.classes)) {
+          classes = objectDetectionProcessor.config.classes;
+        }
+        
+        setAvailableClasses(classes);
       }
-    }, [classHeatmapData, maxValue]);
+    }, []); // Only run once on mount
     
-    // Prepare datasets for scatter chart
-    const datasets = classes.map((className, index) => {
-      const classData = classHeatmapData.filter(item => item.class === className);
+    // Fetch heatmap function - use refs to track state without re-renders
+    const fetchHeatmap = useCallback(() => {
+      if (!cameraId || !dbComponentExists || loadingRef.current) return;
       
-      // Generate a color based on index
-      const hue = (index * 137) % 360;
+      loadingRef.current = true;
+      setLoading(true);
+      setImageLoadError(false);
       
-      return {
-        label: className,
-        data: classData.map(item => ({
-          x: item.x,
-          y: 1 - item.y, // Flip y-axis to match visual coordinates (0 at top)
-          r: Math.max(10, Math.min(40, Math.sqrt(item.value / maxValue * 900))), // Larger points
-          value: item.value // Store original value for tooltip
-        })),
-        backgroundColor: `rgba(255, 0, 0, 0.7)`, // Very visible red with high opacity
-        borderColor: `rgba(200, 0, 0, 1)`, // Solid border
-        borderWidth: 2,
-        pointStyle: 'circle',
-        pointRadius: 0, // Will be set by r value
-        pointHoverRadius: 15
+      // Build the URL with parameters
+      let url = `/api/v1/cameras/${cameraId}/database/heatmap-image?anchor=${selectedAnchor}&quality=${imageQuality}`;
+      
+      // Add class filter if any classes are selected
+      if (selectedClasses.length > 0) {
+        url += `&class=${selectedClasses.join(',')}`;
+      }
+      
+      // Add timestamp to prevent caching
+      url += `&t=${new Date().getTime()}`;
+      
+      // Set the image URL
+      setHeatmapImageUrl(url);
+    }, [cameraId, dbComponentExists, selectedAnchor, imageQuality, selectedClasses]);
+    
+    // Image event handlers
+    const handleImageLoad = useCallback(() => {
+      loadingRef.current = false;
+      setLoading(false);
+      initialFetchDoneRef.current = true;
+    }, []);
+    
+    const handleImageError = useCallback(() => {
+      loadingRef.current = false;
+      setLoading(false);
+      setImageLoadError(true);
+      initialFetchDoneRef.current = true;
+    }, []);
+    
+    // Initial fetch only on mount
+    useEffect(() => {
+      mountedRef.current = true;
+      
+      // Only fetch once and only if we have camera ID and DB
+      if (!initialFetchDoneRef.current && cameraId && dbComponentExists) {
+        fetchHeatmap();
+      }
+      
+      return () => {
+        mountedRef.current = false;
       };
-    });
+    }, [cameraId, dbComponentExists]); // Explicitly removed fetchHeatmap dependency
     
-    const chartData = {
-      datasets
-    };
+    // UI handlers - ensure they don't trigger re-renders when unnecessary
+    const handleAnchorChange = useCallback((event: SelectChangeEvent<string>) => {
+      setSelectedAnchor(event.target.value);
+    }, []);
     
-    const options = {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        x: {
-          type: 'linear' as const,
-          position: 'bottom' as const,
-          min: 0,
-          max: 1,
-          ticks: {
-            display: true, // Show ticks for debugging
-            stepSize: 0.2
-          },
-          grid: {
-            display: true, // Show grid for debugging
-            color: 'rgba(0,0,0,0.1)'
-          }
-        },
-        y: {
-          min: 0,
-          max: 1,
-          ticks: {
-            display: true, // Show ticks for debugging
-            stepSize: 0.2
-          },
-          grid: {
-            display: true, // Show grid for debugging
-            color: 'rgba(0,0,0,0.1)'
-          }
+    const handleQualityChange = useCallback((_event: Event, value: number | number[]) => {
+      setImageQuality(value as number);
+    }, []);
+    
+    const handleClassToggle = useCallback((className: string) => {
+      setSelectedClasses(prev => {
+        if (prev.includes(className)) {
+          return prev.filter(c => c !== className);
+        } else {
+          return [...prev, className];
         }
-      },
-      plugins: {
-        legend: {
-          position: 'top' as const,
-        },
-        title: {
-          display: true,
-          text: 'Object Detection Heatmap by Class'
-        },
-        tooltip: {
-          callbacks: {
-            label: function(context: any) {
-              const dataPoint = context.raw;
-              return `${context.dataset.label}: ${dataPoint.value} detections`;
-            }
-          }
-        }
-      }
-    };
+      });
+    }, []);
     
-    if (isLoadingHeatmapData) {
-      return (
-        <Box display="flex" justifyContent="center" alignItems="center" height={400}>
-          <CircularProgress />
-        </Box>
-      );
-    }
+    // For refresh button - explicitly fetch new image
+    const handleRefresh = useCallback(() => {
+      fetchHeatmap();
+    }, [fetchHeatmap]);
     
-    if (classHeatmapData.length === 0) {
-      return (
-        <Alert severity="info" sx={{ my: 2 }}>
-          No class heatmap data available. Start the pipeline with object detection and database sink enabled to collect data.
-        </Alert>
-      );
-    }
-
-    // Create a background image for the heatmap
+    // Background image handling
     const backgroundImageUrl = pipelineHasRunOnce && lastFrameUrl ? lastFrameUrl : "";
     
-    // Create a simple debug display of data points
-    const debugPoints = classHeatmapData.slice(0, 10).map((point, index) => (
-      <Box key={index} sx={{ mb: 1, fontSize: '0.75rem' }}>
-        Point {index}: class={point.class}, x={point.x}, y={point.y}, value={point.value}
-      </Box>
-    ));
-    
-    // Alternative manual rendering approach for data visualization
-    const manualPoints = classHeatmapData.map((point, index) => {
-      const size = Math.max(10, Math.min(40, Math.sqrt(point.value / maxValue * 900)));
-      return (
-        <Box
-          key={index}
-          sx={{
-            position: 'absolute',
-            left: `${point.x * 100}%`,
-            top: `${point.y * 100}%`,
-            width: size,
-            height: size,
-            backgroundColor: 'rgba(255, 0, 0, 0.7)',
-            borderRadius: '50%',
-            transform: 'translate(-50%, -50%)',
-            zIndex: 15,
-            border: '2px solid rgba(200, 0, 0, 1)'
-          }}
-        />
-      );
-    });
+    // Debugging - add to help identify refresh cycles
+    // console.log("Heatmap component rendering, loading:", loading);
     
     return (
-      <Box sx={{ position: 'relative', height: 400, width: '100%' }}>
-        {/* Background container */}
-        <Box 
-          sx={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundImage: backgroundImageUrl ? `url(${backgroundImageUrl})` : 'none',
-            backgroundSize: 'contain',
-            backgroundPosition: 'center',
-            backgroundRepeat: 'no-repeat',
-            backgroundColor: '#f0f0f0',
-            borderRadius: 1,
-            border: '1px solid',
-            borderColor: 'divider'
-          }}
-        />
+      <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+        {/* Controls */}
+        <Paper sx={{ p: 2, mb: 2 }}>
+          <Typography variant="subtitle1" gutterBottom>Heatmap Settings</Typography>
+          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, alignItems: 'flex-start' }}>
+            {/* Anchor selection */}
+            <FormControl size="small" sx={{ minWidth: 120 }}>
+              <InputLabel id="anchor-select-label">Anchor</InputLabel>
+              <Select
+                labelId="anchor-select-label"
+                value={selectedAnchor}
+                onChange={handleAnchorChange}
+                label="Anchor"
+              >
+                {ANCHOR_OPTIONS.map((anchor) => (
+                  <MenuItem key={anchor} value={anchor}>
+                    {anchor.split('_').map(word => word.charAt(0) + word.slice(1).toLowerCase()).join(' ')}
+                  </MenuItem>
+                ))}
+              </Select>
+              <FormHelperText>Bounding box position</FormHelperText>
+            </FormControl>
+            
+            {/* Quality slider */}
+            <Box sx={{ width: 200 }}>
+              <Typography variant="body2" gutterBottom>
+                Image Quality: {imageQuality}
+              </Typography>
+              <Slider
+                value={imageQuality}
+                onChange={handleQualityChange}
+                min={10}
+                max={100}
+                step={5}
+                valueLabelDisplay="auto"
+                size="small"
+              />
+            </Box>
+            
+            {/* Refresh button */}
+            <Button
+              variant="outlined"
+              startIcon={loading ? <CircularProgress size={20} /> : <RedoIcon />}
+              onClick={handleRefresh}
+              disabled={loading}
+            >
+              Refresh Heatmap
+            </Button>
+          </Box>
+          
+          {/* Class filters */}
+          {availableClasses.length > 0 && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body2" gutterBottom>Filter by Classes:</Typography>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                {availableClasses.map((cls) => (
+                  <Chip
+                    key={cls}
+                    label={cls}
+                    onClick={() => handleClassToggle(cls)}
+                    color={selectedClasses.includes(cls) ? "primary" : "default"}
+                    variant={selectedClasses.includes(cls) ? "filled" : "outlined"}
+                  />
+                ))}
+              </Box>
+              <FormHelperText>
+                {selectedClasses.length === 0 
+                  ? "All classes are shown (no filter)" 
+                  : `Showing ${selectedClasses.length} selected classes`}
+              </FormHelperText>
+            </Box>
+          )}
+        </Paper>
         
-        {/* Manual data point rendering */}
-        {manualPoints}
-        
-        {/* Chart overlay */}
-        <Box 
-          sx={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 10
-          }}
-        >
-          <Scatter data={chartData} options={options} />
-        </Box>
-        
-        {/* Add a density scale legend */}
+        {/* Heatmap image display */}
         <Box 
           sx={{ 
-            position: 'absolute', 
-            bottom: 10, 
-            right: 10, 
-            backgroundColor: 'rgba(255,255,255,0.7)', 
-            padding: 1,
+            position: 'relative', 
+            height: 400, 
+            border: '1px solid',
+            borderColor: 'divider',
             borderRadius: 1,
-            zIndex: 20
+            overflow: 'hidden',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            backgroundColor: '#f0f0f0'
           }}
         >
-          <Typography variant="caption" display="block" gutterBottom>
-            Dot size = detection frequency
-          </Typography>
-          <Box display="flex" alignItems="center">
-            <Box 
-              sx={{ 
-                width: 10, 
-                height: 10, 
-                borderRadius: '50%', 
-                backgroundColor: 'rgba(255, 0, 0, 0.7)', 
-                mr: 0.5 
-              }} 
+          {loading && (
+            <Box sx={{ position: 'absolute', display: 'flex', justifyContent: 'center', alignItems: 'center', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10, bgcolor: 'rgba(255, 255, 255, 0.7)' }}>
+              <CircularProgress />
+            </Box>
+          )}
+      
+          {heatmapImageUrl ? (
+            <>
+              <img 
+                src={heatmapImageUrl} 
+                alt="Object Detection Heatmap" 
+                style={{ 
+                  maxWidth: '100%', 
+                  maxHeight: '100%', 
+                  objectFit: 'contain'
+                }}
+                onLoad={handleImageLoad}
+                onError={handleImageError}
+              />
+              
+              {imageLoadError && (
+                <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                  <Alert severity="error">
+                    Failed to load heatmap image. No data may be available yet.
+                  </Alert>
+                </Box>
+              )}
+            </>
+          ) : (
+            <Alert severity="info">
+              No heatmap data available. Start the pipeline with object detection and database sink enabled to collect data.
+            </Alert>
+          )}
+          
+          {/* Add an overlay showing the background frame if heatmap is semitransparent */}
+          {backgroundImageUrl && (
+            <Box
+              sx={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundImage: `url(${backgroundImageUrl})`,
+                backgroundSize: 'contain',
+                backgroundPosition: 'center',
+                backgroundRepeat: 'no-repeat',
+                opacity: 0.3,
+                zIndex: -1
+              }}
             />
-            <Typography variant="caption" sx={{ mr: 1 }}>Low</Typography>
-            
-            <Box 
-              sx={{ 
-                width: 20, 
-                height: 20, 
-                borderRadius: '50%', 
-                backgroundColor: 'rgba(255, 0, 0, 0.7)', 
-                mr: 0.5 
-              }} 
-            />
-            <Typography variant="caption" sx={{ mr: 1 }}>Medium</Typography>
-            
-            <Box 
-              sx={{ 
-                width: 30, 
-                height: 30, 
-                borderRadius: '50%', 
-                backgroundColor: 'rgba(255, 0, 0, 0.7)', 
-                mr: 0.5 
-              }} 
-            />
-            <Typography variant="caption">High</Typography>
-          </Box>
+          )}
+        </Box>
+        
+        {/* Legend */}
+        <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+          <Paper sx={{ p: 1, display: 'inline-flex', alignItems: 'center', gap: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Box sx={{ width: 16, height: 16, borderRadius: '50%', bgcolor: 'rgba(0, 0, 255, 0.3)' }} />
+              <Typography variant="caption">Low</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Box sx={{ width: 16, height: 16, borderRadius: '50%', bgcolor: 'rgba(0, 255, 0, 0.5)' }} />
+              <Typography variant="caption">Medium</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Box sx={{ width: 16, height: 16, borderRadius: '50%', bgcolor: 'rgba(255, 0, 0, 0.7)' }} />
+              <Typography variant="caption">High</Typography>
+            </Box>
+          </Paper>
         </Box>
       </Box>
     );
@@ -4191,15 +4238,6 @@ const PipelineBuilder = () => {
                       <Typography variant="subtitle1">
                         Object Detection Heatmap
                       </Typography>
-                      <Button
-                        variant="outlined"
-                        startIcon={isLoadingHeatmapData ? <CircularProgress size={20} /> : <RedoIcon />}
-                        onClick={fetchClassHeatmapData}
-                        disabled={isLoadingHeatmapData}
-                        size="small"
-                      >
-                        Refresh
-                      </Button>
                     </Box>
                     <ClassHeatmapVisualization />
                   </Box>
