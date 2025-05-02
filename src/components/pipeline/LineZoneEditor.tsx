@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Box,
   Paper,
@@ -33,22 +33,41 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
   const nextImageRef = useRef<HTMLImageElement | null>(null);
   const lastUpdateTimeRef = useRef<number>(0);
   const pendingZonesUpdateRef = useRef<Zone[] | null>(null);
-  // Add this line - create a ref to track active dragging that's accessible outside the component
   const isActivelyDraggingRef = useRef<boolean>(false);
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const localZonesRef = useRef<Zone[]>(zones);
   
-  // Throttling mechanism for zone updates
-  const throttledZoneUpdate = (updatedZones: Zone[]) => {
+  // Update local reference when zones prop changes
+  useEffect(() => {
+    localZonesRef.current = zones;
+  }, [zones]);
+  
+  // Improved throttling mechanism for zone updates with better performance
+  const throttledZoneUpdate = useCallback((updatedZones: Zone[]) => {
     const now = Date.now();
-    // Only send updates every 50ms during dragging to prevent too many rerenders
-    if (now - lastUpdateTimeRef.current > 50) {
-      onZonesChange(updatedZones);
-      lastUpdateTimeRef.current = now;
+    
+    // Increased throttle time to reduce render frequency during drag operations
+    // Only update parent component at most every 100ms during active dragging
+    if (now - lastUpdateTimeRef.current > 100) {
       pendingZonesUpdateRef.current = null;
+      lastUpdateTimeRef.current = now;
+      
+      // Use requestAnimationFrame for smoother updates
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        onZonesChange(updatedZones);
+        rafRef.current = null;
+      });
     } else {
-      // Store the latest update to apply later
+      // Store the latest update to apply later, but don't trigger a render yet
       pendingZonesUpdateRef.current = updatedZones;
+      
+      // Update our local reference for immediate visual updates without parent re-render
+      localZonesRef.current = updatedZones;
+      drawCanvas();
     }
-  };
+  }, [onZonesChange]);
   
   // Apply any pending updates when dragging ends
   useEffect(() => {
@@ -56,6 +75,12 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
       onZonesChange(pendingZonesUpdateRef.current);
       pendingZonesUpdateRef.current = null;
     }
+    
+    // Clean up any pending RAF on unmount
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+    };
   }, [draggingPoint, onZonesChange]);
   
   // Preload image to prevent flickering
@@ -114,10 +139,10 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
   // Redraw canvas when zones, selectedZone, or hover state changes
   useEffect(() => {
     drawCanvas();
-  }, [zones, selectedZone, hoveredPoint, currentImageUrl]);
+  }, [selectedZone, hoveredPoint, currentImageUrl]);
   
-  // Draw the canvas
-  const drawCanvas = () => {
+  // Optimized drawCanvas function that uses the local zones reference for faster drawing
+  const drawCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     
@@ -126,6 +151,9 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
     
     const container = containerRef.current;
     if (!container) return;
+    
+    // Get the current zones from local reference for faster updates during dragging
+    const currentZones = localZonesRef.current;
     
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -136,7 +164,7 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
       ctx.drawImage(nextImageRef.current, 0, 0, canvas.width, canvas.height);
       
       // Draw zones
-      zones.forEach((zone, index) => {
+      currentZones.forEach((zone, index) => {
         // Convert normalized coordinates to canvas coordinates
         const startX = zone.start_x * canvas.width;
         const startY = zone.start_y * canvas.height;
@@ -260,10 +288,10 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
       ctx.textBaseline = 'middle';
       ctx.fillText('No image available. Start the pipeline to see the camera feed.', canvas.width / 2, canvas.height / 2);
     }
-  };
+  }, [selectedZone, hoveredPoint, currentImageUrl]);
 
   // Convert canvas coordinates to normalized coordinates
-  const canvasToNormalizedCoords = (x: number, y: number) => {
+  const canvasToNormalizedCoords = useCallback((x: number, y: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     
@@ -272,10 +300,69 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
     const normalizedY = Math.max(0, Math.min(1, y / canvas.height));
     
     return { x: normalizedX, y: normalizedY };
-  };
+  }, []);
 
-  // Handle mouse move for hover effects
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  // Optimized hover detection for better performance
+  const checkHoverStatus = useCallback((x: number, y: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    
+    const currentZones = localZonesRef.current;
+    
+    // Only run hover detection if we're not actively dragging to save performance
+    if (isActivelyDraggingRef.current) {
+      return hoveredPoint;
+    }
+    
+    // Check if hovering over any control points or lines
+    for (let i = 0; i < currentZones.length; i++) {
+      const zone = currentZones[i];
+      
+      // Convert normalized coordinates to canvas coordinates
+      const startX = zone.start_x * canvas.width;
+      const startY = zone.start_y * canvas.height;
+      const endX = zone.end_x * canvas.width;
+      const endY = zone.end_y * canvas.height;
+      
+      // Check distance to start point
+      const distToStart = Math.sqrt((x - startX) ** 2 + (y - startY) ** 2);
+      if (distToStart < 10) {
+        canvas.style.cursor = 'pointer';
+        return { zoneIndex: i, point: 'start' as const };
+      }
+      
+      // Check distance to end point
+      const distToEnd = Math.sqrt((x - endX) ** 2 + (y - endY) ** 2);
+      if (distToEnd < 10) {
+        canvas.style.cursor = 'pointer';
+        return { zoneIndex: i, point: 'end' as const };
+      }
+      
+      // Check distance to line
+      const lineLength = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2);
+      if (lineLength === 0) continue;
+      
+      const dot = ((x - startX) * (endX - startX) + (y - startY) * (endY - startY)) / (lineLength ** 2);
+      
+      if (dot < 0 || dot > 1) continue;
+      
+      const closestX = startX + dot * (endX - startX);
+      const closestY = startY + dot * (endY - startY);
+      
+      const distToLine = Math.sqrt((x - closestX) ** 2 + (y - closestY) ** 2);
+      
+      if (distToLine < 10) {
+        canvas.style.cursor = 'pointer';
+        return { zoneIndex: i, point: 'line' as const };
+      }
+    }
+    
+    canvas.style.cursor = drawMode ? 'crosshair' : 'default';
+    return null;
+  }, [drawMode, hoveredPoint]);
+
+  // Optimized mouse move handler
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (disabled) return;
     
     const canvas = canvasRef.current;
@@ -317,11 +404,12 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
       return;
     }
     
-    // If dragging a control point
+    // If dragging a control point, prioritize performance for drag operations
     if (selectedZone !== null && draggingPoint !== null) {
       const normalized = canvasToNormalizedCoords(x, y);
       
-      const updatedZones = [...zones];
+      // Create a shallow copy of the zones array 
+      const updatedZones = [...localZonesRef.current];
       if (draggingPoint === 'start') {
         updatedZones[selectedZone] = {
           ...updatedZones[selectedZone],
@@ -336,70 +424,28 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
         };
       }
       
-      // Use the throttled update function instead of direct callback
+      // Use the throttled update function
       throttledZoneUpdate(updatedZones);
       return;
     }
 
-    // Check if hovering over any control points or lines
-    let foundHover = false;
+    // For hover effects, use debouncing to avoid excessive checks
+    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
     
-    for (let i = 0; i < zones.length; i++) {
-      const zone = zones[i];
+    hoverTimeoutRef.current = setTimeout(() => {
+      const newHoverState = checkHoverStatus(x, y);
       
-      // Convert normalized coordinates to canvas coordinates
-      const startX = zone.start_x * canvas.width;
-      const startY = zone.start_y * canvas.height;
-      const endX = zone.end_x * canvas.width;
-      const endY = zone.end_y * canvas.height;
-      
-      // Check distance to start point
-      const distToStart = Math.sqrt((x - startX) ** 2 + (y - startY) ** 2);
-      if (distToStart < 10) {
-        setHoveredPoint({ zoneIndex: i, point: 'start' });
-        canvas.style.cursor = 'pointer';
-        foundHover = true;
-        break;
+      // Only update state if the hover status has changed
+      if (JSON.stringify(newHoverState) !== JSON.stringify(hoveredPoint)) {
+        setHoveredPoint(newHoverState);
       }
       
-      // Check distance to end point
-      const distToEnd = Math.sqrt((x - endX) ** 2 + (y - endY) ** 2);
-      if (distToEnd < 10) {
-        setHoveredPoint({ zoneIndex: i, point: 'end' });
-        canvas.style.cursor = 'pointer';
-        foundHover = true;
-        break;
-      }
-      
-      // Check distance to line
-      const lineLength = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2);
-      if (lineLength === 0) continue;
-      
-      const dot = ((x - startX) * (endX - startX) + (y - startY) * (endY - startY)) / (lineLength ** 2);
-      
-      if (dot < 0 || dot > 1) continue;
-      
-      const closestX = startX + dot * (endX - startX);
-      const closestY = startY + dot * (endY - startY);
-      
-      const distToLine = Math.sqrt((x - closestX) ** 2 + (y - closestY) ** 2);
-      
-      if (distToLine < 10) {
-        setHoveredPoint({ zoneIndex: i, point: 'line' });
-        canvas.style.cursor = 'pointer';
-        foundHover = true;
-        break;
-      }
-    }
-    
-    if (!foundHover) {
-      setHoveredPoint(null);
-      canvas.style.cursor = drawMode ? 'crosshair' : 'default';
-    }
-  };
+      hoverTimeoutRef.current = null;
+    }, 50); // Debounce time of 50ms for hover detection
+  }, [disabled, drawMode, isDrawing, drawStartPos, selectedZone, draggingPoint, canvasToNormalizedCoords, throttledZoneUpdate, checkHoverStatus, drawCanvas, hoveredPoint]);
 
   // Handle mouse down event
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (disabled) return;
     
     const canvas = canvasRef.current;
@@ -409,6 +455,12 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     
+    // Clear any pending hover updates
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+    
     // If in draw mode, start drawing
     if (drawMode) {
       setIsDrawing(true);
@@ -417,60 +469,27 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
       return;
     }
     
-    // Check if clicking on any control points
-    for (let i = 0; i < zones.length; i++) {
-      const zone = zones[i];
+    // Get current hover state instead of checking again
+    const hoverState = checkHoverStatus(x, y);
+    
+    if (hoverState) {
+      setSelectedZone(hoverState.zoneIndex);
       
-      // Convert normalized coordinates to canvas coordinates
-      const startX = zone.start_x * canvas.width;
-      const startY = zone.start_y * canvas.height;
-      const endX = zone.end_x * canvas.width;
-      const endY = zone.end_y * canvas.height;
-      
-      // Check distance to start point
-      const distToStart = Math.sqrt((x - startX) ** 2 + (y - startY) ** 2);
-      if (distToStart < 10) {
-        setSelectedZone(i);
-        setDraggingPoint('start');
-        isActivelyDraggingRef.current = true; // Set active dragging flag
-        return;
+      if (hoverState.point === 'start' || hoverState.point === 'end') {
+        setDraggingPoint(hoverState.point);
+        isActivelyDraggingRef.current = true;
       }
       
-      // Check distance to end point
-      const distToEnd = Math.sqrt((x - endX) ** 2 + (y - endY) ** 2);
-      if (distToEnd < 10) {
-        setSelectedZone(i);
-        setDraggingPoint('end');
-        isActivelyDraggingRef.current = true; // Set active dragging flag
-        return;
-      }
-      
-      // Check distance to line
-      const lineLength = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2);
-      if (lineLength === 0) continue;
-      
-      const dot = ((x - startX) * (endX - startX) + (y - startY) * (endY - startY)) / (lineLength ** 2);
-      
-      if (dot < 0 || dot > 1) continue;
-      
-      const closestX = startX + dot * (endX - startX);
-      const closestY = startY + dot * (endY - startY);
-      
-      const distToLine = Math.sqrt((x - closestX) ** 2 + (y - closestY) ** 2);
-      
-      if (distToLine < 10) {
-        setSelectedZone(i);
-        return;
-      }
+      return;
     }
     
     // If not clicking on any control points, deselect
     setSelectedZone(null);
     setDraggingPoint(null);
-  };
+  }, [disabled, drawMode, checkHoverStatus]);
 
   // Handle mouse up event
-  const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleMouseUp = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (disabled) return;
     
     const canvas = canvasRef.current;
@@ -493,7 +512,7 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
       if (lineLength > 20) {
         // Create a new zone
         const newZone: Zone = {
-          id: `zone${zones.length + 1}`,
+          id: `zone${localZonesRef.current.length + 1}`,
           start_x: startNormalized.x,
           start_y: startNormalized.y,
           end_x: endNormalized.x,
@@ -502,8 +521,8 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
           triggering_anchors: ["BOTTOM_CENTER", "CENTER"]
         };
         
-        onZonesChange([...zones, newZone]);
-        setSelectedZone(zones.length);
+        onZonesChange([...localZonesRef.current, newZone]);
+        setSelectedZone(localZonesRef.current.length);
       }
       
       setIsDrawing(false);
@@ -512,17 +531,24 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
       return;
     }
     
-    isActivelyDraggingRef.current = false; // Clear active dragging flag
+    isActivelyDraggingRef.current = false;
+    
+    // If we were dragging, make sure final state is synchronized
+    if (draggingPoint !== null && pendingZonesUpdateRef.current) {
+      onZonesChange(pendingZonesUpdateRef.current);
+      pendingZonesUpdateRef.current = null;
+    }
+    
     setDraggingPoint(null);
-  };
+  }, [disabled, drawMode, isDrawing, drawStartPos, canvasToNormalizedCoords, onZonesChange, draggingPoint]);
 
-  const handleDeleteSelectedZone = () => {
+  const handleDeleteSelectedZone = useCallback(() => {
     if (selectedZone === null) return;
     
-    const updatedZones = zones.filter((_, i) => i !== selectedZone);
+    const updatedZones = localZonesRef.current.filter((_, i) => i !== selectedZone);
     onZonesChange(updatedZones);
     setSelectedZone(null);
-  };
+  }, [selectedZone, onZonesChange]);
 
   return (
     <Box sx={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -571,7 +597,6 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
             overflow: 'hidden',
             backgroundColor: '#f5f5f5'
           }}
-          // Fix the ref callback to properly type the element
           ref={(el: HTMLDivElement | null) => {
             containerRef.current = el;
             if (el) {
@@ -587,7 +612,12 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
             onMouseUp={handleMouseUp}
             onMouseLeave={() => {
               setDraggingPoint(null);
+              isActivelyDraggingRef.current = false;
               setHoveredPoint(null);
+              if (pendingZonesUpdateRef.current) {
+                onZonesChange(pendingZonesUpdateRef.current);
+                pendingZonesUpdateRef.current = null;
+              }
             }}
           />
           

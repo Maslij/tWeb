@@ -59,6 +59,8 @@ interface TelemetryTabProps {
   handleDeleteAllRecords: () => void;
   getEventTypeName: (type: number) => string;
   formatTimestamp: (timestamp: number) => string;
+  hasHeatmapData?: boolean;
+  hasZoneLineData?: boolean;
 }
 
 const TelemetryTab: React.FC<TelemetryTabProps> = ({
@@ -81,7 +83,9 @@ const TelemetryTab: React.FC<TelemetryTabProps> = ({
   fetchDatabaseRecords,
   handleDeleteAllRecords,
   getEventTypeName,
-  formatTimestamp
+  formatTimestamp,
+  hasHeatmapData = true,
+  hasZoneLineData = true
 }) => {
   // Zone Line Counts Chart component
   const ZoneLineCountsChart = () => {
@@ -89,7 +93,7 @@ const TelemetryTab: React.FC<TelemetryTabProps> = ({
       return <TelemetryChartSkeleton />;
     }
 
-    if (!zoneLineCounts || zoneLineCounts.length === 0) {
+    if (!hasZoneLineData || !zoneLineCounts || zoneLineCounts.length === 0) {
       return (
         <Box 
           sx={{ 
@@ -113,16 +117,6 @@ const TelemetryTab: React.FC<TelemetryTabProps> = ({
               "Start the pipeline at least once to see the zone crossing data" : 
               "Add line zones in the configuration to start collecting crossing data"}
           </Typography>
-          {!camera?.running && !totalFrames && (
-            <Button
-              variant="contained"
-              color="success"
-              startIcon={<PlayArrowIcon />}
-              sx={{ mt: 2 }}
-            >
-              Start Pipeline
-            </Button>
-          )}
         </Box>
       );
     }
@@ -219,11 +213,8 @@ const TelemetryTab: React.FC<TelemetryTabProps> = ({
       return <TelemetryChartSkeleton />;
     }
 
-    // Generate the heatmap image URL
-    const heatmapImageUrl = cameraId ? 
-      `/api/v1/cameras/${cameraId}/database/heatmap-image?quality=90` : '';
-
-    if (!heatmapImageUrl || !totalFrames) {
+    // Check if we have heatmap data
+    if (!hasHeatmapData || !totalFrames) {
       return (
         <Box 
           sx={{ 
@@ -247,16 +238,32 @@ const TelemetryTab: React.FC<TelemetryTabProps> = ({
               "Start the pipeline at least once to generate heatmap data" : 
               "Wait for more detection events to generate a heatmap"}
           </Typography>
-          {!camera?.running && !totalFrames && (
-            <Button
-              variant="contained"
-              color="success"
-              startIcon={<PlayArrowIcon />}
-              sx={{ mt: 2 }}
-            >
-              Start Pipeline
-            </Button>
-          )}
+        </Box>
+      );
+    }
+
+    // Generate the heatmap image URL
+    const heatmapImageUrl = cameraId ? 
+      `/api/v1/cameras/${cameraId}/database/heatmap-image?quality=90` : '';
+
+    if (!heatmapImageUrl) {
+      return (
+        <Box 
+          sx={{ 
+            textAlign: 'center', 
+            p: 3, 
+            border: '1px solid #ccc', 
+            borderRadius: '4px', 
+            height: '400px', 
+            display: 'flex', 
+            flexDirection: 'column', 
+            justifyContent: 'center', 
+            alignItems: 'center' 
+          }}
+        >
+          <Typography variant="body1" color="text.secondary">
+            Unable to generate heatmap URL
+          </Typography>
         </Box>
       );
     }
@@ -431,16 +438,6 @@ const TelemetryTab: React.FC<TelemetryTabProps> = ({
                 "Start the pipeline at least once to collect telemetry records" : 
                 "No records have been collected yet"}
             </Typography>
-            {!camera?.running && !totalFrames && (
-              <Button
-                variant="contained"
-                color="success"
-                startIcon={<PlayArrowIcon />}
-                sx={{ mt: 2 }}
-              >
-                Start Pipeline
-              </Button>
-            )}
           </Box>
         ) : (
           <>

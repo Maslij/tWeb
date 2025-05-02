@@ -104,16 +104,6 @@ const LineZoneConfigTab: React.FC<LineZoneConfigTabProps> = ({
             <Typography variant="body1" color="text.secondary">
               Start the pipeline at least once to see the camera feed and configure line zones
             </Typography>
-            <Button
-              variant="contained"
-              color="success"
-              startIcon={<PlayArrowIcon />}
-              onClick={handleStartStop}
-              disabled={isStartingPipeline || !sourceComponent}
-              sx={{ mt: 2 }}
-            >
-              {isStartingPipeline ? "Starting..." : "Start Pipeline"}
-            </Button>
           </Box>
         ) : (camera?.running && !frameUrl) || (!camera?.running && !lastFrameUrl) ? (
           <LineZoneEditorSkeleton />
