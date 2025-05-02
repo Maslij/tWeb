@@ -3593,104 +3593,133 @@ const PipelineBuilder = () => {
         <TabPanel value={mainTabValue} index={sourceComponent ? (hasLineZoneManagerComponent ? 3 : 2) : (hasLineZoneManagerComponent ? 2 : 1)} sx={{ p: 0, mt: 3 }}>
           {/* Telemetry Tab */}
           {dbComponentExists && (
-            <Paper elevation={2} sx={{ p: 3, width: '100%', mb: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                <DatabaseIcon sx={{ mr: 1, color: 'primary.main' }} />
-                <Typography variant="h6">Telemetry Records</Typography>
-                {totalEvents > 0 && (
-                  <Typography variant="subtitle1" color="text.secondary" component="span" sx={{ ml: 2 }}>
-                    {totalEvents} events from {totalFrames} frames
+            <>
+              {/* Analytics Section */}
+              <Accordion defaultExpanded sx={{ mb: 2 }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <TuneIcon sx={{ mr: 1, color: 'primary.main' }} />
+                    <Typography variant="h6">Analytics</Typography>
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Typography variant="body1" paragraph>
+                    Analytics dashboard showing statistics and trends from event data.
                   </Typography>
-                )}
-              </Box>
-              
-              <Divider sx={{ mb: 2 }} />
-              
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3, gap: 2 }}>
-                <Button
-                  variant="outlined"
-                  startIcon={isLoadingRecords ? <CircularProgress size={24} color="inherit" /> : <RedoIcon />}
-                  onClick={fetchDatabaseRecords}
-                  disabled={isLoadingRecords || isDeletingRecords}
-                >
-                  {isLoadingRecords ? 'Refreshing...' : 'Refresh'}
-                </Button>
-                <Button
-                  variant="contained"
-                  color="error"
-                  startIcon={isDeletingRecords ? <CircularProgress size={24} color="inherit" /> : <DeleteIcon />}
-                  onClick={handleDeleteAllRecords}
-                  disabled={isDeletingRecords || isLoadingRecords || totalEvents === 0}
-                >
-                  {isDeletingRecords ? 'Deleting...' : 'Delete All Records'}
-                </Button>
-              </Box>
-              
-              {isLoadingRecords ? (
-                <Box display="flex" justifyContent="center" my={5}>
-                  <CircularProgress />
-                </Box>
-              ) : databaseRecords.length === 0 ? (
-                <Alert severity="info">
-                  No telemetry records found for this camera.
-                </Alert>
-              ) : (
-                <>
-                  <TableContainer component={Paper} sx={{ maxHeight: 440 }}>
-                    <Table stickyHeader aria-label="telemetry records table">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>ID</TableCell>
-                          <TableCell>Type</TableCell>
-                          <TableCell>Timestamp</TableCell>
-                          <TableCell>Source</TableCell>
-                          <TableCell>Properties</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {databaseRecords.map((record) => (
-                          <TableRow
-                            key={record.id}
-                            sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
-                          >
-                            <TableCell component="th" scope="row">
-                              {record.id}
-                            </TableCell>
-                            <TableCell>
-                              <Chip 
-                                label={getEventTypeName(record.type)}
-                                color={
-                                  record.type === 0 ? "primary" : 
-                                  record.type === 1 ? "secondary" : 
-                                  record.type === 2 ? "success" : "default"
-                                }
-                                size="small"
-                              />
-                            </TableCell>
-                            <TableCell>{formatTimestamp(record.timestamp)}</TableCell>
-                            <TableCell>{record.source_id}</TableCell>
-                            <TableCell sx={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              <Tooltip title={record.properties} arrow>
-                                <span>{record.properties}</span>
-                              </Tooltip>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                  <TablePagination
-                    component="div"
-                    rowsPerPageOptions={[5, 10, 25, 50]}
-                    count={totalEvents}
-                    rowsPerPage={rowsPerPage}
-                    page={page}
-                    onPageChange={handlePageChange}
-                    onRowsPerPageChange={handleChangeRowsPerPage}
-                  />
-                </>
-              )}
-            </Paper>
+                  
+                  {totalEvents > 0 ? (
+                    <Alert severity="info">
+                      Analytics features coming soon. Stay tuned for visualizations of your camera data!
+                    </Alert>
+                  ) : (
+                    <Alert severity="info">
+                      No event data available for analytics. Start the pipeline with database sink enabled to collect data.
+                    </Alert>
+                  )}
+                </AccordionDetails>
+              </Accordion>
+
+              {/* Telemetry Records Section */}
+              <Accordion>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <DatabaseIcon sx={{ mr: 1, color: 'primary.main' }} />
+                    <Typography variant="h6">Telemetry Records</Typography>
+                    {totalEvents > 0 && (
+                      <Typography variant="subtitle1" color="text.secondary" component="span" sx={{ ml: 2 }}>
+                        {totalEvents} events from {totalFrames} frames
+                      </Typography>
+                    )}
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3, gap: 2 }}>
+                    <Button
+                      variant="outlined"
+                      startIcon={isLoadingRecords ? <CircularProgress size={24} color="inherit" /> : <RedoIcon />}
+                      onClick={fetchDatabaseRecords}
+                      disabled={isLoadingRecords || isDeletingRecords}
+                    >
+                      {isLoadingRecords ? 'Refreshing...' : 'Refresh'}
+                    </Button>
+                    <Button
+                      variant="contained"
+                      color="error"
+                      startIcon={isDeletingRecords ? <CircularProgress size={24} color="inherit" /> : <DeleteIcon />}
+                      onClick={handleDeleteAllRecords}
+                      disabled={isDeletingRecords || isLoadingRecords || totalEvents === 0}
+                    >
+                      {isDeletingRecords ? 'Deleting...' : 'Delete All Records'}
+                    </Button>
+                  </Box>
+                  
+                  {isLoadingRecords ? (
+                    <Box display="flex" justifyContent="center" my={5}>
+                      <CircularProgress />
+                    </Box>
+                  ) : databaseRecords.length === 0 ? (
+                    <Alert severity="info">
+                      No telemetry records found for this camera.
+                    </Alert>
+                  ) : (
+                    <>
+                      <TableContainer component={Paper} sx={{ maxHeight: 440 }}>
+                        <Table stickyHeader aria-label="telemetry records table">
+                          <TableHead>
+                            <TableRow>
+                              <TableCell>ID</TableCell>
+                              <TableCell>Type</TableCell>
+                              <TableCell>Timestamp</TableCell>
+                              <TableCell>Source</TableCell>
+                              <TableCell>Properties</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {databaseRecords.map((record) => (
+                              <TableRow
+                                key={record.id}
+                                sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
+                              >
+                                <TableCell component="th" scope="row">
+                                  {record.id}
+                                </TableCell>
+                                <TableCell>
+                                  <Chip 
+                                    label={getEventTypeName(record.type)}
+                                    color={
+                                      record.type === 0 ? "primary" : 
+                                      record.type === 1 ? "secondary" : 
+                                      record.type === 2 ? "success" : "default"
+                                    }
+                                    size="small"
+                                  />
+                                </TableCell>
+                                <TableCell>{formatTimestamp(record.timestamp)}</TableCell>
+                                <TableCell>{record.source_id}</TableCell>
+                                <TableCell sx={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  <Tooltip title={record.properties} arrow>
+                                    <span>{record.properties}</span>
+                                  </Tooltip>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                      <TablePagination
+                        component="div"
+                        rowsPerPageOptions={[5, 10, 25, 50]}
+                        count={totalEvents}
+                        rowsPerPage={rowsPerPage}
+                        page={page}
+                        onPageChange={handlePageChange}
+                        onRowsPerPageChange={handleChangeRowsPerPage}
+                      />
+                    </>
+                  )}
+                </AccordionDetails>
+              </Accordion>
+            </>
           )}
         </TabPanel>
       </Box>
