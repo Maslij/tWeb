@@ -2746,27 +2746,14 @@ const PipelineBuilder = () => {
   useEffect(() => {
     let interval: number | null = null;
     
-    // No automatic refresh - commented out refresh logic
-    /*
-    if (camera?.running && cameraId) {
-      // Initial frame load
-      refreshFrame();
-      
-      // Set up interval for frame refresh (every 1 second)
-      interval = window.setInterval(refreshFrame, 1000);
-      setRefreshInterval(interval);
-    } else {
-      // Clear interval when camera stops
-      if (refreshInterval) {
-        clearInterval(refreshInterval);
-        setRefreshInterval(null);
-      }
-      setFrameUrl('');
-    }
-    */
+    // Only load frames if the camera is running AND we're on the relevant tabs
+    // Tab indices: 1 = Live Playback, 2 = Line Zone Config (if source exists)
+    const isLivePlaybackTab = mainTabValue === 1;
+    const isLineZoneTab = sourceComponent 
+      ? mainTabValue === 2 && hasLineZoneManagerComponent
+      : mainTabValue === 1 && hasLineZoneManagerComponent;
     
-    // Just load the frame once if camera is running, no interval
-    if (camera?.running && cameraId) {
+    if (camera?.running && cameraId && (isLivePlaybackTab || isLineZoneTab)) {
       refreshFrame();
     } else {
       setFrameUrl('');
@@ -2782,7 +2769,7 @@ const PipelineBuilder = () => {
         setRefreshInterval(null);
       }
     };
-  }, [camera?.running, cameraId]); // Remove refreshInterval from dependencies
+  }, [camera?.running, cameraId, mainTabValue, sourceComponent, hasLineZoneManagerComponent]); // Added tab dependencies
 
   // Update the zone counts refresh interval to respect the unsaved changes flag
   useEffect(() => {
@@ -3980,11 +3967,12 @@ const PipelineBuilder = () => {
                     {!camera?.running && pipelineHasRunOnce && " (Last Frame)"}
                   </Typography>
                 </Box>
-                {camera?.running && (
+                {(camera?.running || pipelineHasRunOnce) && (
                   <Button 
                     variant="contained" 
                     onClick={refreshFrame}
                     startIcon={<RedoIcon />}
+                    disabled={!camera?.running}
                   >
                     Refresh Frame
                   </Button>
@@ -4077,8 +4065,6 @@ const PipelineBuilder = () => {
                   </Box>
                 )}
               </Box>
-
-
             </Paper>
           </TabPanel>
         )}
@@ -4112,7 +4098,37 @@ const PipelineBuilder = () => {
               
               {/* Line Zone Editor view */}
               <Box sx={{ height: '500px' }}>
-                {(camera?.running && !frameUrl) || (!camera?.running && !lastFrameUrl) ? (
+                {(!camera?.running && !pipelineHasRunOnce) ? (
+                  <Box sx={{ 
+                    textAlign: 'center', 
+                    p: 3, 
+                    border: '1px solid #ccc', 
+                    borderRadius: '4px', 
+                    height: '100%', 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    justifyContent: 'center', 
+                    alignItems: 'center' 
+                  }}>
+                    <VisibilityIcon sx={{ fontSize: 60, color: 'text.secondary', opacity: 0.5, mb: 2 }} />
+                    <Typography variant="h6" color="text.secondary" gutterBottom>
+                      Pipeline not started
+                    </Typography>
+                    <Typography variant="body1" color="text.secondary">
+                      Start the pipeline at least once to see the camera feed and configure line zones
+                    </Typography>
+                    <Button
+                      variant="contained"
+                      color="success"
+                      startIcon={<PlayArrowIcon />}
+                      onClick={handleStartStop}
+                      disabled={isStartingPipeline || !sourceComponent}
+                      sx={{ mt: 2 }}
+                    >
+                      {isStartingPipeline ? "Starting..." : "Start Pipeline"}
+                    </Button>
+                  </Box>
+                ) : (camera?.running && !frameUrl) || (!camera?.running && !lastFrameUrl) ? (
                   <LineZoneEditorSkeleton />
                 ) : (
                   <LineZoneEditor 
@@ -4129,7 +4145,7 @@ const PipelineBuilder = () => {
                   <Button 
                     variant="contained"
                     startIcon={<RedoIcon />}
-                    disabled={isRefreshingComponents}
+                    disabled={isRefreshingComponents || (!camera?.running && !pipelineHasRunOnce)}
                     onClick={() => fetchComponents(true)}
                   >
                     Refresh Counts
@@ -4138,7 +4154,7 @@ const PipelineBuilder = () => {
                   <Button 
                     variant="contained" 
                     color="primary"
-                    disabled={isSavingZones}
+                    disabled={isSavingZones || (!camera?.running && !pipelineHasRunOnce)}
                     startIcon={isSavingZones ? <CircularProgress size={20} /> : null}
                     onClick={async () => {
                       if (!lineZoneManagerComponent || !cameraId) return;
