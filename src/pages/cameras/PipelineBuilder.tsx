@@ -3488,40 +3488,40 @@ const PipelineBuilder = () => {
     const [loading, setLoading] = useState(false);
     
     // Fetch available classes from the backend
-    const fetchAvailableClasses = useCallback(async () => {
+    const fetchAvailableClasses = useCallback(() => {
       if (!cameraId || !dbComponentExists) return;
       
-      try {
-        const response = await fetch(`/api/v1/cameras/${cameraId}/database/available-classes`);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch available classes: ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        if (data.classes && Array.isArray(data.classes)) {
-          setAvailableClasses(data.classes);
-        }
-      } catch (err) {
-        console.error('Error fetching available classes:', err);
-        
-        // Fallback to classes from object detection processor if API fails
-        const objectDetectionProcessor = processorComponents.find(
-          comp => comp.type === 'object_detection' || comp.type_name === 'object_detection'
-        );
-        
-        if (objectDetectionProcessor) {
-          let classes: string[] = [];
-          
-          if (Array.isArray(objectDetectionProcessor.classes)) {
-            classes = objectDetectionProcessor.classes;
-          } else if (objectDetectionProcessor.config && Array.isArray(objectDetectionProcessor.config.classes)) {
-            classes = objectDetectionProcessor.config.classes;
-          }
-          
-          setAvailableClasses(classes);
+      // First try to get classes from object detection processor
+      const objectDetectionProcessor = processorComponents.find(
+        comp => comp.type === 'object_detection' || comp.type_name === 'object_detection'
+      );
+      
+      let classes: string[] = [];
+      
+      if (objectDetectionProcessor) {
+        if (Array.isArray(objectDetectionProcessor.classes)) {
+          classes = objectDetectionProcessor.classes;
+        } else if (objectDetectionProcessor.config && Array.isArray(objectDetectionProcessor.config.classes)) {
+          classes = objectDetectionProcessor.config.classes;
         }
       }
-    }, [cameraId, dbComponentExists, processorComponents]);
+      
+      // If no classes found, try to get from available models
+      if (classes.length === 0) {
+        const objectDetectionModel = objectDetectionModels.find(
+          model => model.id === objectDetectionForm.model_id
+        );
+        
+        if (objectDetectionModel && Array.isArray(objectDetectionModel.classes)) {
+          classes = objectDetectionModel.classes;
+        } else if (selectedModelClasses.length > 0) {
+          classes = selectedModelClasses;
+        }
+      }
+      
+      // Set whatever classes we found
+      setAvailableClasses(classes);
+    }, [cameraId, dbComponentExists, processorComponents, objectDetectionModels, objectDetectionForm.model_id, selectedModelClasses]);
     
     // Fetch heatmap function - use refs to track state without re-renders
     const fetchHeatmap = useCallback(() => {
