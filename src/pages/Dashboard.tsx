@@ -12,7 +12,8 @@ import {
   CircularProgress,
   Alert,
   Paper,
-  Chip
+  Chip,
+  Skeleton
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -24,6 +25,26 @@ import VideocamOffIcon from '@mui/icons-material/VideocamOff';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
 
 import apiService, { Camera } from '../services/api';
+
+// Skeleton card component for loading state
+const CameraSkeleton = () => (
+  <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Skeleton variant="rectangular" height={200} animation="wave" />
+    <CardContent sx={{ flexGrow: 1 }}>
+      <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+        <Skeleton variant="text" width="60%" height={32} animation="wave" />
+        <Skeleton variant="rounded" width={80} height={24} animation="wave" />
+      </Box>
+      <Skeleton variant="text" width="100%" height={20} animation="wave" />
+    </CardContent>
+    <CardActions sx={{ padding: 2, pt: 0 }}>
+      <Skeleton variant="rounded" width={80} height={32} animation="wave" />
+      <Skeleton variant="rounded" width={100} height={32} animation="wave" />
+      <Box flexGrow={1} />
+      <Skeleton variant="circular" width={32} height={32} animation="wave" />
+    </CardActions>
+  </Card>
+);
 
 const Dashboard = () => {
   const [cameras, setCameras] = useState<Camera[]>([]);
@@ -119,8 +140,8 @@ const Dashboard = () => {
       )}
 
       {loading ? (
-        <Box display="flex" justifyContent="center" my={5}>
-          <CircularProgress />
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' }, gap: 3 }}>
+          <CameraSkeleton />
         </Box>
       ) : cameras.length === 0 ? (
         <Paper
