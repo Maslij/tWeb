@@ -2626,6 +2626,8 @@ const PipelineBuilder = () => {
   useEffect(() => {
     let interval: number | null = null;
     
+    // No automatic refresh - commented out refresh logic
+    /*
     if (camera?.running && cameraId) {
       // Initial frame load
       refreshFrame();
@@ -2641,6 +2643,14 @@ const PipelineBuilder = () => {
       }
       setFrameUrl('');
     }
+    */
+    
+    // Just load the frame once if camera is running, no interval
+    if (camera?.running && cameraId) {
+      refreshFrame();
+    } else {
+      setFrameUrl('');
+    }
     
     // Clean up function
     return () => {
@@ -2649,9 +2659,41 @@ const PipelineBuilder = () => {
       }
       if (refreshInterval) {
         clearInterval(refreshInterval);
+        setRefreshInterval(null);
       }
     };
   }, [camera?.running, cameraId]); // Remove refreshInterval from dependencies
+
+  // Update the zone counts refresh interval to respect the unsaved changes flag
+  useEffect(() => {
+    let zoneCountsInterval: number | null = null;
+    
+    // No automatic refresh - commented out refresh logic
+    /*
+    // Only start the interval if the camera is running and we have a line zone manager
+    if (camera?.running && hasLineZoneManagerComponent && cameraId) {
+      // Set up interval for refreshing zone counts (every 3 seconds)
+      zoneCountsInterval = window.setInterval(() => {
+        // Get a reference to the LineZoneEditor's active dragging flag
+        const lineZoneEditorElement = document.querySelector('[data-line-zone-editor="true"]');
+        const isActivelyDragging = lineZoneEditorElement && 
+          (lineZoneEditorElement as any).__isActivelyDragging === true;
+        
+        // Only refresh if not actively dragging and no unsaved changes
+        if (!isActivelyDragging && !hasUnsavedZoneChanges) {
+          fetchComponents();
+        }
+      }, 3000);
+    }
+    */
+    
+    // Clean up function
+    return () => {
+      if (zoneCountsInterval) {
+        clearInterval(zoneCountsInterval);
+      }
+    };
+  }, [camera?.running, hasLineZoneManagerComponent, cameraId, fetchComponents, hasUnsavedZoneChanges]);
 
   // Clean up interval on component unmount
   useEffect(() => {
@@ -3156,34 +3198,6 @@ const PipelineBuilder = () => {
     }
   };
 
-  // Update the zone counts refresh interval to respect the unsaved changes flag
-  useEffect(() => {
-    let zoneCountsInterval: number | null = null;
-    
-    // Only start the interval if the camera is running and we have a line zone manager
-    if (camera?.running && hasLineZoneManagerComponent && cameraId) {
-      // Set up interval for refreshing zone counts (every 3 seconds)
-      zoneCountsInterval = window.setInterval(() => {
-        // Get a reference to the LineZoneEditor's active dragging flag
-        const lineZoneEditorElement = document.querySelector('[data-line-zone-editor="true"]');
-        const isActivelyDragging = lineZoneEditorElement && 
-          (lineZoneEditorElement as any).__isActivelyDragging === true;
-        
-        // Only refresh if not actively dragging and no unsaved changes
-        if (!isActivelyDragging && !hasUnsavedZoneChanges) {
-          fetchComponents();
-        }
-      }, 3000);
-    }
-    
-    // Clean up function
-    return () => {
-      if (zoneCountsInterval) {
-        clearInterval(zoneCountsInterval);
-      }
-    };
-  }, [camera?.running, hasLineZoneManagerComponent, cameraId, fetchComponents, hasUnsavedZoneChanges]);
-
   // New function to fetch database records
   const fetchDatabaseRecords = useCallback(async () => {
     if (!cameraId || !dbComponentExists) return;
@@ -3291,23 +3305,10 @@ const PipelineBuilder = () => {
     try {
       setIsLoadingZoneData(true);
       
-      let url = `/api/v1/cameras/${cameraId}/database/zone-line-counts`;
-      
-      // Add time range parameters if they're set
-      if (timeRange && timeRange.start > 0) {
-        url += `?start_time=${timeRange.start}`;
-        if (timeRange.end > 0) {
-          url += `&end_time=${timeRange.end}`;
-        }
+      const response = await apiService.database.getZoneLineCounts(cameraId, timeRange || undefined);
+      if (response) {
+        setZoneLineCounts(response.zone_line_counts || []);
       }
-      
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch zone line counts: ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      setZoneLineCounts(data.zone_line_counts || []);
     } catch (err) {
       console.error('Error fetching zone line counts:', err);
       showSnackbar('Failed to load zone line count data');
@@ -3323,13 +3324,10 @@ const PipelineBuilder = () => {
     try {
       setIsLoadingHeatmapData(true);
       
-      const response = await fetch(`/api/v1/cameras/${cameraId}/database/class-heatmap`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch class heatmap data: ${response.statusText}`);
+      const response = await apiService.database.getClassHeatmapData(cameraId);
+      if (response) {
+        setClassHeatmapData(response.class_heatmap_data || []);
       }
-      
-      const data = await response.json();
-      setClassHeatmapData(data.class_heatmap_data || []);
     } catch (err) {
       console.error('Error fetching class heatmap data:', err);
       showSnackbar('Failed to load class heatmap data');
@@ -3522,43 +3520,18 @@ const PipelineBuilder = () => {
       // Set whatever classes we found
       setAvailableClasses(classes);
     }, [cameraId, dbComponentExists, processorComponents, objectDetectionModels, objectDetectionForm.model_id, selectedModelClasses]);
-    
-    // Fetch heatmap function - use refs to track state without re-renders
-    const fetchHeatmap = useCallback(() => {
-      if (!cameraId || !dbComponentExists || loadingRef.current) return;
-      
-      loadingRef.current = true;
-      setLoading(true);
-      setImageLoadError(false);
-      
-      // Build the URL with parameters
-      let url = `/api/v1/cameras/${cameraId}/database/heatmap-image?anchor=${selectedAnchor}&quality=${imageQuality}`;
-      
-      // Add class filter if any classes are selected
-      if (selectedClasses.length > 0) {
-        url += `&class=${selectedClasses.join(',')}`;
-      }
-      
-      // Add timestamp to prevent caching
-      url += `&t=${new Date().getTime()}`;
-      
-      // Set the image URL
-      setHeatmapImageUrl(url);
-      
-      // Fetch available classes if not already done
-      fetchAvailableClasses();
-    }, [cameraId, dbComponentExists, selectedAnchor, imageQuality, selectedClasses, fetchAvailableClasses]);
+
     
     // Image event handlers
     const handleImageLoad = useCallback(() => {
-      loadingRef.current = false;
+      /* loadingRef.current = false;
       setLoading(false);
       initialFetchDoneRef.current = true;
       
       // After the first successful load, fetch available classes
       if (availableClasses.length === 0) {
         fetchAvailableClasses();
-      }
+      } */
     }, [availableClasses.length, fetchAvailableClasses]);
     
     const handleImageError = useCallback(() => {
@@ -3572,15 +3545,10 @@ const PipelineBuilder = () => {
     useEffect(() => {
       mountedRef.current = true;
       
-      // Only fetch once and only if we have camera ID and DB
-      if (!initialFetchDoneRef.current && cameraId && dbComponentExists) {
-        fetchHeatmap();
-      }
-      
       return () => {
         mountedRef.current = false;
       };
-    }, [cameraId, dbComponentExists, fetchHeatmap]);
+    }, [cameraId, dbComponentExists]);
     
     // UI handlers - ensure they don't trigger re-renders when unnecessary
     const handleAnchorChange = useCallback((event: SelectChangeEvent<string>) => {
@@ -3601,13 +3569,41 @@ const PipelineBuilder = () => {
       });
     }, []);
     
-    // For refresh button - explicitly fetch new image
-    const handleRefresh = useCallback(() => {
-      fetchHeatmap();
-    }, [fetchHeatmap]);
     
     // Background image handling
     const backgroundImageUrl = pipelineHasRunOnce && lastFrameUrl ? lastFrameUrl : "";
+
+    // Function to fetch heatmap image
+    const fetchHeatmapImage = useCallback(() => {
+      if (!cameraId || !dbComponentExists) return;
+      
+      // Set loading state
+      setLoading(true);
+      setImageLoadError(false);
+      
+      // Get the heatmap image URL with selected parameters and a timestamp to bust cache
+      const imageUrl = apiService.database.getHeatmapImage(cameraId, {
+        anchor: selectedAnchor,
+        quality: imageQuality,
+        classes: selectedClasses.length > 0 ? selectedClasses : undefined
+      });
+      
+      // Set the image URL to display the heatmap
+      setHeatmapImageUrl(imageUrl);
+      
+      // Also update available classes to ensure they're loaded
+      fetchAvailableClasses();
+    }, [cameraId, dbComponentExists, selectedAnchor, imageQuality, selectedClasses, fetchAvailableClasses]);
+    
+    // Initial load of heatmap and available classes
+    useEffect(() => {
+      // Only run this once on component mount if data is available
+      if (!initialFetchDoneRef.current && cameraId && dbComponentExists) {
+        fetchHeatmapImage();
+        fetchAvailableClasses();
+        initialFetchDoneRef.current = true;
+      }
+    }, [cameraId, dbComponentExists, fetchHeatmapImage, fetchAvailableClasses]);
     
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
@@ -3651,10 +3647,10 @@ const PipelineBuilder = () => {
             
             {/* Refresh button */}
             <Button
-              variant="outlined"
+              variant="contained"
               startIcon={loading ? <CircularProgress size={20} /> : <RedoIcon />}
-              onClick={handleRefresh}
               disabled={loading}
+              onClick={fetchHeatmapImage}
             >
               Refresh Heatmap
             </Button>
@@ -3715,7 +3711,7 @@ const PipelineBuilder = () => {
                   maxHeight: '100%', 
                   objectFit: 'contain'
                 }}
-                onLoad={handleImageLoad}
+                onLoad={() => setLoading(false)}
                 onError={handleImageError}
               />
               
@@ -4010,7 +4006,7 @@ const PipelineBuilder = () => {
                 </Box>
                 {camera?.running && (
                   <Button 
-                    variant="outlined" 
+                    variant="contained" 
                     onClick={refreshFrame}
                     startIcon={<RedoIcon />}
                   >
@@ -4020,6 +4016,12 @@ const PipelineBuilder = () => {
               </Box>
               
               <Divider sx={{ mb: 2 }} />
+              
+              {camera?.running && (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  Automatic refreshing has been disabled. Click the "Refresh Frame" button to manually update the view.
+                </Alert>
+              )}
               
               <Box sx={{ width: '100%', textAlign: 'center' }}>
                 {(camera?.running && frameUrl) || (!camera?.running && lastFrameUrl) ? (
@@ -4094,6 +4096,12 @@ const PipelineBuilder = () => {
               
               <Divider sx={{ mb: 2 }} />
               
+              {camera?.running && (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  Automatic refreshing has been disabled. Use the "Refresh Counts" button to manually update zone counts.
+                </Alert>
+              )}
+              
               <Typography variant="body2" color="text.secondary" paragraph>
                 Draw crossing lines on the image to define detection zones. Objects crossing these lines will be counted.
                 {camera?.running ? 
@@ -4114,7 +4122,7 @@ const PipelineBuilder = () => {
               <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
                 <Box sx={{ display: 'flex', gap: 2 }}>
                   <Button 
-                    variant="outlined"
+                    variant="contained"
                     startIcon={<RedoIcon />}
                     disabled={isRefreshingComponents}
                     onClick={() => fetchComponents(true)}
@@ -4217,13 +4225,19 @@ const PipelineBuilder = () => {
                   </Box>
                 </AccordionSummary>
                 <AccordionDetails>
+                  {camera?.running && (
+                    <Alert severity="info" sx={{ mb: 3 }}>
+                      Automatic refreshing has been disabled. Use the refresh buttons to manually update the data.
+                    </Alert>
+                  )}
+                  
                   <Box sx={{ mb: 3 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                       <Typography variant="subtitle1">
                         Zone Crossing Counts
                       </Typography>
                       <Button
-                        variant="outlined"
+                        variant="contained"
                         startIcon={isLoadingZoneData ? <CircularProgress size={20} /> : <RedoIcon />}
                         onClick={fetchZoneLineCounts}
                         disabled={isLoadingZoneData}

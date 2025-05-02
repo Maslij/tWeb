@@ -165,6 +165,28 @@ export interface DatabaseRecordsResponse {
   total_frames: number;
 }
 
+// New interfaces for telemetry data
+export interface ZoneLineCount {
+  timestamp: number;
+  zone_id: string;
+  count: number;
+}
+
+export interface ZoneLineCountsResponse {
+  zone_line_counts: ZoneLineCount[];
+}
+
+export interface ClassHeatmapPoint {
+  x: number;
+  y: number;
+  value: number;
+  class: string;
+}
+
+export interface ClassHeatmapResponse {
+  class_heatmap_data: ClassHeatmapPoint[];
+}
+
 // API Service
 const apiService = {
   // License related API calls
@@ -489,6 +511,94 @@ const apiService = {
         console.error('Error deleting database records:', error);
         return false;
       }
+    },
+
+    /**
+     * Get zone line counts for a specific camera with optional time range
+     */
+    async getZoneLineCounts(cameraId: string, timeRange?: {start: number, end: number}): Promise<ZoneLineCountsResponse | null> {
+      try {
+        let url = getFullUrl(`/api/v1/cameras/${cameraId}/database/zone-line-counts`);
+        
+        // Add time range parameters if they're set
+        if (timeRange && timeRange.start > 0) {
+          url += `?start_time=${timeRange.start}`;
+          if (timeRange.end > 0) {
+            url += `&end_time=${timeRange.end}`;
+          }
+        }
+        
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch zone line counts: ${response.statusText}`);
+        }
+        
+        return await response.json();
+      } catch (error) {
+        console.error('Error fetching zone line counts:', error);
+        return null;
+      }
+    },
+
+    /**
+     * Get class heatmap data for a specific camera
+     */
+    async getClassHeatmapData(cameraId: string): Promise<ClassHeatmapResponse | null> {
+      try {
+        const url = getFullUrl(`/api/v1/cameras/${cameraId}/database/class-heatmap`);
+        
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch class heatmap data: ${response.statusText}`);
+        }
+        
+        return await response.json();
+      } catch (error) {
+        console.error('Error fetching class heatmap data:', error);
+        return null;
+      }
+    },
+
+    /**
+     * Get heatmap image URL for a specific camera
+     */
+    getHeatmapImage(cameraId: string, params?: {
+      anchor?: string;
+      quality?: number;
+      classes?: string[];
+    }): string {
+      // Start with base URL
+      let url = getFullUrl(`/api/v1/cameras/${cameraId}/database/heatmap-image`);
+      
+      // Add query parameters if provided
+      if (params) {
+        const queryParams = new URLSearchParams();
+        
+        if (params.anchor) {
+          queryParams.append('anchor', params.anchor);
+        }
+        
+        if (params.quality !== undefined) {
+          queryParams.append('quality', params.quality.toString());
+        }
+        
+        if (params.classes && params.classes.length > 0) {
+          queryParams.append('class', params.classes.join(','));
+        }
+        
+        // Add timestamp for cache busting to force a fresh image every time
+        queryParams.append('t', Date.now().toString());
+        
+        if (queryParams.toString()) {
+          url += `?${queryParams.toString()}`;
+        }
+      } else {
+        // Even with no other params, add a timestamp
+        url += `?t=${Date.now()}`;
+      }
+      
+      // Return the URL directly, as it will be used in an <img> tag
+      return url;
     }
   }
 };
