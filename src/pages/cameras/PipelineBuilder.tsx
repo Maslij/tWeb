@@ -2,10 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Container,
-  Typography,
-  Box,
   Paper,
-  Button,
+  Button as MuiButton,
   Alert,
   CircularProgress,
   Tabs,
@@ -14,7 +12,6 @@ import {
   List,
   ListItem,
   ListItemText,
-  ListItemSecondaryAction,
   IconButton,
   Dialog,
   DialogTitle,
@@ -37,7 +34,6 @@ import {
   FormGroup,
   Chip,
   Slider,
-  Checkbox,
   Accordion,
   AccordionSummary,
   AccordionDetails,
@@ -48,9 +44,16 @@ import {
   TableHead,
   TableRow,
   TablePagination,
-  FormHelperText,
   Skeleton
 } from '@mui/material';
+
+// Import our custom UI components
+import { Box } from '../../components/ui/Box';
+import { Typography } from '../../components/ui/Typography';
+import { Button } from '../../components/ui/Button';
+import { IconButton as CustomIconButton } from '../../components/ui/IconButton';
+import { Divider as CustomDivider } from '../../components/ui/Divider';
+
 import { 
   Chart as ChartJS, 
   CategoryScale, 
@@ -92,23 +95,6 @@ import StorageIcon from '@mui/icons-material/Storage';
 import DatabaseIcon from '@mui/icons-material/Storage';
 import LiveTvIcon from '@mui/icons-material/LiveTv';
 import WarningIcon from '@mui/icons-material/Warning';
-import DriveFolderUploadIcon from '@mui/icons-material/DriveFolderUpload';
-import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
-import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import CameraIcon from '@mui/icons-material/Camera';
-import VideoCameraBackIcon from '@mui/icons-material/VideoCameraBack';
-import CameraAltIcon from '@mui/icons-material/CameraAlt';
-import LineStyleIcon from '@mui/icons-material/LineStyle';
-import LineWeightIcon from '@mui/icons-material/LineWeight';
-import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
-import SettingsApplicationsIcon from '@mui/icons-material/SettingsApplications';
-import AdsClickIcon from '@mui/icons-material/AdsClick';
-import WidgetsIcon from '@mui/icons-material/Widgets';
-import TrackChangesIcon from '@mui/icons-material/TrackChanges';
-import RoutingIcon from '@mui/icons-material/AltRoute';
-import AltRouteIcon from '@mui/icons-material/AltRoute';
-import ShowChartIcon from '@mui/icons-material/ShowChart';
 
 import apiService, { 
   Camera, 
@@ -318,13 +304,6 @@ const TabPanel = (props: TabPanelProps) => {
       {value === index && <Box sx={{ ...sx }}>{children}</Box>}
     </div>
   );
-};
-
-const a11yProps = (index: number) => {
-  return {
-    id: `pipeline-tab-${index}`,
-    'aria-controls': `pipeline-tabpanel-${index}`,
-  };
 };
 
 // Helper to convert JSON to string with formatting
@@ -1983,10 +1962,6 @@ const PipelineBuilder = () => {
     }
   }, [cameraId, showSnackbar, hasUnsavedZoneChanges]);
 
-  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
-    setTabValue(newValue);
-  };
-
   const handleMainTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setMainTabValue(newValue);
   };
@@ -2298,23 +2273,6 @@ const PipelineBuilder = () => {
         }));
       }
     }
-  };
-
-  const handleAddClass = () => {
-    if (objectDetectionForm.newClass.trim()) {
-      setObjectDetectionForm(prev => ({
-        ...prev,
-        classes: [...prev.classes, prev.newClass.trim()],
-        newClass: ""
-      }));
-    }
-  };
-
-  const handleDeleteClass = (index: number) => {
-    setObjectDetectionForm(prev => ({
-      ...prev,
-      classes: prev.classes.filter((_, i) => i !== index)
-    }));
   };
 
   const handleObjectTrackingFormChange = (field: keyof ObjectTrackingForm, value: any) => {
@@ -3745,7 +3703,7 @@ const PipelineBuilder = () => {
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Box>
           <Button
-            startIcon={<ArrowBackIcon />}
+            icon={<ArrowBackIcon />}
             onClick={() => navigate('/')}
             sx={{ mb: 2 }}
           >
@@ -3756,7 +3714,7 @@ const PipelineBuilder = () => {
           </Typography>
         </Box>
         <Box>
-          <Button
+          <MuiButton
             variant="contained"
             color={camera.running ? "error" : "success"}
             startIcon={
@@ -3770,7 +3728,7 @@ const PipelineBuilder = () => {
             {isStartingPipeline ? "Starting..." : 
              isStoppingPipeline ? "Stopping..." :
              camera.running ? "Stop Pipeline" : "Start Pipeline"}
-          </Button>
+          </MuiButton>
         </Box>
       </Box>
 
@@ -3854,14 +3812,14 @@ const PipelineBuilder = () => {
                   <Button
                     variant="outlined"
                     color="secondary"
-                    startIcon={<AutoFixHighIcon />}
+                    icon={<AutoFixHighIcon />}
                     onClick={openTemplateDialog}
                     disabled={!sourceComponent || camera.running}
                     size="small"
                   >
                     Use Template
                   </Button>
-                  <Button 
+                  <MuiButton 
                     variant="contained" 
                     startIcon={<AddIcon />} 
                     onClick={() => openCreateDialog('processor')}
@@ -3869,7 +3827,7 @@ const PipelineBuilder = () => {
                     size="small"
                   >
                     Add Processor
-                  </Button>
+                  </MuiButton>
                 </Box>
               </Box>
               
@@ -3971,7 +3929,7 @@ const PipelineBuilder = () => {
                   <Button 
                     variant="contained" 
                     onClick={refreshFrame}
-                    startIcon={<RedoIcon />}
+                    icon={<RedoIcon />}
                     disabled={!camera?.running}
                   >
                     Refresh Frame
@@ -5593,6 +5551,7 @@ const PipelineBuilder = () => {
                     <Typography variant="body2" color="text.secondary">{template.description}</Typography>
                     
                     <Typography variant="subtitle2" sx={{ mt: 1.5, mb: 0.5 }}>Includes:</Typography>
+                    <CustomDivider spacing={0.5} />
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                       {template.components.processors.map((processor) => (
                         <Chip
@@ -5613,15 +5572,16 @@ const PipelineBuilder = () => {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={closeTemplateDialog}>Cancel</Button>
+          <MuiButton onClick={closeTemplateDialog}>Cancel</MuiButton>
           <Button
             variant="contained"
             color="primary"
-            disabled={!selectedTemplate || !sourceComponent || applyingTemplate}
+            loading={applyingTemplate}
+            icon={<AutoFixHighIcon />}
+            disabled={!selectedTemplate || !sourceComponent}
             onClick={applyTemplate}
-            startIcon={applyingTemplate ? <CircularProgress size={20} /> : <AutoFixHighIcon />}
           >
-            {applyingTemplate ? 'Applying...' : 'Apply Template'}
+            Apply Template
           </Button>
         </DialogActions>
       </Dialog>
