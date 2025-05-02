@@ -13,7 +13,9 @@ import {
   Alert,
   Paper,
   Chip,
-  Skeleton
+  Skeleton,
+  Tooltip,
+  Stack
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -23,8 +25,39 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import VideocamIcon from '@mui/icons-material/Videocam';
 import VideocamOffIcon from '@mui/icons-material/VideocamOff';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
+import VideoFileIcon from '@mui/icons-material/VideoFile';
+import RouterIcon from '@mui/icons-material/Router';
+import LocalPoliceIcon from '@mui/icons-material/LocalPolice';
+import FilterCenterFocusIcon from '@mui/icons-material/FilterCenterFocus';
+import TimelineIcon from '@mui/icons-material/Timeline';
+import SaveIcon from '@mui/icons-material/Save';
+import StorageIcon from '@mui/icons-material/Storage';
 
-import apiService, { Camera } from '../services/api';
+import apiService, { Camera, Component } from '../services/api';
+
+// Define additional interfaces to match the API structure for components
+interface CameraComponents {
+  source: Component | null;
+  processors: Component[];
+  sinks: Component[];
+}
+
+// Define component type mappings similar to PipelineBuilder.tsx
+const sourceTypeMapping: Record<string, { icon: React.ReactElement, label: string }> = {
+  file: { icon: <VideoFileIcon fontSize="small" />, label: "File Source" },
+  rtsp: { icon: <RouterIcon fontSize="small" />, label: "RTSP Camera" }
+};
+
+const processorTypeMapping: Record<string, { icon: React.ReactElement, label: string }> = {
+  object_detection: { icon: <LocalPoliceIcon fontSize="small" />, label: "Object Detection" },
+  object_tracking: { icon: <TimelineIcon fontSize="small" />, label: "Object Tracking" },
+  line_zone_manager: { icon: <FilterCenterFocusIcon fontSize="small" />, label: "Line Zone Manager" }
+};
+
+const sinkTypeMapping: Record<string, { icon: React.ReactElement, label: string }> = {
+  file: { icon: <SaveIcon fontSize="small" />, label: "File Sink" },
+  database: { icon: <StorageIcon fontSize="small" />, label: "Database Sink" }
+};
 
 // Skeleton card component for loading state
 const CameraSkeleton = () => (
@@ -36,6 +69,7 @@ const CameraSkeleton = () => (
         <Skeleton variant="rounded" width={80} height={24} animation="wave" />
       </Box>
       <Skeleton variant="text" width="100%" height={20} animation="wave" />
+      <Skeleton variant="text" width="100%" height={20} animation="wave" />
     </CardContent>
     <CardActions sx={{ padding: 2, pt: 0 }}>
       <Skeleton variant="rounded" width={80} height={32} animation="wave" />
@@ -46,16 +80,91 @@ const CameraSkeleton = () => (
   </Card>
 );
 
+// Get the actual component type as a string
+const getComponentType = (component: Component): string => {
+  if (typeof component.type === 'string') {
+    return component.type;
+  }
+  if (component.type_name) {
+    return component.type_name.toLowerCase();
+  }
+  return 'unknown';
+};
+
+// Component to display component type icons
+const ComponentChips = ({ components }: { components: CameraComponents }) => {
+  const { source, processors, sinks } = components;
+
+  // Return early if no components
+  if (!source && (!processors || processors.length === 0) && (!sinks || sinks.length === 0)) {
+    return <Typography variant="body2" color="text.secondary">No components configured</Typography>;
+  }
+
+  return (
+    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+      {/* Source component */}
+      {source && (
+        <Tooltip title={sourceTypeMapping[getComponentType(source)]?.label || getComponentType(source)}>
+          <Chip
+            icon={sourceTypeMapping[getComponentType(source)]?.icon || <VideocamIcon fontSize="small" />}
+            label={sourceTypeMapping[getComponentType(source)]?.label || getComponentType(source)}
+            size="small"
+            sx={{ mb: 1 }}
+            variant="outlined"
+          />
+        </Tooltip>
+      )}
+      
+      {/* Processor components */}
+      {processors && processors.map((processor, idx) => (
+        <Tooltip key={`proc-${idx}`} title={processorTypeMapping[getComponentType(processor)]?.label || getComponentType(processor)}>
+          <Chip
+            icon={processorTypeMapping[getComponentType(processor)]?.icon || <SettingsIcon fontSize="small" />}
+            label={processorTypeMapping[getComponentType(processor)]?.label || getComponentType(processor)}
+            size="small"
+            sx={{ mb: 1 }}
+            variant="outlined"
+          />
+        </Tooltip>
+      ))}
+      
+      {/* Sink components */}
+      {sinks && sinks.map((sink, idx) => (
+        <Tooltip key={`sink-${idx}`} title={sinkTypeMapping[getComponentType(sink)]?.label || getComponentType(sink)}>
+          <Chip
+            icon={sinkTypeMapping[getComponentType(sink)]?.icon || <SaveIcon fontSize="small" />}
+            label={sinkTypeMapping[getComponentType(sink)]?.label || getComponentType(sink)}
+            size="small"
+            sx={{ mb: 1 }}
+            variant="outlined"
+          />
+        </Tooltip>
+      ))}
+    </Box>
+  );
+};
+
 const Dashboard = () => {
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [cameraComponents, setCameraComponents] = useState<Record<string, CameraComponents>>({});
 
   const fetchCameras = async () => {
     setLoading(true);
     try {
       const camerasData = await apiService.cameras.getAll();
       setCameras(camerasData);
+      
+      // Fetch components for each camera
+      const componentsMap: Record<string, CameraComponents> = {};
+      for (const camera of camerasData) {
+        const components = await apiService.components.getAll(camera.id);
+        if (components) {
+          componentsMap[camera.id] = components;
+        }
+      }
+      setCameraComponents(componentsMap);
       setError(null);
     } catch (err) {
       setError('Failed to load cameras. Please try again later.');
@@ -142,6 +251,8 @@ const Dashboard = () => {
       {loading ? (
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' }, gap: 3 }}>
           <CameraSkeleton />
+          <CameraSkeleton />
+          <CameraSkeleton />
         </Box>
       ) : cameras.length === 0 ? (
         <Paper
@@ -208,22 +319,13 @@ const Dashboard = () => {
                     size="small"
                   />
                 </Box>
-                <Typography variant="body2" color="text.secondary">
-                  Components: 
-                  {camera.components && (
-                    <>
-                      {camera.components.source > 0 && ` Source (${camera.components.source})`}
-                      {camera.components.processors > 0 && ` Processors (${camera.components.processors})`}
-                      {camera.components.sinks > 0 && ` Sinks (${camera.components.sinks})`}
-                    </>
-                  )}
-                  {(!camera.components || 
-                    (camera.components.source === 0 && 
-                     camera.components.processors === 0 && 
-                     camera.components.sinks === 0)) && 
-                    ' None'
-                  }
-                </Typography>
+                {cameraComponents[camera.id] ? (
+                  <ComponentChips components={cameraComponents[camera.id]} />
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    No components configured
+                  </Typography>
+                )}
               </CardContent>
               <CardActions sx={{ padding: 2, pt: 0 }}>
                 {camera.running ? (
