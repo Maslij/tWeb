@@ -74,6 +74,7 @@ import TuneIcon from '@mui/icons-material/Tune';
 import StorageIcon from '@mui/icons-material/Storage';
 import DatabaseIcon from '@mui/icons-material/Storage';
 import LiveTvIcon from '@mui/icons-material/LiveTv';
+import WarningIcon from '@mui/icons-material/Warning';
 
 import apiService, { 
   Camera, 
@@ -1145,6 +1146,10 @@ interface PipelineTemplate {
       type: string;
       config: any;
     }[];
+    sinks?: {
+      type: string;
+      config: any;
+    }[];
   };
 }
 
@@ -1227,6 +1232,20 @@ const pipelineTemplates: PipelineTemplate[] = [
             }]
           }
         }
+      ],
+      sinks: [
+        {
+          type: 'database',
+          config: {
+            store_thumbnails: false,
+            thumbnail_width: 320,
+            thumbnail_height: 180,
+            retention_days: 30,
+            store_detection_events: false,
+            store_tracking_events: false,
+            store_counting_events: true
+          }
+        }
       ]
     }
   },
@@ -1283,6 +1302,20 @@ const pipelineTemplates: PipelineTemplate[] = [
               min_crossing_threshold: 1,
               triggering_anchors: ["BOTTOM_CENTER", "CENTER"]
             }]
+          }
+        }
+      ],
+      sinks: [
+        {
+          type: 'database',
+          config: {
+            store_thumbnails: false,
+            thumbnail_width: 320,
+            thumbnail_height: 180,
+            retention_days: 30,
+            store_detection_events: false,
+            store_tracking_events: true,
+            store_counting_events: true
           }
         }
       ]
@@ -2968,12 +3001,45 @@ const PipelineBuilder = () => {
         }
       }
       
-      // Add components from the template
+      // Check if there are existing sink components that would clash with the template
+      const templateSinkTypes = template.components.sinks?.map(sink => sink.type) || [];
+      const existingSinks = sinkComponents.filter(sink => {
+        const sinkType = typeof sink.type === 'string' ? sink.type : sink.type_name;
+        return templateSinkTypes.includes(String(sinkType));
+      });
+      
+      if (existingSinks.length > 0) {
+        const shouldReplaceSinks = window.confirm(
+          `Applying the "${template.name}" template will replace ${existingSinks.length} existing sink component(s). Continue?`
+        );
+        
+        if (!shouldReplaceSinks) {
+          setApplyingTemplate(false);
+          return;
+        }
+        
+        // Delete existing sinks that would clash with template
+        for (const sink of existingSinks) {
+          await apiService.components.sinks.delete(cameraId, sink.id);
+        }
+      }
+      
+      // Add processor components from the template
       for (const processorConfig of template.components.processors) {
         await apiService.components.processors.create(cameraId, {
           type: processorConfig.type,
           config: processorConfig.config
         });
+      }
+      
+      // Add sink components from the template if any
+      if (template.components.sinks && template.components.sinks.length > 0) {
+        for (const sinkConfig of template.components.sinks) {
+          await apiService.components.sinks.create(cameraId, {
+            type: sinkConfig.type,
+            config: sinkConfig.config
+          });
+        }
       }
       
       // Refresh components
@@ -4660,15 +4726,27 @@ const PipelineBuilder = () => {
                         <Divider sx={{ mb: 2 }} />
                         
                         <FormControl fullWidth sx={{ mb: 2 }}>
-                          <FormControlLabel
-                            control={
-                              <Switch
-                                checked={databaseSinkForm.store_detection_events}
-                                onChange={(e) => handleDatabaseSinkFormChange('store_detection_events', e.target.checked)}
-                              />
-                            }
-                            label="Store Detection Events"
-                          />
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <FormControlLabel
+                              control={
+                                <Switch
+                                  checked={databaseSinkForm.store_detection_events}
+                                  onChange={(e) => handleDatabaseSinkFormChange('store_detection_events', e.target.checked)}
+                                />
+                              }
+                              label="Store Detection Events"
+                            />
+                            <Chip 
+                              color="warning" 
+                              size="small" 
+                              label="High Volume" 
+                              icon={<WarningIcon fontSize="small" />} 
+                              sx={{ ml: 1 }}
+                            />
+                          </Box>
+                          <Typography variant="caption" color="warning.main" sx={{ ml: 4 }}>
+                            Warning: Enabling detection events can significantly increase database size and resource usage.
+                          </Typography>
                         </FormControl>
                         
                         <FormControl fullWidth sx={{ mb: 2 }}>
