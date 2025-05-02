@@ -2414,8 +2414,10 @@ const PipelineBuilder = () => {
         
         success = await apiService.components.source.delete(cameraId);
       } else if (type === 'processor') {
-        // Check if any other components depend on this one
+        // Get component type name
         const componentTypeName = component.type_name || component.type;
+        
+        // Check if any other components depend on this one
         const dependentComponents = [];
         
         // Find all components that depend on this one
@@ -2448,6 +2450,56 @@ const PipelineBuilder = () => {
           // Delete dependent components first (recursive cascading deletion)
           for (const dep of dependentComponents) {
             await handleDeleteComponent(dep, 'processor');
+          }
+        }
+        
+        // Handle database sink dependencies based on processor type
+        const dbSink = sinkComponents.find(sink => {
+          const sinkType = sink.type_name || sink.type;
+          return String(sinkType) === 'database';
+        });
+        
+        if (dbSink) {
+          // If this is object_detection and we're removing it, remove the database sink entirely
+          if (String(componentTypeName) === 'object_detection') {
+            const confirmDbMsg = "Removing object detection will also remove the database sink as it depends on it. Continue?";
+            if (!window.confirm(confirmDbMsg)) {
+              setIsDeletingComponent(null);
+              return;
+            }
+            
+            await apiService.components.sinks.delete(cameraId, dbSink.id);
+            showSnackbar('Database sink removed as it depends on object detection');
+          } 
+          // If this is line_zone_manager, disable counting events in database
+          else if (String(componentTypeName) === 'line_zone_manager') {
+            // Get the current config
+            const currentConfig = dbSink.config || {};
+            
+            // Update config to disable counting events
+            const updatedConfig = {
+              ...currentConfig,
+              store_counting_events: false
+            };
+            
+            // Update the database sink
+            await apiService.components.sinks.update(cameraId, dbSink.id, { config: updatedConfig });
+            showSnackbar('Counting events disabled in database sink as line zone manager was removed');
+          } 
+          // If this is object_tracking, disable tracking events in database
+          else if (String(componentTypeName) === 'object_tracking') {
+            // Get the current config
+            const currentConfig = dbSink.config || {};
+            
+            // Update config to disable tracking events
+            const updatedConfig = {
+              ...currentConfig,
+              store_tracking_events: false
+            };
+            
+            // Update the database sink
+            await apiService.components.sinks.update(cameraId, dbSink.id, { config: updatedConfig });
+            showSnackbar('Tracking events disabled in database sink as object tracker was removed');
           }
         }
         
@@ -3500,34 +3552,8 @@ const PipelineBuilder = () => {
                   </Box>
                 )}
               </Box>
-              
-              {camera?.running && (
-                <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
-                  <Button
-                    variant="contained"
-                    color="error"
-                    startIcon={<StopIcon />}
-                    onClick={handleStartStop}
-                    disabled={isStoppingPipeline}
-                  >
-                    {isStoppingPipeline ? "Stopping..." : "Stop Pipeline"}
-                  </Button>
-                </Box>
-              )}
-              
-              {!camera?.running && (
-                <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
-                  <Button
-                    variant="contained"
-                    color="success"
-                    startIcon={<PlayArrowIcon />}
-                    onClick={handleStartStop}
-                    disabled={isStartingPipeline || !sourceComponent}
-                  >
-                    {isStartingPipeline ? "Starting..." : "Start Pipeline"}
-                  </Button>
-                </Box>
-              )}
+
+
             </Paper>
           </TabPanel>
         )}
@@ -4725,53 +4751,114 @@ const PipelineBuilder = () => {
                         <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>Event Storage Settings</Typography>
                         <Divider sx={{ mb: 2 }} />
                         
-                        <FormControl fullWidth sx={{ mb: 2 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            <FormControlLabel
-                              control={
-                                <Switch
-                                  checked={databaseSinkForm.store_detection_events}
-                                  onChange={(e) => handleDatabaseSinkFormChange('store_detection_events', e.target.checked)}
+                        {/* Check if object detection exists in the pipeline */}
+                        {(() => {
+                          const hasObjectDetection = processorComponents.some(
+                            comp => (comp.type === 'object_detection' || comp.type_name === 'object_detection')
+                          );
+                          
+                          return (
+                            <Tooltip 
+                              title={!hasObjectDetection ? "Object detection component is required" : ""}
+                              placement="right"
+                            >
+                              <FormControl fullWidth sx={{ mb: 2 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                  <FormControlLabel
+                                    control={
+                                      <Switch
+                                        checked={databaseSinkForm.store_detection_events}
+                                        onChange={(e) => handleDatabaseSinkFormChange('store_detection_events', e.target.checked)}
+                                        disabled={!hasObjectDetection}
+                                      />
+                                    }
+                                    label={
+                                      <Box sx={{ color: !hasObjectDetection ? 'text.disabled' : 'inherit' }}>
+                                        Store Detection Events
+                                      </Box>
+                                    }
+                                  />
+                                  <Chip 
+                                    color="warning" 
+                                    size="small" 
+                                    label="High Volume" 
+                                    icon={<WarningIcon fontSize="small" />} 
+                                    sx={{ ml: 1 }}
+                                  />
+                                </Box>
+                                <Typography 
+                                  variant="caption" 
+                                  color="warning.main" 
+                                  sx={{ ml: 4, color: !hasObjectDetection ? 'text.disabled' : 'warning.main' }}
+                                >
+                                  Warning: Enabling detection events can significantly increase database size and resource usage.
+                                </Typography>
+                              </FormControl>
+                            </Tooltip>
+                          );
+                        })()}
+                        
+                        {/* Check if object tracking exists in the pipeline */}
+                        {(() => {
+                          const hasObjectTracking = processorComponents.some(
+                            comp => (comp.type === 'object_tracking' || comp.type_name === 'object_tracking')
+                          );
+                          
+                          return (
+                            <Tooltip 
+                              title={!hasObjectTracking ? "Object tracking component is required" : ""}
+                              placement="right"
+                            >
+                              <FormControl fullWidth sx={{ mb: 2 }}>
+                                <FormControlLabel
+                                  control={
+                                    <Switch
+                                      checked={databaseSinkForm.store_tracking_events}
+                                      onChange={(e) => handleDatabaseSinkFormChange('store_tracking_events', e.target.checked)}
+                                      disabled={!hasObjectTracking}
+                                    />
+                                  }
+                                  label={
+                                    <Box sx={{ color: !hasObjectTracking ? 'text.disabled' : 'inherit' }}>
+                                      Store Tracking Events
+                                    </Box>
+                                  }
                                 />
-                              }
-                              label="Store Detection Events"
-                            />
-                            <Chip 
-                              color="warning" 
-                              size="small" 
-                              label="High Volume" 
-                              icon={<WarningIcon fontSize="small" />} 
-                              sx={{ ml: 1 }}
-                            />
-                          </Box>
-                          <Typography variant="caption" color="warning.main" sx={{ ml: 4 }}>
-                            Warning: Enabling detection events can significantly increase database size and resource usage.
-                          </Typography>
-                        </FormControl>
+                              </FormControl>
+                            </Tooltip>
+                          );
+                        })()}
                         
-                        <FormControl fullWidth sx={{ mb: 2 }}>
-                          <FormControlLabel
-                            control={
-                              <Switch
-                                checked={databaseSinkForm.store_tracking_events}
-                                onChange={(e) => handleDatabaseSinkFormChange('store_tracking_events', e.target.checked)}
-                              />
-                            }
-                            label="Store Tracking Events"
-                          />
-                        </FormControl>
-                        
-                        <FormControl fullWidth sx={{ mb: 2 }}>
-                          <FormControlLabel
-                            control={
-                              <Switch
-                                checked={databaseSinkForm.store_counting_events}
-                                onChange={(e) => handleDatabaseSinkFormChange('store_counting_events', e.target.checked)}
-                              />
-                            }
-                            label="Store Counting Events"
-                          />
-                        </FormControl>
+                        {/* Check if line zone manager exists in the pipeline */}
+                        {(() => {
+                          const hasLineZoneManager = processorComponents.some(
+                            comp => (comp.type === 'line_zone_manager' || comp.type_name === 'line_zone_manager')
+                          );
+                          
+                          return (
+                            <Tooltip 
+                              title={!hasLineZoneManager ? "Line zone manager component is required" : ""}
+                              placement="right"
+                            >
+                              <FormControl fullWidth sx={{ mb: 2 }}>
+                                <FormControlLabel
+                                  control={
+                                    <Switch
+                                      checked={databaseSinkForm.store_counting_events}
+                                      onChange={(e) => handleDatabaseSinkFormChange('store_counting_events', e.target.checked)}
+                                      disabled={!hasLineZoneManager}
+                                    />
+                                  }
+                                  label={
+                                    <Box sx={{ color: !hasLineZoneManager ? 'text.disabled' : 'inherit' }}>
+                                      Store Counting Events
+                                    </Box>
+                                  }
+                                />
+                              </FormControl>
+                            </Tooltip>
+                          );
+                        })()}
                         
                         <TextField
                           label="Configuration Preview (JSON)"
