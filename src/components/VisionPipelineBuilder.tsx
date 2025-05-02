@@ -44,6 +44,14 @@ const normalizeComponent = (component: any): VisionComponent => {
     available_models: component.available_models || []
   };
   
+  // Special handling for source/camera components to turn OFF hardware acceleration by default
+  if (normalizedComponent.id === 'camera_feed' || normalizedComponent.category === 'source') {
+    normalizedComponent.config = {
+      hw_acceleration: false,  // Turn OFF hardware acceleration by default
+      ...normalizedComponent.config // Keep any existing config values
+    };
+  }
+  
   // Special handling for annotated stream components to ensure they have all the config options
   if (normalizedComponent.id === 'annotated_stream' || normalizedComponent.id === 'annotated_video_sink') {
     normalizedComponent.config = {
@@ -1661,7 +1669,9 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
       componentId: 'camera_feed',
       position: { x: 50, y: 50 }, // Position near top-left
       connections: [],
-      config: {},
+      config: {
+        hw_acceleration: false // Disable hardware acceleration by default
+      },
       sourceDetails: {
         name: streamName,
         source: streamSource,
@@ -2049,16 +2059,20 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
       componentId: activeComponent.id,
       position: { x: x - dragOffset.x, y: y - dragOffset.y },
       connections: [],
-      config: activeComponent.config ? { ...activeComponent.config } : undefined
+      config: activeComponent.config ? { ...activeComponent.config } : {}
     };
     
-    // If it's a source component, add stream details
+    // If it's a source component, add stream details and ensure hardware acceleration is disabled
     if (activeComponent.category === 'source') {
       newNode.sourceDetails = {
         name: streamName,
         source: streamSource,
         type: streamType
       };
+      
+      // Make sure hw_acceleration is false by default
+      if (!newNode.config) newNode.config = {};
+      newNode.config.hw_acceleration = false;
     }
     
     // If it's an event_alarm component, initialize with just "person" as default
@@ -2195,16 +2209,20 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
         componentId: activeComponent.id,
         position: { x: x - dragOffset.x, y: y - dragOffset.y },
         connections: [],
-        config: activeComponent.config ? { ...activeComponent.config } : undefined
+        config: activeComponent.config ? { ...activeComponent.config } : {}
       };
       
-      // If it's a source component, add stream details
+      // If it's a source component, add stream details and ensure hardware acceleration is disabled
       if (activeComponent.category === 'source') {
         newNode.sourceDetails = {
           name: streamName,
           source: streamSource,
           type: streamType
         };
+        
+        // Make sure hw_acceleration is false by default
+        if (!newNode.config) newNode.config = {};
+        newNode.config.hw_acceleration = false;
       }
       
       setPipeline(prev => ({
@@ -2726,7 +2744,7 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
                   500,
                   abortController.signal
                 )
-                  .then((finalState) => {
+                  .then((finalState: string) => {
                     if (finalState === 'error') {
                       setFlashMessage({
                         message: 'Error applying pipeline changes',
@@ -2742,7 +2760,7 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
                     setProcessingMessage('');
                     setIsSaving(false);
                   })
-                  .catch((err) => {
+                  .catch((err: Error) => {
                     // Check if this was an abort error from cleanup
                     if (err instanceof DOMException && err.name === 'AbortError') {
                       console.log('Pipeline processing check was aborted - component may have unmounted');
@@ -3426,16 +3444,20 @@ const VisionPipelineBuilder: React.FunctionComponent<VisionPipelineBuilderProps>
                     y: y - 40  // Center the component vertically
                   },
                   connections: [],
-                  config: component.config ? { ...component.config } : undefined
+                  config: component.config ? { ...component.config } : {}
                 };
                 
-                // If it's a source component, add stream details
+                // If it's a source component, add stream details and ensure hardware acceleration is disabled
                 if (component.category === 'source') {
                   newNode.sourceDetails = {
                     name: streamName,
                     source: streamSource,
                     type: streamType
                   };
+                  
+                  // Make sure hw_acceleration is false by default
+                  if (!newNode.config) newNode.config = {};
+                  newNode.config.hw_acceleration = false;
                 }
                 
                 setPipeline(prev => ({
