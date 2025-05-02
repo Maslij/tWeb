@@ -165,15 +165,19 @@ export interface DatabaseRecordsResponse {
   total_frames: number;
 }
 
-// New interfaces for telemetry data
+// Update interfaces for telemetry data
 export interface ZoneLineCount {
   timestamp: number;
   zone_id: string;
+  direction: string;
   count: number;
 }
 
 export interface ZoneLineCountsResponse {
   zone_line_counts: ZoneLineCount[];
+  success?: boolean;
+  has_data?: boolean;
+  error?: string;
 }
 
 export interface ClassHeatmapPoint {
@@ -185,6 +189,9 @@ export interface ClassHeatmapPoint {
 
 export interface ClassHeatmapResponse {
   class_heatmap_data: ClassHeatmapPoint[];
+  success?: boolean;
+  has_data?: boolean;
+  error?: string;
 }
 
 // API Service
@@ -529,6 +536,17 @@ const apiService = {
         }
         
         const response = await fetch(url);
+        
+        // Handle 204 No Content response
+        if (response.status === 204) {
+          return {
+            zone_line_counts: [],
+            success: false,
+            has_data: false,
+            error: 'No zone line count data available'
+          };
+        }
+        
         if (!response.ok) {
           throw new Error(`Failed to fetch zone line counts: ${response.statusText}`);
         }
@@ -548,6 +566,17 @@ const apiService = {
         const url = getFullUrl(`/api/v1/cameras/${cameraId}/database/class-heatmap`);
         
         const response = await fetch(url);
+        
+        // Handle 204 No Content response
+        if (response.status === 204) {
+          return {
+            class_heatmap_data: [],
+            success: false,
+            has_data: false,
+            error: 'No class heatmap data available'
+          };
+        }
+        
         if (!response.ok) {
           throw new Error(`Failed to fetch class heatmap data: ${response.statusText}`);
         }

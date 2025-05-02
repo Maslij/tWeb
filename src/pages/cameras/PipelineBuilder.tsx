@@ -371,6 +371,10 @@ const PipelineBuilder = () => {
   const [isLoadingHeatmapData, setIsLoadingHeatmapData] = useState<boolean>(false);
   const [timeRange, setTimeRange] = useState<{start: number, end: number} | null>(null);
 
+  // Add the state variables at the top of the component
+  const [hasZoneLineData, setHasZoneLineData] = useState<boolean>(true);
+  const [hasHeatmapData, setHasHeatmapData] = useState<boolean>(true);
+
   // Fetch data on mount
   useEffect(() => {
     if (!cameraId) return;
@@ -1949,11 +1953,23 @@ const PipelineBuilder = () => {
       
       const response = await apiService.database.getZoneLineCounts(cameraId, timeRange || undefined);
       if (response) {
-        setZoneLineCounts(response.zone_line_counts || []);
+        if (response.success === false || !response.has_data) {
+          // No data available
+          setZoneLineCounts([]);
+          setHasZoneLineData(false);
+        } else {
+          setZoneLineCounts(response.zone_line_counts || []);
+          setHasZoneLineData(true);
+        }
+      } else {
+        setZoneLineCounts([]);
+        setHasZoneLineData(false);
       }
     } catch (err) {
       console.error('Error fetching zone line counts:', err);
       showSnackbar('Failed to load zone line count data');
+      setZoneLineCounts([]);
+      setHasZoneLineData(false);
     } finally {
       setIsLoadingZoneData(false);
     }
@@ -1966,14 +1982,25 @@ const PipelineBuilder = () => {
     try {
       setIsLoadingHeatmapData(true);
       
-      // Instead of fetching data, we'll just set loading to false after a short delay
-      // This will trigger a re-render of the component which will load the image
+      // Check if we have heatmap data by making a lightweight request
+      const response = await fetch(`/api/v1/cameras/${cameraId}/database/class-heatmap`);
+      const data = await response.json();
+      
+      if (response.status === 204 || (data && data.success === false) || (data && data.has_data === false)) {
+        // No data available
+        setHasHeatmapData(false);
+      } else {
+        setHasHeatmapData(true);
+      }
+      
+      // Just a short delay to avoid UI flickering
       setTimeout(() => {
         setIsLoadingHeatmapData(false);
-      }, 500);
+      }, 300);
     } catch (err) {
       console.error('Error preparing heatmap data:', err);
       showSnackbar('Failed to load heatmap data');
+      setHasHeatmapData(false);
       setIsLoadingHeatmapData(false);
     }
   }, [cameraId, dbComponentExists, showSnackbar]);
@@ -2225,6 +2252,8 @@ const PipelineBuilder = () => {
               handleDeleteAllRecords={handleDeleteAllRecords}
               getEventTypeName={getEventTypeName}
               formatTimestamp={formatTimestamp}
+              hasHeatmapData={hasHeatmapData}
+              hasZoneLineData={hasZoneLineData}
             />
           )}
         </TabPanel>

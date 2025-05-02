@@ -35,6 +35,7 @@ import { Camera, EventRecord } from '../../services/api';
 interface ZoneLineCount {
   timestamp: number;
   zone_id: string;
+  direction: string;
   count: number;
 }
 
@@ -87,6 +88,9 @@ const TelemetryTab: React.FC<TelemetryTabProps> = ({
   hasHeatmapData = true,
   hasZoneLineData = true
 }) => {
+  // Add state for direction filter
+  const [directionFilter, setDirectionFilter] = React.useState<'all' | 'in' | 'out'>('all');
+
   // Zone Line Counts Chart component
   const ZoneLineCountsChart = () => {
     if (isLoadingZoneData) {
@@ -121,29 +125,88 @@ const TelemetryTab: React.FC<TelemetryTabProps> = ({
       );
     }
 
+    // Filter data based on selected direction
+    const filteredData = directionFilter === 'all' 
+      ? zoneLineCounts 
+      : zoneLineCounts.filter(item => item.direction === directionFilter);
+
     // Group data by zone_id
-    const zones = [...new Set(zoneLineCounts.map(item => item.zone_id))];
+    const zones = [...new Set(filteredData.map(item => item.zone_id))];
     
     // Prepare datasets for the chart
-    const datasets = zones.map((zoneId, index) => {
-      const zoneData = zoneLineCounts.filter(item => item.zone_id === zoneId);
-      
-      // Generate a color based on index
-      const hue = (index * 137) % 360;
-      const color = `hsl(${hue}, 70%, 50%)`;
-      
-      return {
-        label: `Zone: ${zoneId}`,
-        data: zoneData.map(item => ({
-          x: item.timestamp,
-          y: item.count
-        })),
-        borderColor: color,
-        backgroundColor: `${color}80`,
-        fill: false,
-        tension: 0.1
-      };
-    });
+    const datasets = directionFilter !== 'all'
+      ? zones.map((zoneId, index) => {
+          // Filter data for this zone 
+          const zoneData = filteredData.filter(item => item.zone_id === zoneId);
+          
+          // Group by timestamp to combine counts with the same timestamp
+          const groupedByTimestamp = zoneData.reduce((acc, item) => {
+            const existingPoint = acc.find(p => p.timestamp === item.timestamp);
+            if (existingPoint) {
+              existingPoint.count += item.count;
+            } else {
+              acc.push({...item});
+            }
+            return acc;
+          }, [] as ZoneLineCount[]);
+
+          // Generate a color based on index
+          const hue = (index * 137) % 360;
+          const color = `hsl(${hue}, 70%, 50%)`;
+          
+          // Add direction to label if showing a specific direction
+          const directionSuffix = ` (${directionFilter})`;
+          
+          return {
+            label: `Zone: ${zoneId}${directionSuffix}`,
+            data: groupedByTimestamp.map(item => ({
+              x: item.timestamp,
+              y: item.count
+            })),
+            borderColor: color,
+            backgroundColor: `${color}80`,
+            fill: false,
+            tension: 0.1
+          };
+        })
+      : zones.flatMap((zoneId, index) => {
+          // For 'all' directions, create separate datasets for 'in' and 'out'
+          const baseHue = (index * 137) % 360;
+          
+          // Get data for this zone, filtered by direction
+          const inData = zoneLineCounts.filter(item => 
+            item.zone_id === zoneId && item.direction === 'in');
+          
+          const outData = zoneLineCounts.filter(item => 
+            item.zone_id === zoneId && item.direction === 'out');
+          
+          // Return array with two datasets (one for each direction)
+          return [
+            {
+              label: `Zone: ${zoneId} (in)`,
+              data: inData.map(item => ({
+                x: item.timestamp,
+                y: item.count
+              })),
+              borderColor: `hsl(${baseHue}, 70%, 50%)`,
+              backgroundColor: `hsl(${baseHue}, 70%, 50%, 0.5)`,
+              fill: false,
+              tension: 0.1
+            },
+            {
+              label: `Zone: ${zoneId} (out)`,
+              data: outData.map(item => ({
+                x: item.timestamp,
+                y: item.count
+              })),
+              borderColor: `hsl(${baseHue + 40}, 70%, 50%)`,
+              backgroundColor: `hsl(${baseHue + 40}, 70%, 50%, 0.5)`,
+              fill: false,
+              tension: 0.1,
+              borderDash: [5, 5] // Add dashed line for 'out' direction
+            }
+          ];
+        });
     
     const chartData = {
       datasets
@@ -186,7 +249,9 @@ const TelemetryTab: React.FC<TelemetryTabProps> = ({
         },
         title: {
           display: true,
-          text: 'Zone Crossing Counts Over Time'
+          text: directionFilter === 'all' 
+            ? 'Zone Crossing Counts Over Time' 
+            : `Zone Crossing Counts Over Time (${directionFilter.charAt(0).toUpperCase() + directionFilter.slice(1)} Direction)`
         },
         tooltip: {
           callbacks: {
@@ -340,15 +405,44 @@ const TelemetryTab: React.FC<TelemetryTabProps> = ({
             <Typography variant="subtitle1">
               Line Zone Crossing Counts
             </Typography>
-            <Button
-              variant="contained"
-              startIcon={isLoadingZoneData ? <CircularProgress size={20} /> : <RedoIcon />}
-              onClick={fetchZoneLineCounts}
-              disabled={isLoadingZoneData}
-              size="small"
-            >
-              Refresh
-            </Button>
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              {/* Direction filter buttons */}
+              <Box sx={{ display: 'flex', mr: 2 }}>
+                <Button
+                  variant={directionFilter === 'all' ? "contained" : "outlined"}
+                  onClick={() => setDirectionFilter('all')}
+                  size="small"
+                  sx={{ borderRadius: '4px 0 0 4px' }}
+                >
+                  All
+                </Button>
+                <Button
+                  variant={directionFilter === 'in' ? "contained" : "outlined"}
+                  onClick={() => setDirectionFilter('in')}
+                  size="small"
+                  sx={{ borderRadius: 0 }}
+                >
+                  In
+                </Button>
+                <Button
+                  variant={directionFilter === 'out' ? "contained" : "outlined"}
+                  onClick={() => setDirectionFilter('out')}
+                  size="small"
+                  sx={{ borderRadius: '0 4px 4px 0' }}
+                >
+                  Out
+                </Button>
+              </Box>
+              <Button
+                variant="contained"
+                startIcon={isLoadingZoneData ? <CircularProgress size={20} /> : <RedoIcon />}
+                onClick={fetchZoneLineCounts}
+                disabled={isLoadingZoneData}
+                size="small"
+              >
+                Refresh
+              </Button>
+            </Box>
           </Box>
           <ZoneLineCountsChart />
         </Box>
