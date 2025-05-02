@@ -49,6 +49,21 @@ import {
   TableRow,
   TablePagination
 } from '@mui/material';
+import { 
+  Chart as ChartJS, 
+  CategoryScale, 
+  LinearScale, 
+  PointElement, 
+  LineElement, 
+  BarElement, 
+  Title, 
+  Tooltip as ChartTooltip, 
+  Legend,
+  TimeScale
+} from 'chart.js';
+import { Line, Bar, Scatter } from 'react-chartjs-2';
+import 'chartjs-adapter-date-fns';
+import { enUS } from 'date-fns/locale';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import VideoSettingsIcon from '@mui/icons-material/VideoSettings';
 import MemoryIcon from '@mui/icons-material/Memory';
@@ -1323,6 +1338,33 @@ const pipelineTemplates: PipelineTemplate[] = [
   }
 ];
 
+// Register Chart.js components
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  ChartTooltip,
+  Legend,
+  TimeScale
+);
+
+// Add new interfaces for telemetry data
+interface ZoneLineCount {
+  timestamp: number;
+  zone_id: string;
+  count: number;
+}
+
+interface ClassHeatmapPoint {
+  x: number;
+  y: number;
+  value: number;
+  class: string;
+}
+
 const PipelineBuilder = () => {
   const { cameraId } = useParams<{ cameraId: string }>();
   const navigate = useNavigate();
@@ -1517,6 +1559,13 @@ const PipelineBuilder = () => {
   const [dbComponentExists, setDbComponentExists] = useState<boolean>(false);
   // Add a ref to track if telemetry data has been loaded for the current tab session
   const telemetryTabFirstLoadRef = useRef<boolean>(false);
+
+  // Add new state for telemetry visualization data
+  const [zoneLineCounts, setZoneLineCounts] = useState<ZoneLineCount[]>([]);
+  const [classHeatmapData, setClassHeatmapData] = useState<ClassHeatmapPoint[]>([]);
+  const [isLoadingZoneData, setIsLoadingZoneData] = useState<boolean>(false);
+  const [isLoadingHeatmapData, setIsLoadingHeatmapData] = useState<boolean>(false);
+  const [timeRange, setTimeRange] = useState<{start: number, end: number} | null>(null);
 
   // Fetch data on mount
   useEffect(() => {
@@ -3234,6 +3283,428 @@ const PipelineBuilder = () => {
     return date.toLocaleString();
   };
 
+  // Add function to fetch zone line counts
+  const fetchZoneLineCounts = useCallback(async () => {
+    if (!cameraId || !dbComponentExists) return;
+    
+    try {
+      setIsLoadingZoneData(true);
+      
+      let url = `/api/v1/cameras/${cameraId}/database/zone-line-counts`;
+      
+      // Add time range parameters if they're set
+      if (timeRange && timeRange.start > 0) {
+        url += `?start_time=${timeRange.start}`;
+        if (timeRange.end > 0) {
+          url += `&end_time=${timeRange.end}`;
+        }
+      }
+      
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch zone line counts: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      setZoneLineCounts(data.zone_line_counts || []);
+    } catch (err) {
+      console.error('Error fetching zone line counts:', err);
+      showSnackbar('Failed to load zone line count data');
+    } finally {
+      setIsLoadingZoneData(false);
+    }
+  }, [cameraId, dbComponentExists, timeRange, showSnackbar]);
+
+  // Add function to fetch class heatmap data
+  const fetchClassHeatmapData = useCallback(async () => {
+    if (!cameraId || !dbComponentExists) return;
+    
+    try {
+      setIsLoadingHeatmapData(true);
+      
+      const response = await fetch(`/api/v1/cameras/${cameraId}/database/class-heatmap`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch class heatmap data: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      setClassHeatmapData(data.class_heatmap_data || []);
+    } catch (err) {
+      console.error('Error fetching class heatmap data:', err);
+      showSnackbar('Failed to load class heatmap data');
+    } finally {
+      setIsLoadingHeatmapData(false);
+    }
+  }, [cameraId, dbComponentExists, showSnackbar]);
+
+  // Update telemetry data loading effect
+  useEffect(() => {
+    // Calculate the telemetry tab index dynamically based on available tabs
+    const telemetryTabIndex = sourceComponent ? 
+      (hasLineZoneManagerComponent ? 3 : 2) : 
+      (hasLineZoneManagerComponent ? 2 : 1);
+    
+    if (mainTabValue === telemetryTabIndex && dbComponentExists) {
+      // Only fetch data when the tab is first selected
+      if (!telemetryTabFirstLoadRef.current) {
+        fetchDatabaseRecords();
+        fetchZoneLineCounts();
+        fetchClassHeatmapData();
+        telemetryTabFirstLoadRef.current = true;
+      }
+    } else {
+      // Reset the ref when navigating away from the tab
+      telemetryTabFirstLoadRef.current = false;
+    }
+  }, [mainTabValue, sourceComponent, hasLineZoneManagerComponent, dbComponentExists, 
+      fetchDatabaseRecords, fetchZoneLineCounts, fetchClassHeatmapData]);
+
+  // Add function to set time range for data filtering
+  const handleTimeRangeChange = (range: {start: number, end: number}) => {
+    setTimeRange(range);
+    // Trigger data refresh with new time range
+    fetchZoneLineCounts();
+  };
+
+  // Add Zone Line Counts Chart component
+  const ZoneLineCountsChart = () => {
+    // Group data by zone_id
+    const zones = [...new Set(zoneLineCounts.map(item => item.zone_id))];
+    
+    // Prepare datasets for the chart
+    const datasets = zones.map((zoneId, index) => {
+      const zoneData = zoneLineCounts.filter(item => item.zone_id === zoneId);
+      
+      // Generate a color based on index
+      const hue = (index * 137) % 360;
+      const color = `hsl(${hue}, 70%, 50%)`;
+      
+      return {
+        label: `Zone: ${zoneId}`,
+        data: zoneData.map(item => ({
+          x: item.timestamp,
+          y: item.count
+        })),
+        borderColor: color,
+        backgroundColor: `${color}80`,
+        fill: false,
+        tension: 0.1
+      };
+    });
+    
+    const chartData = {
+      datasets
+    };
+    
+    const options = {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          type: 'time' as const,
+          time: {
+            unit: 'hour' as const,
+            tooltipFormat: 'MMM d, yyyy HH:mm',
+            displayFormats: {
+              hour: 'MMM d, HH:mm'
+            }
+          },
+          title: {
+            display: true,
+            text: 'Time'
+          },
+          adapters: {
+            date: {
+              locale: enUS
+            }
+          }
+        },
+        y: {
+          beginAtZero: true,
+          title: {
+            display: true,
+            text: 'Count'
+          }
+        }
+      },
+      plugins: {
+        legend: {
+          position: 'top' as const,
+        },
+        title: {
+          display: true,
+          text: 'Zone Crossing Counts Over Time'
+        },
+        tooltip: {
+          callbacks: {
+            title: function(tooltipItems: any) {
+              // Format the timestamp
+              const date = new Date(tooltipItems[0].parsed.x);
+              return date.toLocaleString();
+            }
+          }
+        }
+      }
+    };
+    
+    if (isLoadingZoneData) {
+      return (
+        <Box display="flex" justifyContent="center" alignItems="center" height={400}>
+          <CircularProgress />
+        </Box>
+      );
+    }
+    
+    if (zoneLineCounts.length === 0) {
+      return (
+        <Alert severity="info" sx={{ my: 2 }}>
+          No zone crossing data available. Start the pipeline with line zone manager and database sink enabled to collect data.
+        </Alert>
+      );
+    }
+    
+    return (
+      <Box height={400} width="100%">
+        <Line data={chartData} options={options} />
+      </Box>
+    );
+  };
+
+  // Add Class Heatmap Visualization component
+  const ClassHeatmapVisualization = () => {
+    // Group data by class
+    const classes = [...new Set(classHeatmapData.map(item => item.class))];
+    
+    // Find max value for scaling
+    const maxValue = Math.max(...classHeatmapData.map(item => item.value), 1);
+    
+    // Log data for debugging
+    useEffect(() => {
+      if (classHeatmapData.length > 0) {
+        console.log("Heatmap data:", classHeatmapData.slice(0, 5));
+        console.log("Total points:", classHeatmapData.length);
+        console.log("Max value:", maxValue);
+      }
+    }, [classHeatmapData, maxValue]);
+    
+    // Prepare datasets for scatter chart
+    const datasets = classes.map((className, index) => {
+      const classData = classHeatmapData.filter(item => item.class === className);
+      
+      // Generate a color based on index
+      const hue = (index * 137) % 360;
+      
+      return {
+        label: className,
+        data: classData.map(item => ({
+          x: item.x,
+          y: 1 - item.y, // Flip y-axis to match visual coordinates (0 at top)
+          r: Math.max(10, Math.min(40, Math.sqrt(item.value / maxValue * 900))), // Larger points
+          value: item.value // Store original value for tooltip
+        })),
+        backgroundColor: `rgba(255, 0, 0, 0.7)`, // Very visible red with high opacity
+        borderColor: `rgba(200, 0, 0, 1)`, // Solid border
+        borderWidth: 2,
+        pointStyle: 'circle',
+        pointRadius: 0, // Will be set by r value
+        pointHoverRadius: 15
+      };
+    });
+    
+    const chartData = {
+      datasets
+    };
+    
+    const options = {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          type: 'linear' as const,
+          position: 'bottom' as const,
+          min: 0,
+          max: 1,
+          ticks: {
+            display: true, // Show ticks for debugging
+            stepSize: 0.2
+          },
+          grid: {
+            display: true, // Show grid for debugging
+            color: 'rgba(0,0,0,0.1)'
+          }
+        },
+        y: {
+          min: 0,
+          max: 1,
+          ticks: {
+            display: true, // Show ticks for debugging
+            stepSize: 0.2
+          },
+          grid: {
+            display: true, // Show grid for debugging
+            color: 'rgba(0,0,0,0.1)'
+          }
+        }
+      },
+      plugins: {
+        legend: {
+          position: 'top' as const,
+        },
+        title: {
+          display: true,
+          text: 'Object Detection Heatmap by Class'
+        },
+        tooltip: {
+          callbacks: {
+            label: function(context: any) {
+              const dataPoint = context.raw;
+              return `${context.dataset.label}: ${dataPoint.value} detections`;
+            }
+          }
+        }
+      }
+    };
+    
+    if (isLoadingHeatmapData) {
+      return (
+        <Box display="flex" justifyContent="center" alignItems="center" height={400}>
+          <CircularProgress />
+        </Box>
+      );
+    }
+    
+    if (classHeatmapData.length === 0) {
+      return (
+        <Alert severity="info" sx={{ my: 2 }}>
+          No class heatmap data available. Start the pipeline with object detection and database sink enabled to collect data.
+        </Alert>
+      );
+    }
+
+    // Create a background image for the heatmap
+    const backgroundImageUrl = pipelineHasRunOnce && lastFrameUrl ? lastFrameUrl : "";
+    
+    // Create a simple debug display of data points
+    const debugPoints = classHeatmapData.slice(0, 10).map((point, index) => (
+      <Box key={index} sx={{ mb: 1, fontSize: '0.75rem' }}>
+        Point {index}: class={point.class}, x={point.x}, y={point.y}, value={point.value}
+      </Box>
+    ));
+    
+    // Alternative manual rendering approach for data visualization
+    const manualPoints = classHeatmapData.map((point, index) => {
+      const size = Math.max(10, Math.min(40, Math.sqrt(point.value / maxValue * 900)));
+      return (
+        <Box
+          key={index}
+          sx={{
+            position: 'absolute',
+            left: `${point.x * 100}%`,
+            top: `${point.y * 100}%`,
+            width: size,
+            height: size,
+            backgroundColor: 'rgba(255, 0, 0, 0.7)',
+            borderRadius: '50%',
+            transform: 'translate(-50%, -50%)',
+            zIndex: 15,
+            border: '2px solid rgba(200, 0, 0, 1)'
+          }}
+        />
+      );
+    });
+    
+    return (
+      <Box sx={{ position: 'relative', height: 400, width: '100%' }}>
+        {/* Background container */}
+        <Box 
+          sx={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundImage: backgroundImageUrl ? `url(${backgroundImageUrl})` : 'none',
+            backgroundSize: 'contain',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+            backgroundColor: '#f0f0f0',
+            borderRadius: 1,
+            border: '1px solid',
+            borderColor: 'divider'
+          }}
+        />
+        
+        {/* Manual data point rendering */}
+        {manualPoints}
+        
+        {/* Chart overlay */}
+        <Box 
+          sx={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 10
+          }}
+        >
+          <Scatter data={chartData} options={options} />
+        </Box>
+        
+        {/* Add a density scale legend */}
+        <Box 
+          sx={{ 
+            position: 'absolute', 
+            bottom: 10, 
+            right: 10, 
+            backgroundColor: 'rgba(255,255,255,0.7)', 
+            padding: 1,
+            borderRadius: 1,
+            zIndex: 20
+          }}
+        >
+          <Typography variant="caption" display="block" gutterBottom>
+            Dot size = detection frequency
+          </Typography>
+          <Box display="flex" alignItems="center">
+            <Box 
+              sx={{ 
+                width: 10, 
+                height: 10, 
+                borderRadius: '50%', 
+                backgroundColor: 'rgba(255, 0, 0, 0.7)', 
+                mr: 0.5 
+              }} 
+            />
+            <Typography variant="caption" sx={{ mr: 1 }}>Low</Typography>
+            
+            <Box 
+              sx={{ 
+                width: 20, 
+                height: 20, 
+                borderRadius: '50%', 
+                backgroundColor: 'rgba(255, 0, 0, 0.7)', 
+                mr: 0.5 
+              }} 
+            />
+            <Typography variant="caption" sx={{ mr: 1 }}>Medium</Typography>
+            
+            <Box 
+              sx={{ 
+                width: 30, 
+                height: 30, 
+                borderRadius: '50%', 
+                backgroundColor: 'rgba(255, 0, 0, 0.7)', 
+                mr: 0.5 
+              }} 
+            />
+            <Typography variant="caption">High</Typography>
+          </Box>
+        </Box>
+      </Box>
+    );
+  };
+
   if (loading) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -3695,19 +4166,43 @@ const PipelineBuilder = () => {
                   </Box>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Typography variant="body1" paragraph>
-                    Analytics dashboard showing statistics and trends from event data.
-                  </Typography>
+                  <Box sx={{ mb: 3 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                      <Typography variant="subtitle1">
+                        Zone Crossing Counts
+                      </Typography>
+                      <Button
+                        variant="outlined"
+                        startIcon={isLoadingZoneData ? <CircularProgress size={20} /> : <RedoIcon />}
+                        onClick={fetchZoneLineCounts}
+                        disabled={isLoadingZoneData}
+                        size="small"
+                      >
+                        Refresh
+                      </Button>
+                    </Box>
+                    <ZoneLineCountsChart />
+                  </Box>
                   
-                  {totalEvents > 0 ? (
-                    <Alert severity="info">
-                      Analytics features coming soon. Stay tuned for visualizations of your camera data!
-                    </Alert>
-                  ) : (
-                    <Alert severity="info">
-                      No event data available for analytics. Start the pipeline with database sink enabled to collect data.
-                    </Alert>
-                  )}
+                  <Divider sx={{ my: 3 }} />
+                  
+                  <Box sx={{ mt: 3 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                      <Typography variant="subtitle1">
+                        Object Detection Heatmap
+                      </Typography>
+                      <Button
+                        variant="outlined"
+                        startIcon={isLoadingHeatmapData ? <CircularProgress size={20} /> : <RedoIcon />}
+                        onClick={fetchClassHeatmapData}
+                        disabled={isLoadingHeatmapData}
+                        size="small"
+                      >
+                        Refresh
+                      </Button>
+                    </Box>
+                    <ClassHeatmapVisualization />
+                  </Box>
                 </AccordionDetails>
               </Accordion>
 
