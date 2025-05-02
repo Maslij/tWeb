@@ -3487,24 +3487,41 @@ const PipelineBuilder = () => {
     const [imageLoadError, setImageLoadError] = useState<boolean>(false);
     const [loading, setLoading] = useState(false);
     
-    // Extract classes from object detection processor only once
-    useEffect(() => {
-      const objectDetectionProcessor = processorComponents.find(
-        comp => comp.type === 'object_detection' || comp.type_name === 'object_detection'
-      );
+    // Fetch available classes from the backend
+    const fetchAvailableClasses = useCallback(async () => {
+      if (!cameraId || !dbComponentExists) return;
       
-      if (objectDetectionProcessor) {
-        let classes: string[] = [];
-        
-        if (Array.isArray(objectDetectionProcessor.classes)) {
-          classes = objectDetectionProcessor.classes;
-        } else if (objectDetectionProcessor.config && Array.isArray(objectDetectionProcessor.config.classes)) {
-          classes = objectDetectionProcessor.config.classes;
+      try {
+        const response = await fetch(`/api/v1/cameras/${cameraId}/database/available-classes`);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch available classes: ${response.statusText}`);
         }
         
-        setAvailableClasses(classes);
+        const data = await response.json();
+        if (data.classes && Array.isArray(data.classes)) {
+          setAvailableClasses(data.classes);
+        }
+      } catch (err) {
+        console.error('Error fetching available classes:', err);
+        
+        // Fallback to classes from object detection processor if API fails
+        const objectDetectionProcessor = processorComponents.find(
+          comp => comp.type === 'object_detection' || comp.type_name === 'object_detection'
+        );
+        
+        if (objectDetectionProcessor) {
+          let classes: string[] = [];
+          
+          if (Array.isArray(objectDetectionProcessor.classes)) {
+            classes = objectDetectionProcessor.classes;
+          } else if (objectDetectionProcessor.config && Array.isArray(objectDetectionProcessor.config.classes)) {
+            classes = objectDetectionProcessor.config.classes;
+          }
+          
+          setAvailableClasses(classes);
+        }
       }
-    }, []); // Only run once on mount
+    }, [cameraId, dbComponentExists, processorComponents]);
     
     // Fetch heatmap function - use refs to track state without re-renders
     const fetchHeatmap = useCallback(() => {
@@ -3527,14 +3544,22 @@ const PipelineBuilder = () => {
       
       // Set the image URL
       setHeatmapImageUrl(url);
-    }, [cameraId, dbComponentExists, selectedAnchor, imageQuality, selectedClasses]);
+      
+      // Fetch available classes if not already done
+      fetchAvailableClasses();
+    }, [cameraId, dbComponentExists, selectedAnchor, imageQuality, selectedClasses, fetchAvailableClasses]);
     
     // Image event handlers
     const handleImageLoad = useCallback(() => {
       loadingRef.current = false;
       setLoading(false);
       initialFetchDoneRef.current = true;
-    }, []);
+      
+      // After the first successful load, fetch available classes
+      if (availableClasses.length === 0) {
+        fetchAvailableClasses();
+      }
+    }, [availableClasses.length, fetchAvailableClasses]);
     
     const handleImageError = useCallback(() => {
       loadingRef.current = false;
@@ -3555,7 +3580,7 @@ const PipelineBuilder = () => {
       return () => {
         mountedRef.current = false;
       };
-    }, [cameraId, dbComponentExists]); // Explicitly removed fetchHeatmap dependency
+    }, [cameraId, dbComponentExists, fetchHeatmap]);
     
     // UI handlers - ensure they don't trigger re-renders when unnecessary
     const handleAnchorChange = useCallback((event: SelectChangeEvent<string>) => {
@@ -3583,9 +3608,6 @@ const PipelineBuilder = () => {
     
     // Background image handling
     const backgroundImageUrl = pipelineHasRunOnce && lastFrameUrl ? lastFrameUrl : "";
-    
-    // Debugging - add to help identify refresh cycles
-    // console.log("Heatmap component rendering, loading:", loading);
     
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
@@ -3729,24 +3751,6 @@ const PipelineBuilder = () => {
               }}
             />
           )}
-        </Box>
-        
-        {/* Legend */}
-        <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
-          <Paper sx={{ p: 1, display: 'inline-flex', alignItems: 'center', gap: 1 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <Box sx={{ width: 16, height: 16, borderRadius: '50%', bgcolor: 'rgba(0, 0, 255, 0.3)' }} />
-              <Typography variant="caption">Low</Typography>
-            </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <Box sx={{ width: 16, height: 16, borderRadius: '50%', bgcolor: 'rgba(0, 255, 0, 0.5)' }} />
-              <Typography variant="caption">Medium</Typography>
-            </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <Box sx={{ width: 16, height: 16, borderRadius: '50%', bgcolor: 'rgba(255, 0, 0, 0.7)' }} />
-              <Typography variant="caption">High</Typography>
-            </Box>
-          </Paper>
         </Box>
       </Box>
     );
