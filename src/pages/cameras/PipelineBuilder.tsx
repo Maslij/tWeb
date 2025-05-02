@@ -48,7 +48,8 @@ import {
   TableHead,
   TableRow,
   TablePagination,
-  FormHelperText
+  FormHelperText,
+  Skeleton
 } from '@mui/material';
 import { 
   Chart as ChartJS, 
@@ -91,6 +92,23 @@ import StorageIcon from '@mui/icons-material/Storage';
 import DatabaseIcon from '@mui/icons-material/Storage';
 import LiveTvIcon from '@mui/icons-material/LiveTv';
 import WarningIcon from '@mui/icons-material/Warning';
+import DriveFolderUploadIcon from '@mui/icons-material/DriveFolderUpload';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CameraIcon from '@mui/icons-material/Camera';
+import VideoCameraBackIcon from '@mui/icons-material/VideoCameraBack';
+import CameraAltIcon from '@mui/icons-material/CameraAlt';
+import LineStyleIcon from '@mui/icons-material/LineStyle';
+import LineWeightIcon from '@mui/icons-material/LineWeight';
+import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
+import SettingsApplicationsIcon from '@mui/icons-material/SettingsApplications';
+import AdsClickIcon from '@mui/icons-material/AdsClick';
+import WidgetsIcon from '@mui/icons-material/Widgets';
+import TrackChangesIcon from '@mui/icons-material/TrackChanges';
+import RoutingIcon from '@mui/icons-material/AltRoute';
+import AltRouteIcon from '@mui/icons-material/AltRoute';
+import ShowChartIcon from '@mui/icons-material/ShowChart';
 
 import apiService, { 
   Camera, 
@@ -1365,6 +1383,108 @@ interface ClassHeatmapPoint {
   value: number;
   class: string;
 }
+
+// Skeleton components for loading states
+const ComponentCardSkeleton = () => (
+  <Card sx={{ mb: 2 }}>
+    <CardContent>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+        <Skeleton variant="circular" width={24} height={24} sx={{ mr: 2 }} />
+        <Skeleton variant="text" width="60%" height={32} />
+      </Box>
+      <Skeleton variant="text" width="80%" sx={{ mb: 1 }} />
+      <Divider sx={{ my: 1 }} />
+      <Skeleton variant="text" width="40%" />
+      <Skeleton variant="text" width="30%" />
+    </CardContent>
+    <CardActions>
+      <Skeleton variant="rounded" width={80} height={32} />
+      <Skeleton variant="rounded" width={80} height={32} />
+    </CardActions>
+  </Card>
+);
+
+const ImageSkeleton = () => (
+  <Box 
+    sx={{ 
+      width: '100%', 
+      height: '600px', 
+      display: 'flex', 
+      flexDirection: 'column',
+      alignItems: 'center', 
+      justifyContent: 'center',
+      border: '1px solid #ccc',
+      borderRadius: '4px',
+      bgcolor: 'background.paper'
+    }}
+  >
+    <Skeleton variant="rectangular" width="100%" height="100%" animation="wave" />
+  </Box>
+);
+
+const LineZoneEditorSkeleton = () => (
+  <Box sx={{ height: '500px' }}>
+    <Paper sx={{ p: 1, mb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <Box>
+        <Skeleton variant="text" width={150} />
+      </Box>
+      <Box sx={{ display: 'flex', gap: 1 }}>
+        <Skeleton variant="rounded" width={100} height={32} />
+        <Skeleton variant="rounded" width={120} height={32} />
+        <Skeleton variant="circular" width={24} height={24} />
+      </Box>
+    </Paper>
+    <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, height: 'calc(100% - 50px)' }}>
+      <Skeleton variant="rectangular" height="100%" width="70%" animation="wave" />
+      <Box sx={{ width: { xs: '100%', md: '30%' }, height: { xs: 'auto', md: '100%' } }}>
+        <Skeleton variant="text" width="80%" />
+        <Skeleton variant="rectangular" height={400} width="100%" animation="wave" />
+      </Box>
+    </Box>
+  </Box>
+);
+
+const TelemetryChartSkeleton = () => (
+  <Box height={400} width="100%">
+    <Skeleton variant="rectangular" height="100%" width="100%" animation="wave" />
+  </Box>
+);
+
+const DatabaseTableSkeleton = () => (
+  <>
+    <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3, gap: 2 }}>
+      <Skeleton variant="rounded" width={100} height={36} />
+      <Skeleton variant="rounded" width={150} height={36} />
+    </Box>
+    <TableContainer component={Paper} sx={{ maxHeight: 440 }}>
+      <Table stickyHeader>
+        <TableHead>
+          <TableRow>
+            {[...Array(5)].map((_, i) => (
+              <TableCell key={i}>
+                <Skeleton variant="text" />
+              </TableCell>
+            ))}
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {[...Array(5)].map((_, rowIndex) => (
+            <TableRow key={rowIndex}>
+              {[...Array(5)].map((_, cellIndex) => (
+                <TableCell key={cellIndex}>
+                  <Skeleton variant="text" />
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </TableContainer>
+    <Box sx={{ display: 'flex', justifyContent: 'flex-end', pt: 2 }}>
+      <Skeleton variant="rectangular" width={300} height={40} />
+    </Box>
+  </>
+);
 
 const PipelineBuilder = () => {
   const { cameraId } = useParams<{ cameraId: string }>();
@@ -3324,14 +3444,14 @@ const PipelineBuilder = () => {
     try {
       setIsLoadingHeatmapData(true);
       
-      const response = await apiService.database.getClassHeatmapData(cameraId);
-      if (response) {
-        setClassHeatmapData(response.class_heatmap_data || []);
-      }
+      // Instead of fetching data, we'll just set loading to false after a short delay
+      // This will trigger a re-render of the component which will load the image
+      setTimeout(() => {
+        setIsLoadingHeatmapData(false);
+      }, 500);
     } catch (err) {
-      console.error('Error fetching class heatmap data:', err);
-      showSnackbar('Failed to load class heatmap data');
-    } finally {
+      console.error('Error preparing heatmap data:', err);
+      showSnackbar('Failed to load heatmap data');
       setIsLoadingHeatmapData(false);
     }
   }, [cameraId, dbComponentExists, showSnackbar]);
@@ -3367,6 +3487,31 @@ const PipelineBuilder = () => {
 
   // Add Zone Line Counts Chart component
   const ZoneLineCountsChart = () => {
+    if (isLoadingZoneData) {
+      return <TelemetryChartSkeleton />;
+    }
+
+    if (!zoneLineCounts || zoneLineCounts.length === 0) {
+      return (
+        <Box 
+          sx={{ 
+            height: '400px', 
+            display: 'flex', 
+            justifyContent: 'center',
+            alignItems: 'center',
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 1,
+            backgroundColor: 'background.paper'
+          }}
+        >
+          <Typography color="text.secondary">
+            No zone crossing data available
+          </Typography>
+        </Box>
+      );
+    }
+
     // Group data by zone_id
     const zones = [...new Set(zoneLineCounts.map(item => item.zone_id))];
     
@@ -3446,22 +3591,6 @@ const PipelineBuilder = () => {
       }
     };
     
-    if (isLoadingZoneData) {
-      return (
-        <Box display="flex" justifyContent="center" alignItems="center" height={400}>
-          <CircularProgress />
-        </Box>
-      );
-    }
-    
-    if (zoneLineCounts.length === 0) {
-      return (
-        <Alert severity="info" sx={{ my: 2 }}>
-          No zone crossing data available. Start the pipeline with line zone manager and database sink enabled to collect data.
-        </Alert>
-      );
-    }
-    
     return (
       <Box height={400} width="100%">
         <Line data={chartData} options={options} />
@@ -3471,283 +3600,76 @@ const PipelineBuilder = () => {
 
   // Add Class Heatmap Visualization component
   const ClassHeatmapVisualization = () => {
-    // Use refs to prevent unnecessary re-renders
-    const loadingRef = useRef(false);
-    const mountedRef = useRef(false);
-    const initialFetchDoneRef = useRef(false);
-    
-    // State
-    const [heatmapImageUrl, setHeatmapImageUrl] = useState<string>('');
-    const [selectedAnchor, setSelectedAnchor] = useState<string>("CENTER");
-    const [imageQuality, setImageQuality] = useState<number>(90);
-    const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
-    const [availableClasses, setAvailableClasses] = useState<string[]>([]);
-    const [imageLoadError, setImageLoadError] = useState<boolean>(false);
-    const [loading, setLoading] = useState(false);
-    
-    // Fetch available classes from the backend
-    const fetchAvailableClasses = useCallback(() => {
-      if (!cameraId || !dbComponentExists) return;
-      
-      // First try to get classes from object detection processor
-      const objectDetectionProcessor = processorComponents.find(
-        comp => comp.type === 'object_detection' || comp.type_name === 'object_detection'
-      );
-      
-      let classes: string[] = [];
-      
-      if (objectDetectionProcessor) {
-        if (Array.isArray(objectDetectionProcessor.classes)) {
-          classes = objectDetectionProcessor.classes;
-        } else if (objectDetectionProcessor.config && Array.isArray(objectDetectionProcessor.config.classes)) {
-          classes = objectDetectionProcessor.config.classes;
-        }
-      }
-      
-      // If no classes found, try to get from available models
-      if (classes.length === 0) {
-        const objectDetectionModel = objectDetectionModels.find(
-          model => model.id === objectDetectionForm.model_id
-        );
-        
-        if (objectDetectionModel && Array.isArray(objectDetectionModel.classes)) {
-          classes = objectDetectionModel.classes;
-        } else if (selectedModelClasses.length > 0) {
-          classes = selectedModelClasses;
-        }
-      }
-      
-      // Set whatever classes we found
-      setAvailableClasses(classes);
-    }, [cameraId, dbComponentExists, processorComponents, objectDetectionModels, objectDetectionForm.model_id, selectedModelClasses]);
+    if (isLoadingHeatmapData) {
+      return <TelemetryChartSkeleton />;
+    }
 
-    
-    // Image event handlers
-    const handleImageLoad = useCallback(() => {
-      /* loadingRef.current = false;
-      setLoading(false);
-      initialFetchDoneRef.current = true;
-      
-      // After the first successful load, fetch available classes
-      if (availableClasses.length === 0) {
-        fetchAvailableClasses();
-      } */
-    }, [availableClasses.length, fetchAvailableClasses]);
-    
-    const handleImageError = useCallback(() => {
-      loadingRef.current = false;
-      setLoading(false);
-      setImageLoadError(true);
-      initialFetchDoneRef.current = true;
-    }, []);
-    
-    // Initial fetch only on mount
-    useEffect(() => {
-      mountedRef.current = true;
-      
-      return () => {
-        mountedRef.current = false;
-      };
-    }, [cameraId, dbComponentExists]);
-    
-    // UI handlers - ensure they don't trigger re-renders when unnecessary
-    const handleAnchorChange = useCallback((event: SelectChangeEvent<string>) => {
-      setSelectedAnchor(event.target.value);
-    }, []);
-    
-    const handleQualityChange = useCallback((_event: Event, value: number | number[]) => {
-      setImageQuality(value as number);
-    }, []);
-    
-    const handleClassToggle = useCallback((className: string) => {
-      setSelectedClasses(prev => {
-        if (prev.includes(className)) {
-          return prev.filter(c => c !== className);
-        } else {
-          return [...prev, className];
-        }
-      });
-    }, []);
-    
-    
-    // Background image handling
-    const backgroundImageUrl = pipelineHasRunOnce && lastFrameUrl ? lastFrameUrl : "";
+    // Generate the heatmap image URL
+    const heatmapImageUrl = cameraId ? 
+      `/api/v1/cameras/${cameraId}/database/heatmap-image?quality=90` : '';
 
-    // Function to fetch heatmap image
-    const fetchHeatmapImage = useCallback(() => {
-      if (!cameraId || !dbComponentExists) return;
-      
-      // Set loading state
-      setLoading(true);
-      setImageLoadError(false);
-      
-      // Get the heatmap image URL with selected parameters and a timestamp to bust cache
-      const imageUrl = apiService.database.getHeatmapImage(cameraId, {
-        anchor: selectedAnchor,
-        quality: imageQuality,
-        classes: selectedClasses.length > 0 ? selectedClasses : undefined
-      });
-      
-      // Set the image URL to display the heatmap
-      setHeatmapImageUrl(imageUrl);
-      
-      // Also update available classes to ensure they're loaded
-      fetchAvailableClasses();
-    }, [cameraId, dbComponentExists, selectedAnchor, imageQuality, selectedClasses, fetchAvailableClasses]);
-    
-    // Initial load of heatmap and available classes
-    useEffect(() => {
-      // Only run this once on component mount if data is available
-      if (!initialFetchDoneRef.current && cameraId && dbComponentExists) {
-        fetchHeatmapImage();
-        fetchAvailableClasses();
-        initialFetchDoneRef.current = true;
-      }
-    }, [cameraId, dbComponentExists, fetchHeatmapImage, fetchAvailableClasses]);
-    
-    return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-        {/* Controls */}
-        <Paper sx={{ p: 2, mb: 2 }}>
-          <Typography variant="subtitle1" gutterBottom>Heatmap Settings</Typography>
-          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, alignItems: 'flex-start' }}>
-            {/* Anchor selection */}
-            <FormControl size="small" sx={{ minWidth: 120 }}>
-              <InputLabel id="anchor-select-label">Anchor</InputLabel>
-              <Select
-                labelId="anchor-select-label"
-                value={selectedAnchor}
-                onChange={handleAnchorChange}
-                label="Anchor"
-              >
-                {ANCHOR_OPTIONS.map((anchor) => (
-                  <MenuItem key={anchor} value={anchor}>
-                    {anchor.split('_').map(word => word.charAt(0) + word.slice(1).toLowerCase()).join(' ')}
-                  </MenuItem>
-                ))}
-              </Select>
-              <FormHelperText>Bounding box position</FormHelperText>
-            </FormControl>
-            
-            {/* Quality slider */}
-            <Box sx={{ width: 200 }}>
-              <Typography variant="body2" gutterBottom>
-                Image Quality: {imageQuality}
-              </Typography>
-              <Slider
-                value={imageQuality}
-                onChange={handleQualityChange}
-                min={10}
-                max={100}
-                step={5}
-                valueLabelDisplay="auto"
-                size="small"
-              />
-            </Box>
-            
-            {/* Refresh button */}
-            <Button
-              variant="contained"
-              startIcon={loading ? <CircularProgress size={20} /> : <RedoIcon />}
-              disabled={loading}
-              onClick={fetchHeatmapImage}
-            >
-              Refresh Heatmap
-            </Button>
-          </Box>
-          
-          {/* Class filters */}
-          {availableClasses.length > 0 && (
-            <Box sx={{ mt: 2 }}>
-              <Typography variant="body2" gutterBottom>Filter by Classes:</Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                {availableClasses.map((cls) => (
-                  <Chip
-                    key={cls}
-                    label={cls}
-                    onClick={() => handleClassToggle(cls)}
-                    color={selectedClasses.includes(cls) ? "primary" : "default"}
-                    variant={selectedClasses.includes(cls) ? "filled" : "outlined"}
-                  />
-                ))}
-              </Box>
-              <FormHelperText>
-                {selectedClasses.length === 0 
-                  ? "All classes are shown (no filter)" 
-                  : `Showing ${selectedClasses.length} selected classes`}
-              </FormHelperText>
-            </Box>
-          )}
-        </Paper>
-        
-        {/* Heatmap image display */}
+    if (!heatmapImageUrl) {
+      return (
         <Box 
           sx={{ 
-            position: 'relative', 
-            height: 400, 
+            height: '400px', 
+            display: 'flex', 
+            justifyContent: 'center',
+            alignItems: 'center',
             border: '1px solid',
             borderColor: 'divider',
             borderRadius: 1,
-            overflow: 'hidden',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            backgroundColor: '#f0f0f0'
+            backgroundColor: 'background.paper',
+            flexDirection: 'column',
+            gap: 2
           }}
         >
-          {loading && (
-            <Box sx={{ position: 'absolute', display: 'flex', justifyContent: 'center', alignItems: 'center', top: 0, left: 0, right: 0, bottom: 0, zIndex: 10, bgcolor: 'rgba(255, 255, 255, 0.7)' }}>
-              <CircularProgress />
-            </Box>
-          )}
-      
-          {heatmapImageUrl ? (
-            <>
-              <img 
-                src={heatmapImageUrl} 
-                alt="Object Detection Heatmap" 
-                style={{ 
-                  maxWidth: '100%', 
-                  maxHeight: '100%', 
-                  objectFit: 'contain'
-                }}
-                onLoad={() => setLoading(false)}
-                onError={handleImageError}
-              />
-              
-              {imageLoadError && (
-                <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                  <Alert severity="error">
-                    Failed to load heatmap image. No data may be available yet.
-                  </Alert>
-                </Box>
-              )}
-            </>
-          ) : (
-            <Alert severity="info">
-              No heatmap data available. Start the pipeline with object detection and database sink enabled to collect data.
-            </Alert>
-          )}
-          
-          {/* Add an overlay showing the background frame if heatmap is semitransparent */}
-          {backgroundImageUrl && (
-            <Box
-              sx={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                backgroundImage: `url(${backgroundImageUrl})`,
-                backgroundSize: 'contain',
-                backgroundPosition: 'center',
-                backgroundRepeat: 'no-repeat',
-                opacity: 0.3,
-                zIndex: -1
-              }}
-            />
-          )}
+          <Typography color="text.secondary">
+            No heatmap data available
+          </Typography>
+          <Typography color="text.secondary" variant="body2">
+            Camera ID is required to generate a heatmap
+          </Typography>
         </Box>
+      );
+    }
+
+    return (
+      <Box 
+        sx={{ 
+          height: 400, 
+          width: "100%", 
+          display: 'flex', 
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          border: '1px solid',
+          borderColor: 'divider',
+          borderRadius: 1,
+          position: 'relative'
+        }}
+      >
+        <img 
+          src={`${heatmapImageUrl}&t=${new Date().getTime()}`} // Add timestamp to prevent caching
+          alt="Detection Heatmap" 
+          style={{ 
+            maxWidth: '100%', 
+            maxHeight: '100%', 
+            objectFit: 'contain'
+          }}
+          onError={(e) => {
+            // Handle image load error
+            const target = e.target as HTMLImageElement;
+            target.style.display = 'none';
+            // Show error message
+            const errorDiv = document.createElement('div');
+            errorDiv.textContent = 'Failed to load heatmap image. No data may be available yet.';
+            errorDiv.style.color = '#666';
+            errorDiv.style.textAlign = 'center';
+            errorDiv.style.padding = '20px';
+            target.parentNode?.appendChild(errorDiv);
+          }}
+        />
       </Box>
     );
   };
@@ -3755,8 +3677,62 @@ const PipelineBuilder = () => {
   if (loading) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-        <Box display="flex" justifyContent="center" my={5}>
-          <CircularProgress />
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+          <Box>
+            <Skeleton variant="text" width={120} height={40} sx={{ mb: 2 }} />
+            <Skeleton variant="text" width={300} height={40} />
+          </Box>
+          <Skeleton variant="rounded" width={150} height={40} />
+        </Box>
+
+        <Box sx={{ width: '100%', mb: 4 }}>
+          <Paper elevation={3} sx={{ borderRadius: '4px 4px 0 0' }}>
+            <Skeleton variant="rectangular" height={64} width="100%" />
+          </Paper>
+          
+          <Box sx={{ mt: 3 }}>
+            {/* Source Card Skeleton */}
+            <Paper elevation={2} sx={{ p: 3, width: '100%', mb: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <Skeleton variant="circular" width={24} height={24} sx={{ mr: 1 }} />
+                  <Skeleton variant="text" width={120} height={32} />
+                </Box>
+                <Skeleton variant="rounded" width={120} height={36} />
+              </Box>
+              <Divider sx={{ mb: 2 }} />
+              <ComponentCardSkeleton />
+            </Paper>
+
+            {/* Processors Card Skeleton */}
+            <Paper elevation={2} sx={{ p: 3, width: '100%', mb: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <Skeleton variant="circular" width={24} height={24} sx={{ mr: 1 }} />
+                  <Skeleton variant="text" width={120} height={32} />
+                </Box>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Skeleton variant="rounded" width={120} height={36} />
+                  <Skeleton variant="rounded" width={120} height={36} />
+                </Box>
+              </Box>
+              <Divider sx={{ mb: 2 }} />
+              <ComponentCardSkeleton />
+            </Paper>
+
+            {/* Sinks Card Skeleton */}
+            <Paper elevation={2} sx={{ p: 3, width: '100%' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <Skeleton variant="circular" width={24} height={24} sx={{ mr: 1 }} />
+                  <Skeleton variant="text" width={120} height={32} />
+                </Box>
+                <Skeleton variant="rounded" width={120} height={36} />
+              </Box>
+              <Divider sx={{ mb: 2 }} />
+              <ComponentCardSkeleton />
+            </Paper>
+          </Box>
         </Box>
       </Container>
     );
@@ -4024,9 +4000,12 @@ const PipelineBuilder = () => {
               )}
               
               <Box sx={{ width: '100%', textAlign: 'center' }}>
-                {(camera?.running && frameUrl) || (!camera?.running && lastFrameUrl) ? (
+                {(camera?.running && !frameUrl) && (
+                  <ImageSkeleton />
+                )}
+                {(camera?.running && frameUrl) && (
                   <img 
-                    src={camera?.running ? frameUrl : lastFrameUrl} 
+                    src={frameUrl} 
                     alt="Camera feed" 
                     style={{ 
                       maxWidth: '100%', 
@@ -4035,7 +4014,20 @@ const PipelineBuilder = () => {
                       borderRadius: '4px'
                     }} 
                   />
-                ) : (
+                )}
+                {(!camera?.running && lastFrameUrl) && (
+                  <img 
+                    src={lastFrameUrl} 
+                    alt="Camera feed (last frame)" 
+                    style={{ 
+                      maxWidth: '100%', 
+                      maxHeight: '600px', 
+                      border: '1px solid #ccc',
+                      borderRadius: '4px'
+                    }} 
+                  />
+                )}
+                {(!camera?.running && !lastFrameUrl && pipelineHasRunOnce) && (
                   <Box 
                     sx={{ 
                       width: '100%', 
@@ -4048,31 +4040,40 @@ const PipelineBuilder = () => {
                       bgcolor: 'background.paper'
                     }}
                   >
-                    {pipelineHasRunOnce ? (
-                      <Typography variant="body1" color="text.secondary">
-                        No image available from the last session
-                      </Typography>
-                    ) : (
-                      <Box sx={{ textAlign: 'center', p: 3 }}>
-                        <LiveTvIcon sx={{ fontSize: 60, color: 'text.secondary', opacity: 0.5, mb: 2 }} />
-                        <Typography variant="h6" color="text.secondary" gutterBottom>
-                          Pipeline not started
-                        </Typography>
-                        <Typography variant="body1" color="text.secondary">
-                          Start the pipeline to see the live video feed
-                        </Typography>
-                        <Button
-                          variant="contained"
-                          color="success"
-                          startIcon={<PlayArrowIcon />}
-                          onClick={handleStartStop}
-                          disabled={isStartingPipeline || !sourceComponent}
-                          sx={{ mt: 2 }}
-                        >
-                          {isStartingPipeline ? "Starting..." : "Start Pipeline"}
-                        </Button>
-                      </Box>
-                    )}
+                    <Typography variant="body1" color="text.secondary">
+                      No image available from the last session
+                    </Typography>
+                  </Box>
+                )}
+                {(!camera?.running && !lastFrameUrl && !pipelineHasRunOnce) && (
+                  <Box sx={{ 
+                    textAlign: 'center', 
+                    p: 3, 
+                    border: '1px solid #ccc', 
+                    borderRadius: '4px', 
+                    height: '600px', 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    justifyContent: 'center', 
+                    alignItems: 'center' 
+                  }}>
+                    <LiveTvIcon sx={{ fontSize: 60, color: 'text.secondary', opacity: 0.5, mb: 2 }} />
+                    <Typography variant="h6" color="text.secondary" gutterBottom>
+                      Pipeline not started
+                    </Typography>
+                    <Typography variant="body1" color="text.secondary">
+                      Start the pipeline to see the live video feed
+                    </Typography>
+                    <Button
+                      variant="contained"
+                      color="success"
+                      startIcon={<PlayArrowIcon />}
+                      onClick={handleStartStop}
+                      disabled={isStartingPipeline || !sourceComponent}
+                      sx={{ mt: 2 }}
+                    >
+                      {isStartingPipeline ? "Starting..." : "Start Pipeline"}
+                    </Button>
                   </Box>
                 )}
               </Box>
@@ -4111,12 +4112,16 @@ const PipelineBuilder = () => {
               
               {/* Line Zone Editor view */}
               <Box sx={{ height: '500px' }}>
-                <LineZoneEditor 
-                  zones={lineZoneManagerForm.zones} 
-                  onZonesChange={handleLineZonesUpdate}
-                  imageUrl={(camera?.running ? frameUrl : lastFrameUrl) || "" as string}
-                  disabled={isSavingZones}
-                />
+                {(camera?.running && !frameUrl) || (!camera?.running && !lastFrameUrl) ? (
+                  <LineZoneEditorSkeleton />
+                ) : (
+                  <LineZoneEditor 
+                    zones={lineZoneManagerForm.zones} 
+                    onZonesChange={handleLineZonesUpdate}
+                    imageUrl={(camera?.running ? frameUrl : lastFrameUrl) || "" as string}
+                    disabled={isSavingZones}
+                  />
+                )}
               </Box>
               
               <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
@@ -4234,7 +4239,7 @@ const PipelineBuilder = () => {
                   <Box sx={{ mb: 3 }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                       <Typography variant="subtitle1">
-                        Zone Crossing Counts
+                        Line Zone Crossing Counts
                       </Typography>
                       <Button
                         variant="contained"
@@ -4256,6 +4261,15 @@ const PipelineBuilder = () => {
                       <Typography variant="subtitle1">
                         Object Detection Heatmap
                       </Typography>
+                      <Button
+                        variant="contained"
+                        startIcon={isLoadingHeatmapData ? <CircularProgress size={20} /> : <RedoIcon />}
+                        onClick={fetchClassHeatmapData}
+                        disabled={isLoadingHeatmapData}
+                        size="small"
+                      >
+                        Refresh
+                      </Button>
                     </Box>
                     <ClassHeatmapVisualization />
                   </Box>
@@ -4297,9 +4311,7 @@ const PipelineBuilder = () => {
                   </Box>
                   
                   {isLoadingRecords ? (
-                    <Box display="flex" justifyContent="center" my={5}>
-                      <CircularProgress />
-                    </Box>
+                    <DatabaseTableSkeleton />
                   ) : databaseRecords.length === 0 ? (
                     <Alert severity="info">
                       No telemetry records found for this camera.
