@@ -55,7 +55,20 @@ export interface CameraInput {
 // License status interface
 export interface LicenseStatus {
   valid: boolean;
-  has_license: boolean;
+  key: string;
+  tier?: string;
+  tier_id?: number;
+  owner?: string;
+  email?: string;
+  expiration?: number;
+  message?: string;
+}
+
+// License update interface
+export interface LicenseUpdate {
+  license_key: string;
+  owner?: string;
+  email?: string;
 }
 
 // Component types interface
@@ -222,14 +235,34 @@ const apiService = {
     },
 
     // Set license key
-    setLicense: async (licenseKey: string): Promise<boolean> => {
+    setLicense: async (licenseData: LicenseUpdate): Promise<LicenseStatus | null> => {
       try {
-        const response = await axios.post(getFullUrl('/api/v1/license'), {
-          license_key: licenseKey
-        });
-        return response.data?.valid === true;
+        const response = await axios.post(getFullUrl('/api/v1/license'), licenseData);
+        return response.data;
       } catch (error) {
         console.error('Error setting license key:', error);
+        return null;
+      }
+    },
+    
+    // Update existing license information
+    updateLicense: async (licenseData: Partial<LicenseUpdate>): Promise<LicenseStatus | null> => {
+      try {
+        const response = await axios.put(getFullUrl('/api/v1/license'), licenseData);
+        return response.data;
+      } catch (error) {
+        console.error('Error updating license information:', error);
+        return null;
+      }
+    },
+    
+    // Delete license
+    deleteLicense: async (): Promise<boolean> => {
+      try {
+        const response = await axios.delete(getFullUrl('/api/v1/license'));
+        return response.data?.success === true;
+      } catch (error) {
+        console.error('Error deleting license:', error);
         return false;
       }
     }
