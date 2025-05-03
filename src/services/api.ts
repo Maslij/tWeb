@@ -24,7 +24,9 @@ const getFullUrl = (path: string): string => {
   if (window.location.hostname === 'localhost') {
     // When using Vite's built-in proxy, we should use relative URLs
     // The proxy in vite.config.ts will forward /api requests to the backend
-    return path;
+    // If proxy is not working, connect directly to the API server
+    const apiServer = import.meta.env.VITE_TAPI_SERVER || 'localhost:8090';
+    return `http://${apiServer}${path}`;
   }
   
   // For production, we need to use the actual API server
@@ -735,4 +737,4 @@ const apiService = {
   }
 };
 
-export default apiService; 
+export default apiService;
