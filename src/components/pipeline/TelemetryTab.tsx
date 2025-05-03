@@ -93,11 +93,10 @@ const TelemetryTab: React.FC<TelemetryTabProps> = ({
 
   // Zone Line Counts Chart component
   const ZoneLineCountsChart = () => {
-    if (isLoadingZoneData) {
-      return <TelemetryChartSkeleton />;
-    }
-
-    if (!hasZoneLineData || !zoneLineCounts || zoneLineCounts.length === 0) {
+    // Prepare datasets even during loading
+    const shouldRenderData = !(!hasZoneLineData || !zoneLineCounts || zoneLineCounts.length === 0);
+    
+    if (!shouldRenderData && !isLoadingZoneData) {
       return (
         <Box 
           sx={{ 
@@ -125,161 +124,184 @@ const TelemetryTab: React.FC<TelemetryTabProps> = ({
       );
     }
 
-    // Filter data based on selected direction
-    const filteredData = directionFilter === 'all' 
-      ? zoneLineCounts 
-      : zoneLineCounts.filter(item => item.direction === directionFilter);
-
-    // Group data by zone_id
-    const zones = [...new Set(filteredData.map(item => item.zone_id))];
+    // Only prepare chart data if we have data to show
+    let chartData: { datasets: any[] } = { datasets: [] };
+    let options = {};
     
-    // Prepare datasets for the chart
-    const datasets = directionFilter !== 'all'
-      ? zones.map((zoneId, index) => {
-          // Filter data for this zone 
-          const zoneData = filteredData.filter(item => item.zone_id === zoneId);
-          
-          // Group by timestamp to combine counts with the same timestamp
-          const groupedByTimestamp = zoneData.reduce((acc, item) => {
-            const existingPoint = acc.find(p => p.timestamp === item.timestamp);
-            if (existingPoint) {
-              existingPoint.count += item.count;
-            } else {
-              acc.push({...item});
-            }
-            return acc;
-          }, [] as ZoneLineCount[]);
+    if (shouldRenderData) {
+      // Filter data based on selected direction
+      const filteredData = directionFilter === 'all' 
+        ? zoneLineCounts 
+        : zoneLineCounts.filter(item => item.direction === directionFilter);
 
-          // Generate a color based on index
-          const hue = (index * 137) % 360;
-          const color = `hsl(${hue}, 70%, 50%)`;
-          
-          // Add direction to label if showing a specific direction
-          const directionSuffix = ` (${directionFilter})`;
-          
-          return {
-            label: `Zone: ${zoneId}${directionSuffix}`,
-            data: groupedByTimestamp.map(item => ({
-              x: item.timestamp,
-              y: item.count
-            })),
-            borderColor: color,
-            backgroundColor: `${color}80`,
-            fill: false,
-            tension: 0.1
-          };
-        })
-      : zones.flatMap((zoneId, index) => {
-          // For 'all' directions, create separate datasets for 'in' and 'out'
-          const baseHue = (index * 137) % 360;
-          
-          // Get data for this zone, filtered by direction
-          const inData = zoneLineCounts.filter(item => 
-            item.zone_id === zoneId && item.direction === 'in');
-          
-          const outData = zoneLineCounts.filter(item => 
-            item.zone_id === zoneId && item.direction === 'out');
-          
-          // Return array with two datasets (one for each direction)
-          return [
-            {
-              label: `Zone: ${zoneId} (in)`,
-              data: inData.map(item => ({
+      // Group data by zone_id
+      const zones = [...new Set(filteredData.map(item => item.zone_id))];
+      
+      // Prepare datasets for the chart
+      const datasets = directionFilter !== 'all'
+        ? zones.map((zoneId, index) => {
+            // Filter data for this zone 
+            const zoneData = filteredData.filter(item => item.zone_id === zoneId);
+            
+            // Group by timestamp to combine counts with the same timestamp
+            const groupedByTimestamp = zoneData.reduce((acc, item) => {
+              const existingPoint = acc.find(p => p.timestamp === item.timestamp);
+              if (existingPoint) {
+                existingPoint.count += item.count;
+              } else {
+                acc.push({...item});
+              }
+              return acc;
+            }, [] as ZoneLineCount[]);
+
+            // Generate a color based on index
+            const hue = (index * 137) % 360;
+            const color = `hsl(${hue}, 70%, 50%)`;
+            
+            // Add direction to label if showing a specific direction
+            const directionSuffix = ` (${directionFilter})`;
+            
+            return {
+              label: `Zone: ${zoneId}${directionSuffix}`,
+              data: groupedByTimestamp.map(item => ({
                 x: item.timestamp,
                 y: item.count
               })),
-              borderColor: `hsl(${baseHue}, 70%, 50%)`,
-              backgroundColor: `hsl(${baseHue}, 70%, 50%, 0.5)`,
+              borderColor: color,
+              backgroundColor: `${color}80`,
               fill: false,
               tension: 0.1
+            };
+          })
+        : zones.flatMap((zoneId, index) => {
+            // For 'all' directions, create separate datasets for 'in' and 'out'
+            const baseHue = (index * 137) % 360;
+            
+            // Get data for this zone, filtered by direction
+            const inData = zoneLineCounts.filter(item => 
+              item.zone_id === zoneId && item.direction === 'in');
+            
+            const outData = zoneLineCounts.filter(item => 
+              item.zone_id === zoneId && item.direction === 'out');
+            
+            // Return array with two datasets (one for each direction)
+            return [
+              {
+                label: `Zone: ${zoneId} (in)`,
+                data: inData.map(item => ({
+                  x: item.timestamp,
+                  y: item.count
+                })),
+                borderColor: `hsl(${baseHue}, 70%, 50%)`,
+                backgroundColor: `hsl(${baseHue}, 70%, 50%, 0.5)`,
+                fill: false,
+                tension: 0.1
+              },
+              {
+                label: `Zone: ${zoneId} (out)`,
+                data: outData.map(item => ({
+                  x: item.timestamp,
+                  y: item.count
+                })),
+                borderColor: `hsl(${baseHue + 40}, 70%, 50%)`,
+                backgroundColor: `hsl(${baseHue + 40}, 70%, 50%, 0.5)`,
+                fill: false,
+                tension: 0.1,
+                borderDash: [5, 5] // Add dashed line for 'out' direction
+              }
+            ];
+          });
+      
+      chartData = {
+        datasets
+      };
+      
+      options = {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            type: 'time' as const,
+            time: {
+              unit: 'hour' as const,
+              tooltipFormat: 'MMM d, yyyy HH:mm',
+              displayFormats: {
+                hour: 'MMM d, HH:mm'
+              }
             },
-            {
-              label: `Zone: ${zoneId} (out)`,
-              data: outData.map(item => ({
-                x: item.timestamp,
-                y: item.count
-              })),
-              borderColor: `hsl(${baseHue + 40}, 70%, 50%)`,
-              backgroundColor: `hsl(${baseHue + 40}, 70%, 50%, 0.5)`,
-              fill: false,
-              tension: 0.1,
-              borderDash: [5, 5] // Add dashed line for 'out' direction
+            title: {
+              display: true,
+              text: 'Time'
+            },
+            adapters: {
+              date: {
+                locale: enUS
+              }
             }
-          ];
-        });
-    
-    const chartData = {
-      datasets
-    };
-    
-    const options = {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        x: {
-          type: 'time' as const,
-          time: {
-            unit: 'hour' as const,
-            tooltipFormat: 'MMM d, yyyy HH:mm',
-            displayFormats: {
-              hour: 'MMM d, HH:mm'
+          },
+          y: {
+            beginAtZero: true,
+            title: {
+              display: true,
+              text: 'Count'
             }
+          }
+        },
+        plugins: {
+          legend: {
+            position: 'top' as const,
           },
           title: {
             display: true,
-            text: 'Time'
+            text: directionFilter === 'all' 
+              ? 'Zone Crossing Counts Over Time' 
+              : `Zone Crossing Counts Over Time (${directionFilter.charAt(0).toUpperCase() + directionFilter.slice(1)} Direction)`
           },
-          adapters: {
-            date: {
-              locale: enUS
-            }
-          }
-        },
-        y: {
-          beginAtZero: true,
-          title: {
-            display: true,
-            text: 'Count'
-          }
-        }
-      },
-      plugins: {
-        legend: {
-          position: 'top' as const,
-        },
-        title: {
-          display: true,
-          text: directionFilter === 'all' 
-            ? 'Zone Crossing Counts Over Time' 
-            : `Zone Crossing Counts Over Time (${directionFilter.charAt(0).toUpperCase() + directionFilter.slice(1)} Direction)`
-        },
-        tooltip: {
-          callbacks: {
-            title: function(tooltipItems: any) {
-              // Format the timestamp
-              const date = new Date(tooltipItems[0].parsed.x);
-              return date.toLocaleString();
+          tooltip: {
+            callbacks: {
+              title: function(tooltipItems: any) {
+                // Format the timestamp
+                const date = new Date(tooltipItems[0].parsed.x);
+                return date.toLocaleString();
+              }
             }
           }
         }
-      }
-    };
+      };
+    }
     
     return (
-      <Box height={400} width="100%">
-        <Line data={chartData} options={options} />
+      <Box height={400} width="100%" position="relative">
+        {shouldRenderData && <Line data={chartData} options={options} />}
+        
+        {isLoadingZoneData && (
+          <Box 
+            position="absolute"
+            top={0}
+            left={0}
+            right={0}
+            bottom={0}
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            bgcolor="transparent"
+            zIndex={10}
+          >
+            <CircularProgress />
+          </Box>
+        )}
+        
+        {!shouldRenderData && isLoadingZoneData && <TelemetryChartSkeleton />}
       </Box>
     );
   };
 
   // Class Heatmap Visualization component
   const ClassHeatmapVisualization = () => {
-    if (isLoadingHeatmapData) {
-      return <TelemetryChartSkeleton />;
-    }
-
     // Check if we have heatmap data
-    if (!hasHeatmapData || !totalFrames) {
+    const shouldRenderData = hasHeatmapData && totalFrames > 0;
+    
+    if (!shouldRenderData && !isLoadingHeatmapData) {
       return (
         <Box 
           sx={{ 
@@ -311,7 +333,7 @@ const TelemetryTab: React.FC<TelemetryTabProps> = ({
     const heatmapImageUrl = cameraId ? 
       `/api/v1/cameras/${cameraId}/database/heatmap-image?quality=90` : '';
 
-    if (!heatmapImageUrl) {
+    if (!heatmapImageUrl && !isLoadingHeatmapData) {
       return (
         <Box 
           sx={{ 
@@ -348,27 +370,49 @@ const TelemetryTab: React.FC<TelemetryTabProps> = ({
           position: 'relative'
         }}
       >
-        <img 
-          src={`${heatmapImageUrl}&t=${new Date().getTime()}`} // Add timestamp to prevent caching
-          alt="Detection Heatmap" 
-          style={{ 
-            maxWidth: '100%', 
-            maxHeight: '100%', 
-            objectFit: 'contain'
-          }}
-          onError={(e) => {
-            // Handle image load error
-            const target = e.target as HTMLImageElement;
-            target.style.display = 'none';
-            // Show error message
-            const errorDiv = document.createElement('div');
-            errorDiv.textContent = 'Failed to load heatmap image. No data may be available yet.';
-            errorDiv.style.color = '#666';
-            errorDiv.style.textAlign = 'center';
-            errorDiv.style.padding = '20px';
-            target.parentNode?.appendChild(errorDiv);
-          }}
-        />
+        {shouldRenderData && (
+          <img 
+            id="heatmap-image"
+            src={`${heatmapImageUrl}&t=${new Date().getTime()}`} // Add timestamp to prevent caching
+            alt="Detection Heatmap" 
+            style={{ 
+              maxWidth: '100%', 
+              maxHeight: '100%', 
+              objectFit: 'contain'
+            }}
+            onError={(e) => {
+              // Handle image load error
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+              // Show error message
+              const errorDiv = document.createElement('div');
+              errorDiv.textContent = 'Failed to load heatmap image. No data may be available yet.';
+              errorDiv.style.color = '#666';
+              errorDiv.style.textAlign = 'center';
+              errorDiv.style.padding = '20px';
+              target.parentNode?.appendChild(errorDiv);
+            }}
+          />
+        )}
+        
+        {isLoadingHeatmapData && (
+          <Box 
+            position="absolute"
+            top={0}
+            left={0}
+            right={0}
+            bottom={0}
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            bgcolor="transparent"
+            zIndex={10}
+          >
+            <CircularProgress />
+          </Box>
+        )}
+        
+        {!shouldRenderData && isLoadingHeatmapData && <TelemetryChartSkeleton />}
       </Box>
     );
   };
