@@ -1,42 +1,128 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, ReactElement } from 'react';
 import './App.css';
-import Navbar from './components/Navbar';
+import Navbar, { notifyLicenseChanged, LICENSE_CHANGE_EVENT } from './components/Navbar';
 import { ThemeProvider } from './contexts/ThemeContext';
 import Dashboard from './pages/Dashboard';
 import NewCamera from './pages/cameras/NewCamera';
 import PipelineBuilder from './pages/cameras/PipelineBuilder';
 import LicenseSetup from './pages/LicenseSetup';
-import apiService from './services/api';
+import apiService, { LicenseStatus } from './services/api';
 import { Box, CircularProgress, Typography, CssBaseline, Paper, Card, CardContent, Container, Chip } from '@mui/material';
 import VideocamIcon from '@mui/icons-material/Videocam';
 import LockIcon from '@mui/icons-material/Lock';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import { getVersionString } from './utils/version';
 
-function App() {
+// Higher-order component to protect routes that require a valid license
+const ProtectedRoute = ({ children }: { children: ReactElement }) => {
   const [licenseChecked, setLicenseChecked] = useState(false);
-  const [hasLicense, setHasLicense] = useState(false);
-  const [checkingLicense, setCheckingLicense] = useState(true);
+  const [licenseStatus, setLicenseStatus] = useState<LicenseStatus | null>(null);
+  const [checkingError, setCheckingError] = useState<string | null>(null);
+  
+  // Function to check license status
+  const checkLicense = async () => {
+    console.log('ProtectedRoute: Checking license status');
+    try {
+      const status = await apiService.license.getStatus();
+      console.log('ProtectedRoute: License status:', status);
+      
+      // If license status changed, notify
+      if (!licenseStatus || 
+          (status && licenseStatus && (
+            status.valid !== licenseStatus.valid || 
+            status.tier !== licenseStatus.tier)
+          )) {
+        console.log('ProtectedRoute: License status changed, notifying');
+        setLicenseStatus(status);
+        // If the license status has changed, notify the navbar
+        notifyLicenseChanged();
+      } else {
+        setLicenseStatus(status);
+      }
+    } catch (err: any) {
+      console.error('Error checking license in protected route:', err);
+      setCheckingError(err.response?.status === 401 
+        ? 'License is invalid or expired' 
+        : 'Failed to verify license status');
+      
+      // If we previously had a valid license but now don't, notify
+      if (licenseStatus?.valid) {
+        console.log('ProtectedRoute: License became invalid, notifying');
+        notifyLicenseChanged();
+      }
+    } finally {
+      setLicenseChecked(true);
+    }
+  };
+  
+  // Check license on mount and when LICENSE_CHANGE_EVENT is fired
+  useEffect(() => {
+    // Initial check
+    checkLicense();
+    
+    // Listen for license change events
+    const handleLicenseChange = () => {
+      console.log('ProtectedRoute: License change event received');
+      checkLicense();
+    };
+    
+    window.addEventListener(LICENSE_CHANGE_EVENT, handleLicenseChange);
+    
+    return () => {
+      window.removeEventListener(LICENSE_CHANGE_EVENT, handleLicenseChange);
+    };
+  }, []);
+  
+  if (!licenseChecked) {
+    return (
+      <Box 
+        sx={{ 
+          display: 'flex', 
+          flexDirection: 'column',
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          minHeight: '70vh',
+        }}
+      >
+        <CircularProgress size={40} thickness={4} />
+        <Typography variant="body1" sx={{ mt: 2 }}>
+          Verifying license...
+        </Typography>
+      </Box>
+    );
+  }
+  
+  // Redirect to license page if license check failed or license is invalid
+  if (checkingError || !licenseStatus?.valid) {
+    return <Navigate to="/license" replace />;
+  }
+  
+  return children;
+};
+
+function App() {
+  const [initialLicenseChecked, setInitialLicenseChecked] = useState(false);
+  const [licenseStatus, setLicenseStatus] = useState<LicenseStatus | null>(null);
   const versionString = getVersionString();
 
   useEffect(() => {
-    const checkLicense = async () => {
+    const checkInitialLicense = async () => {
       try {
-        const licenseStatus = await apiService.license.getStatus();
-        setHasLicense(licenseStatus?.valid || false);
+        const status = await apiService.license.getStatus();
+        setLicenseStatus(status);
       } catch (error) {
-        console.error('Error checking license:', error);
-        setHasLicense(false);
+        console.error('Error checking initial license:', error);
+        setLicenseStatus(null);
       } finally {
-        setLicenseChecked(true);
-        setCheckingLicense(false);
+        setInitialLicenseChecked(true);
       }
     };
 
-    checkLicense();
+    checkInitialLicense();
   }, []);
 
-  if (checkingLicense) {
+  if (!initialLicenseChecked) {
     return (
       <ThemeProvider>
         <CssBaseline />
@@ -78,7 +164,7 @@ function App() {
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
                     <CircularProgress size={40} thickness={4} />
                     <Typography variant="body2" sx={{ mt: 2, fontWeight: 500, color: 'text.secondary' }}>
-                      Checking license status...
+                      Initializing system...
                     </Typography>
                   </Box>
                 </Box>
@@ -102,44 +188,39 @@ function App() {
       <CssBaseline />
       <Router>
         <div className="app">
-          {licenseChecked && hasLicense && <Navbar />}
+          {/* Always show Navbar, it will handle its own license status display */}
+          <Navbar />
           <main className="content">
             <Routes>
-              {/* License check route */}
+              {/* License page is always accessible */}
               <Route 
                 path="/license" 
                 element={<LicenseSetup />} 
               />
               
-              {/* Protected routes */}
+              {/* Protected routes using the ProtectedRoute HOC */}
               <Route 
                 path="/" 
                 element={
-                  licenseChecked && !hasLicense ? (
-                    <Navigate to="/license" replace />
-                  ) : (
+                  <ProtectedRoute>
                     <Dashboard />
-                  )
+                  </ProtectedRoute>
                 } 
               />
               <Route 
                 path="/cameras/new" 
                 element={
-                  licenseChecked && !hasLicense ? (
-                    <Navigate to="/license" replace />
-                  ) : (
+                  <ProtectedRoute>
                     <NewCamera />
-                  )
+                  </ProtectedRoute>
                 } 
               />
               <Route 
                 path="/cameras/:cameraId/pipeline" 
                 element={
-                  licenseChecked && !hasLicense ? (
-                    <Navigate to="/license" replace />
-                  ) : (
+                  <ProtectedRoute>
                     <PipelineBuilder />
-                  )
+                  </ProtectedRoute>
                 } 
               />
               

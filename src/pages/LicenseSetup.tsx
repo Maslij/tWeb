@@ -35,6 +35,7 @@ import VerifiedIcon from '@mui/icons-material/Verified';
 import WarningIcon from '@mui/icons-material/Warning';
 
 import apiService, { LicenseStatus, LicenseUpdate } from '../services/api';
+import { notifyLicenseChanged } from '../components/Navbar';
 
 // Define tier information interface
 interface TierInfo {
@@ -137,7 +138,18 @@ const LicenseSetup = () => {
       const result = await apiService.license.setLicense(licenseData);
       if (result && result.valid) {
         setLicenseStatus(result);
-        setTimeout(() => navigate('/'), 1500);
+        
+        // First notify that license has changed and add a small delay
+        // to allow components to update
+        notifyLicenseChanged();
+        
+        // Show success message and redirect with a delay
+        setError(null);
+        
+        // Use a longer delay to ensure the navbar has time to update
+        setTimeout(() => {
+          navigate('/');
+        }, 1000);  // Increased delay for UI update
       } else {
         setError('Invalid license key. Please try again.');
       }
@@ -163,8 +175,16 @@ const LicenseSetup = () => {
       
       const result = await apiService.license.updateLicense(updateData);
       if (result && result.valid) {
-        setLicenseStatus(result);
+        // First notify about the license change
+        notifyLicenseChanged();
+        
+        // Then update local state
         setShowEditDialog(false);
+        setLicenseStatus(result);
+        
+        // Show success message briefly
+        setError("License information updated successfully");
+        setTimeout(() => setError(null), 3000);
       } else {
         setError('Failed to update license information.');
       }
@@ -183,18 +203,35 @@ const LicenseSetup = () => {
     try {
       const success = await apiService.license.deleteLicense();
       if (success) {
-        setLicenseStatus(null);
+        // First notify about the license change
+        notifyLicenseChanged();
+        
+        // Then update local state
         setShowDeleteDialog(false);
         setLicenseKey('');
         setLicenseOwner('');
         setLicenseEmail('');
+        
+        // Wait a short time to let the UI update before checking license again
+        setTimeout(async () => {
+          try {
+            // Fetch the updated license status
+            const updatedStatus = await apiService.license.getStatus();
+            setLicenseStatus(updatedStatus);
+            console.log('License status after deletion:', updatedStatus);
+          } catch (err) {
+            console.error('Error getting updated license status:', err);
+          } finally {
+            setLoading(false);
+          }
+        }, 500);
       } else {
         setError('Failed to delete license.');
+        setLoading(false);
       }
     } catch (err) {
       console.error('Error deleting license:', err);
       setError('Failed to delete license. Please try again.');
-    } finally {
       setLoading(false);
     }
   };

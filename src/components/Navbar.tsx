@@ -22,6 +22,15 @@ import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import apiService, { LicenseStatus } from '../services/api';
 import { getVersionString } from '../utils/version';
 
+// Export the license change event with a more specific name
+export const LICENSE_CHANGE_EVENT = 'license-status-changed';
+
+// Enhanced notification function that logs for debugging
+export const notifyLicenseChanged = () => {
+  console.log('License change event triggered');
+  window.dispatchEvent(new CustomEvent(LICENSE_CHANGE_EVENT));
+};
+
 // Get version display string
 const VERSION_DISPLAY = getVersionString();
 
@@ -30,28 +39,71 @@ const Navbar = () => {
   const [licenseStatus, setLicenseStatus] = useState<LicenseStatus | null>(null);
   const [isLicenseValid, setIsLicenseValid] = useState<boolean>(false);
   const [checkingLicense, setCheckingLicense] = useState<boolean>(true);
+  // Add reference for the last check time
+  const [lastRefresh, setLastRefresh] = useState<number>(Date.now());
 
-  // Check license status on component mount
-  useEffect(() => {
-    const checkLicense = async () => {
-      try {
-        const status = await apiService.license.getStatus();
-        setLicenseStatus(status);
-        setIsLicenseValid(status?.valid || false);
-      } catch (err) {
-        console.error('Error checking license:', err);
-        setIsLicenseValid(false);
-      } finally {
-        setCheckingLicense(false);
+  // Function to check license status
+  const checkLicense = async (force = false) => {
+    // Only proceed if forced or enough time has passed since last check
+    if (!force && Date.now() - lastRefresh < 500) {
+      console.log('Skipping redundant license check');
+      return;
+    }
+    
+    console.log('Checking license status at', new Date().toISOString());
+    setCheckingLicense(true);
+    setLastRefresh(Date.now());
+    
+    try {
+      const status = await apiService.license.getStatus();
+      console.log('License status:', status);
+      setLicenseStatus(status);
+      
+      // Check the actual validity (using the new isValid field)
+      const valid = status?.valid === true;
+      setIsLicenseValid(valid);
+
+      if (!valid && window.location.pathname !== '/license') {
+        // If license is invalid and we're not already on the license page, show a warning
+        console.warn('License is invalid or missing. Access to features may be restricted.');
       }
+    } catch (err: any) {
+      console.error('Error checking license:', err);
+      setIsLicenseValid(false);
+      
+      // If we get a 401 Unauthorized, it means the license is invalid
+      if (err.response && err.response.status === 401) {
+        // If we're not on the license page, redirect to it
+        if (window.location.pathname !== '/license') {
+          window.location.href = '/license';
+        }
+      }
+    } finally {
+      setCheckingLicense(false);
+    }
+  };
+
+  // Check license status on component mount and periodically
+  useEffect(() => {
+    // Check initially
+    checkLicense(true);
+
+    // Periodically check license status every minute
+    const intervalId = setInterval(() => checkLicense(true), 60 * 1000);
+    
+    // Also check license status whenever the license change event is fired
+    const handleLicenseChange = () => {
+      console.log('License change event received, refreshing status immediately');
+      // Use force=true to ensure it always updates
+      checkLicense(true);
     };
 
-    checkLicense();
-
-    // Periodically check license status every 5 minutes
-    const intervalId = setInterval(checkLicense, 5 * 60 * 1000);
+    window.addEventListener(LICENSE_CHANGE_EVENT, handleLicenseChange);
     
-    return () => clearInterval(intervalId);
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener(LICENSE_CHANGE_EVENT, handleLicenseChange);
+    };
   }, []);
 
   const toggleTheme = () => {
@@ -128,22 +180,25 @@ const Navbar = () => {
             {/* License status indicator */}
             <Tooltip title={
               isLicenseValid 
-                ? "License valid" 
+                ? `License valid - ${licenseStatus?.tier || 'Basic'} tier` 
                 : checkingLicense 
                   ? "Checking license..." 
-                  : "License invalid or expired"
+                  : "License invalid or expired. Click to manage license."
             }>
               <Chip
                 icon={isLicenseValid 
                   ? <VerifiedIcon fontSize="small" /> 
                   : <ErrorOutlineIcon fontSize="small" />
                 }
-                label={isLicenseValid ? "Licensed" : "Unlicensed"}
+                label={isLicenseValid 
+                  ? `${licenseStatus?.tier ? licenseStatus.tier.charAt(0).toUpperCase() + licenseStatus.tier.slice(1) : 'Licensed'}` 
+                  : "Unlicensed"
+                }
                 color={isLicenseValid ? "success" : "error"}
                 size="small"
                 sx={{ mr: 2 }}
-                onClick={() => !isLicenseValid && window.location.pathname !== '/license' && (window.location.href = '/license')}
-                clickable={!isLicenseValid}
+                onClick={() => window.location.pathname !== '/license' && (window.location.href = '/license')}
+                clickable
               />
             </Tooltip>
             

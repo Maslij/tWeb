@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Container,
   Typography,
@@ -38,7 +38,7 @@ import TimelineIcon from '@mui/icons-material/Timeline';
 import SaveIcon from '@mui/icons-material/Save';
 import StorageIcon from '@mui/icons-material/Storage';
 
-import apiService, { Camera, Component, Task } from '../services/api';
+import apiService, { Camera, Component, Task, LicenseStatus } from '../services/api';
 
 // Define additional interfaces to match the API structure for components
 interface CameraComponents {
@@ -147,16 +147,59 @@ const ComponentChips = ({ components }: { components: CameraComponents }) => {
 };
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cameraComponents, setCameraComponents] = useState<Record<string, CameraComponents>>({});
+  
+  // Add state for license status
+  const [licenseStatus, setLicenseStatus] = useState<LicenseStatus | null>(null);
+  const [isLicenseChecked, setIsLicenseChecked] = useState(false);
   
   // Add state for camera deletion
   const [deletingCameraId, setDeletingCameraId] = useState<string | null>(null);
   const [deleteProgress, setDeleteProgress] = useState(0);
   const [deleteStatus, setDeleteStatus] = useState('');
   const [showDeletionDialog, setShowDeletionDialog] = useState(false);
+
+  // Check license first
+  useEffect(() => {
+    const checkLicense = async () => {
+      try {
+        const status = await apiService.license.getStatus();
+        setLicenseStatus(status);
+        
+        // If license is invalid, redirect to license page
+        if (!status?.valid) {
+          console.warn('No valid license found. Redirecting to license page.');
+          navigate('/license');
+          return;
+        }
+      } catch (err: any) {
+        console.error('Error checking license:', err);
+        
+        // If we get a 401 Unauthorized, redirect to license page
+        if (err.response && err.response.status === 401) {
+          navigate('/license');
+          return;
+        }
+        
+        setError('Failed to verify license status. Some features may be restricted.');
+      } finally {
+        setIsLicenseChecked(true);
+      }
+    };
+    
+    checkLicense();
+  }, [navigate]);
+
+  // Only fetch cameras if license is checked and valid
+  useEffect(() => {
+    if (isLicenseChecked && licenseStatus?.valid) {
+      fetchCameras();
+    }
+  }, [isLicenseChecked, licenseStatus]);
 
   const fetchCameras = async () => {
     setLoading(true);
@@ -167,32 +210,50 @@ const Dashboard = () => {
       // Fetch components for each camera
       const componentsMap: Record<string, CameraComponents> = {};
       for (const camera of camerasData) {
-        const components = await apiService.components.getAll(camera.id);
-        if (components) {
-          componentsMap[camera.id] = components;
+        try {
+          const components = await apiService.components.getAll(camera.id);
+          if (components) {
+            componentsMap[camera.id] = components;
+          }
+        } catch (err: any) {
+          console.error(`Error fetching components for camera ${camera.id}:`, err);
+          
+          // If the error is license-related (401), redirect to license page
+          if (err.response && err.response.status === 401) {
+            setError('Your license is no longer valid. Redirecting to license page...');
+            setTimeout(() => navigate('/license'), 2000);
+            return;
+          }
         }
       }
       setCameraComponents(componentsMap);
       setError(null);
-    } catch (err) {
-      setError('Failed to load cameras. Please try again later.');
-      console.error('Error fetching cameras:', err);
+    } catch (err: any) {
+      if (err.response && err.response.status === 401) {
+        setError('Your license is no longer valid. Redirecting to license page...');
+        setTimeout(() => navigate('/license'), 2000);
+      } else {
+        setError('Failed to load cameras. Please try again later.');
+        console.error('Error fetching cameras:', err);
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchCameras();
-  }, []);
-
   const handleStartCamera = async (cameraId: string) => {
     try {
       await apiService.cameras.start(cameraId);
       fetchCameras(); // Refresh camera list
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error starting camera:', err);
-      setError('Failed to start camera. Please try again.');
+      
+      if (err.response && err.response.status === 401) {
+        setError('Your license is no longer valid. Redirecting to license page...');
+        setTimeout(() => navigate('/license'), 2000);
+      } else {
+        setError('Failed to start camera. Please try again.');
+      }
     }
   };
 
@@ -200,9 +261,15 @@ const Dashboard = () => {
     try {
       await apiService.cameras.stop(cameraId);
       fetchCameras(); // Refresh camera list
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error stopping camera:', err);
-      setError('Failed to stop camera. Please try again.');
+      
+      if (err.response && err.response.status === 401) {
+        setError('Your license is no longer valid. Redirecting to license page...');
+        setTimeout(() => navigate('/license'), 2000);
+      } else {
+        setError('Failed to stop camera. Please try again.');
+      }
     }
   };
 
@@ -253,14 +320,71 @@ const Dashboard = () => {
           setShowDeletionDialog(false);
           setDeletingCameraId(null);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Error deleting camera:', err);
-        setError('Failed to delete camera. Please try again.');
-        setShowDeletionDialog(false);
-        setDeletingCameraId(null);
+        
+        if (err.response && err.response.status === 401) {
+          setError('Your license is no longer valid. Redirecting to license page...');
+          setTimeout(() => navigate('/license'), 2000);
+          setShowDeletionDialog(false);
+          setDeletingCameraId(null);
+        } else {
+          setError('Failed to delete camera. Please try again.');
+          setShowDeletionDialog(false);
+          setDeletingCameraId(null);
+        }
       }
     }
   };
+
+  // Don't render content until license is checked
+  if (!isLicenseChecked) {
+    return (
+      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+        <Box display="flex" justifyContent="center" alignItems="center" flexDirection="column" my={5}>
+          <CircularProgress sx={{ mb: 2 }} />
+          <Typography>Checking license status...</Typography>
+        </Box>
+      </Container>
+    );
+  }
+
+  // If license is invalid (but we somehow got here), show a message
+  if (isLicenseChecked && (!licenseStatus || !licenseStatus.valid)) {
+    return (
+      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+        <Paper
+          sx={{
+            p: 5,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            bgcolor: 'background.paper',
+            borderRadius: 2,
+          }}
+        >
+          <VpnKeyIcon sx={{ fontSize: 60, color: 'error.main', mb: 2 }} />
+          <Typography variant="h6" sx={{ mb: 1 }}>
+            License Required
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3, textAlign: 'center' }}>
+            A valid license is required to use the Vision Dashboard.
+            Please activate your license to continue.
+          </Typography>
+          <Button
+            component={Link}
+            to="/license"
+            variant="contained"
+            color="primary"
+            startIcon={<VpnKeyIcon />}
+          >
+            Activate License
+          </Button>
+        </Paper>
+      </Container>
+    );
+  }
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>

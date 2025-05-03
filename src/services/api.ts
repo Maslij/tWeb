@@ -6,16 +6,10 @@ const API_URL = '';
 
 // Helper function to ensure response is an array
 const ensureArray = (data: any): any[] => {
-  if (Array.isArray(data)) {
-    return data;
-  } else if (data && typeof data === 'object') {
-    // If it's an object, try to extract array values
-    const possibleArray = Object.values(data);
-    if (possibleArray.length > 0) {
-      return possibleArray;
-    }
+  if (!data) {
+    return [];
   }
-  return []; // Return empty array as fallback
+  return Array.isArray(data) ? data : [data];
 };
 
 // Get the full URL with the actual origin for embedded images
@@ -232,6 +226,10 @@ const apiService = {
         return response.data;
       } catch (error) {
         console.error('Error checking license status:', error);
+        // Throw the error so it can be caught by components to redirect to the license page
+        if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
+          throw error;
+        }
         return null;
       }
     },
@@ -279,6 +277,10 @@ const apiService = {
         return ensureArray(response.data);
       } catch (error) {
         console.error('Error fetching cameras:', error);
+        // Propagate 401 errors
+        if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
+          throw error;
+        }
         return [];
       }
     },
@@ -290,6 +292,10 @@ const apiService = {
         return response.data;
       } catch (error) {
         console.error(`Error fetching camera ${id}:`, error);
+        // Propagate 401 errors
+        if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
+          throw error;
+        }
         return null;
       }
     },
@@ -301,6 +307,10 @@ const apiService = {
         return response.data;
       } catch (error) {
         console.error('Error creating camera:', error);
+        // Propagate 401 errors
+        if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
+          throw error;
+        }
         return null;
       }
     },
@@ -312,6 +322,10 @@ const apiService = {
         return response.data;
       } catch (error) {
         console.error(`Error updating camera ${id}:`, error);
+        // Propagate 401 errors
+        if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
+          throw error;
+        }
         return null;
       }
     },
@@ -333,12 +347,32 @@ const apiService = {
 
     // Start a camera (convenience method)
     start: async (id: string): Promise<Camera | null> => {
-      return apiService.cameras.update(id, { running: true });
+      try {
+        const response = await axios.put(getFullUrl(`/api/v1/cameras/${id}`), { running: true });
+        return response.data;
+      } catch (error) {
+        console.error(`Error starting camera ${id}:`, error);
+        // Propagate 401 errors
+        if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
+          throw error;
+        }
+        return null;
+      }
     },
 
     // Stop a camera (convenience method)
     stop: async (id: string): Promise<Camera | null> => {
-      return apiService.cameras.update(id, { running: false });
+      try {
+        const response = await axios.put(getFullUrl(`/api/v1/cameras/${id}`), { running: false });
+        return response.data;
+      } catch (error) {
+        console.error(`Error stopping camera ${id}:`, error);
+        // Propagate 401 errors
+        if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
+          throw error;
+        }
+        return null;
+      }
     },
 
     // Get the latest frame from a camera
