@@ -150,6 +150,7 @@ interface ZoneLineCount {
   timestamp: number;
   zone_id: string;
   count: number;
+  direction: string;
 }
 
 // Register Chart.js components
@@ -319,27 +320,11 @@ const PipelineBuilder = () => {
   // Define hasLineZoneManagerComponent and lineZoneManagerComponent here to ensure
   // our hooks are called in the same order every render
   const hasLineZoneManagerComponent = processorComponents.some(
-    component => {
-      if (typeof component.type === 'string') {
-        return component.type === 'line_zone_manager';
-      }
-      if (component.type_name) {
-        return component.type_name === 'line_zone_manager';
-      }
-      return false;
-    }
+    component => component.type === 'line_zone_manager'
   );
 
   const lineZoneManagerComponent = processorComponents.find(
-    component => {
-      if (typeof component.type === 'string') {
-        return component.type === 'line_zone_manager';
-      }
-      if (component.type_name) {
-        return component.type_name === 'line_zone_manager';
-      }
-      return false;
-    }
+    component => component.type === 'line_zone_manager'
   );
 
   // Make showSnackbar a useCallback
@@ -409,13 +394,13 @@ const PipelineBuilder = () => {
           
           // Check if a database sink component exists and set state accordingly
           const hasDbSink = (components.sinks || []).some(
-            sink => sink.type === 'database' || sink.type_name === 'database'
+            sink => sink.type === 'database'
           );
           setDbComponentExists(hasDbSink);
           
           // Look for line zone manager component and initialize its zones if found
           const lineZoneManager = components.processors?.find(
-            comp => (comp.type === 'line_zone_manager' || comp.type_name === 'line_zone_manager')
+            comp => comp.type === 'line_zone_manager'
           );
           
           if (lineZoneManager) {
@@ -597,14 +582,14 @@ const PipelineBuilder = () => {
         // Check if a database sink component exists
         const hasDbSink = (components.sinks || []).some(
           sink => {
-            return sink.type === 'database' || sink.type_name === 'database';
+            return sink.type === "database";
           }
         );
         setDbComponentExists(hasDbSink);
         
         // Look for line zone manager component and initialize its zones if found
         const lineZoneManager = components.processors?.find(
-          comp => (comp.type === 'line_zone_manager' || comp.type_name === 'line_zone_manager')
+          comp => comp.type === 'line_zone_manager'
         );
         
         if (lineZoneManager) {
@@ -708,9 +693,6 @@ const PipelineBuilder = () => {
     
     if (typeof component.type === 'string') {
       componentType = component.type;
-    } else if (component.type_name) {
-      componentType = component.type_name.toLowerCase();
-    } else {
       // If type is a number or unknown format, try to determine the type based on inspection
       // of the component properties
       if (component.url && (component.url.startsWith('rtsp://') || component.rtsp_transport)) {
@@ -725,7 +707,7 @@ const PipelineBuilder = () => {
         componentType = 'line_zone_manager';
       } else if (component.path && component.fourcc) {
         componentType = 'file'; // file sink
-      } else if ((component as any).db_path || (component.type_name === 'database')) {
+      } else if ((component as any).db_path ) {
         componentType = 'database'; // database sink
       } else {
         componentType = 'unknown';
@@ -1195,7 +1177,7 @@ const PipelineBuilder = () => {
         success = await apiService.components.source.delete(cameraId);
       } else if (type === 'processor') {
         // Get component type name
-        const componentTypeName = component.type_name || component.type;
+        const componentTypeName = component.type;
         
         // Check if any other components depend on this one
         const dependentComponents = [];
@@ -1206,7 +1188,7 @@ const PipelineBuilder = () => {
             // This component is a dependency for depType
             // Find all components of type depType and mark them for deletion
             const componentsToDelete = processorComponents.filter(proc => {
-              const procType = proc.type_name || proc.type;
+              const procType = proc.type;
               return String(procType) === depType;
             });
             
@@ -1217,7 +1199,7 @@ const PipelineBuilder = () => {
         // If we found dependent components, warn the user and handle cascading deletion
         if (dependentComponents.length > 0) {
           const dependentNames = dependentComponents.map(dep => {
-            const depType = dep.type_name || dep.type;
+            const depType = dep.type;
             return getComponentTypeName(String(depType), 'processor');
           }).join(", ");
           
@@ -1235,7 +1217,7 @@ const PipelineBuilder = () => {
         
         // Handle database sink dependencies based on processor type
         const dbSink = sinkComponents.find(sink => {
-          const sinkType = sink.type_name || sink.type;
+          const sinkType = sink.type;
           return String(sinkType) === 'database';
         });
         
@@ -1441,9 +1423,6 @@ const PipelineBuilder = () => {
           if (typeof p.type === 'string') {
             return p.type === type;
           }
-          if (p.type_name) {
-            return p.type_name === type;
-          }
           return false;
         }
       );
@@ -1457,9 +1436,6 @@ const PipelineBuilder = () => {
         (s: Component) => {
           if (typeof s.type === 'string') {
             return s.type === type;
-          }
-          if (s.type_name) {
-            return s.type_name === type;
           }
           return false;
         }
@@ -1482,7 +1458,7 @@ const PipelineBuilder = () => {
       for (const requiredType of requiredTypes) {
         // Check if any processor matches the required type
         const hasRequiredComponent = processorComponents.some(
-          processor => processor.type === requiredType || processor.type_name === requiredType
+          processor => processor.type === requiredType
         );
         
         if (!hasRequiredComponent) {
@@ -1515,9 +1491,6 @@ const PipelineBuilder = () => {
           if (typeof p.type === 'string') {
             return p.type === type;
           }
-          if (p.type_name) {
-            return p.type_name === type;
-          }
           return false;
         }
       );
@@ -1530,9 +1503,6 @@ const PipelineBuilder = () => {
         (s: Component) => {
           if (typeof s.type === 'string') {
             return s.type === type;
-          }
-          if (s.type_name) {
-            return s.type_name === type;
           }
           return false;
         }
@@ -1550,7 +1520,7 @@ const PipelineBuilder = () => {
     if (dependencies[type]) {
       const requiredTypes = dependencies[type];
       const missingDeps = requiredTypes.filter(reqType => 
-        !processorComponents.some(proc => proc.type === reqType || proc.type_name === reqType)
+        !processorComponents.some(proc => proc.type === reqType)
       );
       
       if (missingDeps.length > 0) {
@@ -1606,9 +1576,6 @@ const PipelineBuilder = () => {
           if (typeof component.type === 'string') {
             return component.type === type;
           }
-          if (component.type_name) {
-            return component.type_name === type;
-          }
           return false;
         })
       );
@@ -1621,9 +1588,6 @@ const PipelineBuilder = () => {
         sinkComponents.some(component => {
           if (typeof component.type === 'string') {
             return component.type === type;
-          }
-          if (component.type_name) {
-            return component.type_name === type;
           }
           return false;
         })
@@ -1796,7 +1760,7 @@ const PipelineBuilder = () => {
       // Check if there are existing sink components that would clash with the template
       const templateSinkTypes = template.components.sinks?.map(sink => sink.type) || [];
       const existingSinks = sinkComponents.filter(sink => {
-        const sinkType = typeof sink.type === 'string' ? sink.type : sink.type_name;
+        const sinkType = sink.type;
         return templateSinkTypes.includes(String(sinkType));
       });
       
@@ -3199,7 +3163,7 @@ const PipelineBuilder = () => {
                         {/* Check if object detection exists in the pipeline */}
                         {(() => {
                           const hasObjectDetection = processorComponents.some(
-                            comp => (comp.type === 'object_detection' || comp.type_name === 'object_detection')
+                            comp => (comp.type === "object_detection")
                           );
                           
                           return (
@@ -3246,7 +3210,7 @@ const PipelineBuilder = () => {
                         {/* Check if object tracking exists in the pipeline */}
                         {(() => {
                           const hasObjectTracking = processorComponents.some(
-                            comp => (comp.type === 'object_tracking' || comp.type_name === 'object_tracking')
+                            comp => (comp.type === "object_tracking")
                           );
                           
                           return (
@@ -3277,7 +3241,7 @@ const PipelineBuilder = () => {
                         {/* Check if line zone manager exists in the pipeline */}
                         {(() => {
                           const hasLineZoneManager = processorComponents.some(
-                            comp => (comp.type === 'line_zone_manager' || comp.type_name === 'line_zone_manager')
+                            comp => (comp.type === "line_zone_manager")
                           );
                           
                           return (
