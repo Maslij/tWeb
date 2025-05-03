@@ -212,7 +212,7 @@ const PipelineBuilder = () => {
     width: 640,
     height: 480,
     fps: 30,
-    use_hw_accel: true,
+    use_hw_accel: false,
     adaptive_timing: true
   });
 
@@ -222,7 +222,7 @@ const PipelineBuilder = () => {
     width: 640,
     height: 480,
     fps: 30,
-    use_hw_accel: true,
+    use_hw_accel: false,
     rtsp_transport: "tcp",
     latency: 200
   });
@@ -748,7 +748,8 @@ const PipelineBuilder = () => {
         width: component.width || configData.width || 640,
         height: component.height || configData.height || 480,
         fps: component.target_fps || component.fps || configData.fps || 30,
-        use_hw_accel: component.hardware_acceleration === "enabled" || configData.use_hw_accel || true,
+        use_hw_accel: component.hardware_acceleration === "enabled" || 
+                      (configData.use_hw_accel !== undefined ? configData.use_hw_accel : false),
         adaptive_timing: component.adaptive_timing === "enabled" || configData.adaptive_timing || true
       });
     } else if (type === 'source' && componentType === 'rtsp') {
@@ -757,7 +758,8 @@ const PipelineBuilder = () => {
         width: component.width || configData.width || 640,
         height: component.height || configData.height || 480,
         fps: component.target_fps || component.fps || configData.fps || 30,
-        use_hw_accel: component.hardware_acceleration === "enabled" || configData.use_hw_accel || true,
+        use_hw_accel: component.hardware_acceleration === "enabled" || 
+                      (configData.use_hw_accel !== undefined ? configData.use_hw_accel : false),
         rtsp_transport: component.rtsp_transport || configData.rtsp_transport || "tcp",
         latency: component.latency || configData.latency || 200
       });
@@ -1681,7 +1683,7 @@ const PipelineBuilder = () => {
           width: 640,
           height: 480,
           fps: 30,
-          use_hw_accel: true,
+          use_hw_accel: false,
           adaptive_timing: true
         });
       } else if (componentType === 'rtsp') {
@@ -1690,7 +1692,7 @@ const PipelineBuilder = () => {
           width: 640,
           height: 480,
           fps: 30,
-          use_hw_accel: true,
+          use_hw_accel: false,
           rtsp_transport: "tcp",
           latency: 200
         });
