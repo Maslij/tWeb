@@ -277,10 +277,6 @@ const apiService = {
         return ensureArray(response.data);
       } catch (error) {
         console.error('Error fetching cameras:', error);
-        // Propagate 401 errors
-        if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
-          throw error;
-        }
         return [];
       }
     },
@@ -292,10 +288,6 @@ const apiService = {
         return response.data;
       } catch (error) {
         console.error(`Error fetching camera ${id}:`, error);
-        // Propagate 401 errors
-        if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
-          throw error;
-        }
         return null;
       }
     },
@@ -307,10 +299,6 @@ const apiService = {
         return response.data;
       } catch (error) {
         console.error('Error creating camera:', error);
-        // Propagate 401 errors
-        if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
-          throw error;
-        }
         return null;
       }
     },
@@ -322,10 +310,6 @@ const apiService = {
         return response.data;
       } catch (error) {
         console.error(`Error updating camera ${id}:`, error);
-        // Propagate 401 errors
-        if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
-          throw error;
-        }
         return null;
       }
     },
@@ -347,32 +331,12 @@ const apiService = {
 
     // Start a camera (convenience method)
     start: async (id: string): Promise<Camera | null> => {
-      try {
-        const response = await axios.put(getFullUrl(`/api/v1/cameras/${id}`), { running: true });
-        return response.data;
-      } catch (error) {
-        console.error(`Error starting camera ${id}:`, error);
-        // Propagate 401 errors
-        if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
-          throw error;
-        }
-        return null;
-      }
+      return apiService.cameras.update(id, { running: true });
     },
 
     // Stop a camera (convenience method)
     stop: async (id: string): Promise<Camera | null> => {
-      try {
-        const response = await axios.put(getFullUrl(`/api/v1/cameras/${id}`), { running: false });
-        return response.data;
-      } catch (error) {
-        console.error(`Error stopping camera ${id}:`, error);
-        // Propagate 401 errors
-        if (axios.isAxiosError(error) && error.response && error.response.status === 401) {
-          throw error;
-        }
-        return null;
-      }
+      return apiService.cameras.update(id, { running: false });
     },
 
     // Get the latest frame from a camera

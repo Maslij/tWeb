@@ -1,7 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useState, useEffect, ReactElement } from 'react';
 import './App.css';
-import Navbar, { notifyLicenseChanged, LICENSE_CHANGE_EVENT } from './components/Navbar';
+import Navbar from './components/Navbar';
 import { ThemeProvider } from './contexts/ThemeContext';
 import Dashboard from './pages/Dashboard';
 import NewCamera from './pages/cameras/NewCamera';
@@ -20,58 +20,22 @@ const ProtectedRoute = ({ children }: { children: ReactElement }) => {
   const [licenseStatus, setLicenseStatus] = useState<LicenseStatus | null>(null);
   const [checkingError, setCheckingError] = useState<string | null>(null);
   
-  // Function to check license status
-  const checkLicense = async () => {
-    console.log('ProtectedRoute: Checking license status');
-    try {
-      const status = await apiService.license.getStatus();
-      console.log('ProtectedRoute: License status:', status);
-      
-      // If license status changed, notify
-      if (!licenseStatus || 
-          (status && licenseStatus && (
-            status.valid !== licenseStatus.valid || 
-            status.tier !== licenseStatus.tier)
-          )) {
-        console.log('ProtectedRoute: License status changed, notifying');
-        setLicenseStatus(status);
-        // If the license status has changed, notify the navbar
-        notifyLicenseChanged();
-      } else {
-        setLicenseStatus(status);
-      }
-    } catch (err: any) {
-      console.error('Error checking license in protected route:', err);
-      setCheckingError(err.response?.status === 401 
-        ? 'License is invalid or expired' 
-        : 'Failed to verify license status');
-      
-      // If we previously had a valid license but now don't, notify
-      if (licenseStatus?.valid) {
-        console.log('ProtectedRoute: License became invalid, notifying');
-        notifyLicenseChanged();
-      }
-    } finally {
-      setLicenseChecked(true);
-    }
-  };
-  
-  // Check license on mount and when LICENSE_CHANGE_EVENT is fired
   useEffect(() => {
-    // Initial check
+    const checkLicense = async () => {
+      try {
+        const status = await apiService.license.getStatus();
+        setLicenseStatus(status);
+      } catch (err: any) {
+        console.error('Error checking license in protected route:', err);
+        setCheckingError(err.response?.status === 401 
+          ? 'License is invalid or expired' 
+          : 'Failed to verify license status');
+      } finally {
+        setLicenseChecked(true);
+      }
+    };
+    
     checkLicense();
-    
-    // Listen for license change events
-    const handleLicenseChange = () => {
-      console.log('ProtectedRoute: License change event received');
-      checkLicense();
-    };
-    
-    window.addEventListener(LICENSE_CHANGE_EVENT, handleLicenseChange);
-    
-    return () => {
-      window.removeEventListener(LICENSE_CHANGE_EVENT, handleLicenseChange);
-    };
   }, []);
   
   if (!licenseChecked) {

@@ -22,15 +22,6 @@ import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import apiService, { LicenseStatus } from '../services/api';
 import { getVersionString } from '../utils/version';
 
-// Export the license change event with a more specific name
-export const LICENSE_CHANGE_EVENT = 'license-status-changed';
-
-// Enhanced notification function that logs for debugging
-export const notifyLicenseChanged = () => {
-  console.log('License change event triggered');
-  window.dispatchEvent(new CustomEvent(LICENSE_CHANGE_EVENT));
-};
-
 // Get version display string
 const VERSION_DISPLAY = getVersionString();
 
@@ -39,71 +30,45 @@ const Navbar = () => {
   const [licenseStatus, setLicenseStatus] = useState<LicenseStatus | null>(null);
   const [isLicenseValid, setIsLicenseValid] = useState<boolean>(false);
   const [checkingLicense, setCheckingLicense] = useState<boolean>(true);
-  // Add reference for the last check time
-  const [lastRefresh, setLastRefresh] = useState<number>(Date.now());
-
-  // Function to check license status
-  const checkLicense = async (force = false) => {
-    // Only proceed if forced or enough time has passed since last check
-    if (!force && Date.now() - lastRefresh < 500) {
-      console.log('Skipping redundant license check');
-      return;
-    }
-    
-    console.log('Checking license status at', new Date().toISOString());
-    setCheckingLicense(true);
-    setLastRefresh(Date.now());
-    
-    try {
-      const status = await apiService.license.getStatus();
-      console.log('License status:', status);
-      setLicenseStatus(status);
-      
-      // Check the actual validity (using the new isValid field)
-      const valid = status?.valid === true;
-      setIsLicenseValid(valid);
-
-      if (!valid && window.location.pathname !== '/license') {
-        // If license is invalid and we're not already on the license page, show a warning
-        console.warn('License is invalid or missing. Access to features may be restricted.');
-      }
-    } catch (err: any) {
-      console.error('Error checking license:', err);
-      setIsLicenseValid(false);
-      
-      // If we get a 401 Unauthorized, it means the license is invalid
-      if (err.response && err.response.status === 401) {
-        // If we're not on the license page, redirect to it
-        if (window.location.pathname !== '/license') {
-          window.location.href = '/license';
-        }
-      }
-    } finally {
-      setCheckingLicense(false);
-    }
-  };
 
   // Check license status on component mount and periodically
   useEffect(() => {
-    // Check initially
-    checkLicense(true);
+    const checkLicense = async () => {
+      setCheckingLicense(true);
+      try {
+        const status = await apiService.license.getStatus();
+        setLicenseStatus(status);
+        
+        // Check the actual validity (using the new isValid field)
+        const valid = status?.valid === true;
+        setIsLicenseValid(valid);
 
-    // Periodically check license status every minute
-    const intervalId = setInterval(() => checkLicense(true), 60 * 1000);
-    
-    // Also check license status whenever the license change event is fired
-    const handleLicenseChange = () => {
-      console.log('License change event received, refreshing status immediately');
-      // Use force=true to ensure it always updates
-      checkLicense(true);
+        if (!valid && window.location.pathname !== '/license') {
+          // If license is invalid and we're not already on the license page, show a warning
+          console.warn('License is invalid or missing. Access to features may be restricted.');
+        }
+      } catch (err: any) {
+        console.error('Error checking license:', err);
+        setIsLicenseValid(false);
+        
+        // If we get a 401 Unauthorized, it means the license is invalid
+        if (err.response && err.response.status === 401) {
+          // If we're not on the license page, redirect to it
+          if (window.location.pathname !== '/license') {
+            window.location.href = '/license';
+          }
+        }
+      } finally {
+        setCheckingLicense(false);
+      }
     };
 
-    window.addEventListener(LICENSE_CHANGE_EVENT, handleLicenseChange);
+    checkLicense();
+
+    // Periodically check license status every minute (reduced from 5 minutes for quicker feedback)
+    const intervalId = setInterval(checkLicense, 60 * 1000);
     
-    return () => {
-      clearInterval(intervalId);
-      window.removeEventListener(LICENSE_CHANGE_EVENT, handleLicenseChange);
-    };
+    return () => clearInterval(intervalId);
   }, []);
 
   const toggleTheme = () => {
