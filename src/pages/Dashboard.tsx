@@ -90,9 +90,6 @@ const getComponentType = (component: Component): string => {
   if (typeof component.type === 'string') {
     return component.type;
   }
-  if (component.type_name) {
-    return component.type_name.toLowerCase();
-  }
   return 'unknown';
 };
 
@@ -171,6 +168,7 @@ const Dashboard = () => {
       const componentsMap: Record<string, CameraComponents> = {};
       for (const camera of camerasData) {
         const components = await apiService.components.getAll(camera.id);
+        console.log(components);
         if (components) {
           componentsMap[camera.id] = components;
         }
