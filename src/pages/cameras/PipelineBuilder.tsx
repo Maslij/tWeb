@@ -38,7 +38,8 @@ import {
   TableHead,
   TableRow,
   TablePagination,
-  Skeleton
+  Skeleton,
+  AlertTitle
 } from '@mui/material';
 
 // Import our custom UI components
@@ -173,12 +174,24 @@ import LineZoneConfigTab from '../../components/pipeline/LineZoneConfigTab';
 import TelemetryTab from '../../components/pipeline/TelemetryTab';
 
 const PipelineBuilder = () => {
+  // After user state declarations, add state for license information
   const { cameraId } = useParams<{ cameraId: string }>();
   const navigate = useNavigate();
   const [camera, setCamera] = useState<Camera | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mainTabValue, setMainTabValue] = useState(0);
+  
+  // License state
+  const [licenseInfo, setLicenseInfo] = useState<{
+    valid: boolean;
+    tier: string;
+    tier_id: number;
+  }>({
+    valid: true,
+    tier: "professional",
+    tier_id: 3
+  });
   
   // Component state
   const [componentTypes, setComponentTypes] = useState<ComponentTypes | null>(null);
@@ -367,6 +380,16 @@ const PipelineBuilder = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
+        // Fetch license information first
+        const licenseData = await apiService.license.getStatus();
+        if (licenseData) {
+          setLicenseInfo({
+            valid: licenseData.valid,
+            tier: licenseData.tier || 'basic',
+            tier_id: licenseData.tier_id || 1
+          });
+        }
+        
         // Fetch camera data
         const cameraData = await apiService.cameras.getById(cameraId);
         if (!cameraData) {
@@ -665,19 +688,35 @@ const PipelineBuilder = () => {
     setSelectedComponent(null);
     setComponentConfig('{}');
     
-    // Find the first available component type
+    // Find the first available component type that's allowed by the license tier
     const availableTypes = componentTypes?.[type === 'source' ? 'sources' : 
                             type === 'processor' ? 'processors' : 'sinks'] || [];
     
-    const firstAvailableType = availableTypes.find(t => canAddComponent(t, type));
+    // Filter types by license tier first, then check if they can be added
+    const licenseAllowedTypes = availableTypes.filter(
+      t => isComponentAllowedForLicenseTier(t, type, licenseInfo.tier_id)
+    );
     
-    if (firstAvailableType) {
+    // Further filter by checking if the component can actually be added
+    const addableTypes = licenseAllowedTypes.filter(t => canAddComponent(t, type));
+    
+    if (addableTypes.length > 0) {
+      // Select the first addable component that's allowed by the license tier
+      const firstAvailableType = addableTypes[0];
       setSelectedComponentType(firstAvailableType);
       initializeFormForComponentType(firstAvailableType);
+    } else if (licenseAllowedTypes.length > 0) {
+      // If there are types allowed by license, but none can be added due to other restrictions
+      setSelectedComponentType(licenseAllowedTypes[0]);
+      showSnackbar(`No ${type} components can be added at this time. Check requirements.`);
     } else {
+      // No components allowed by license tier
       setSelectedComponentType('');
-      // Show a message that no components are available
-      showSnackbar(`No available ${type} components to add`);
+      if (type === 'processor' && licenseInfo.tier_id < 3) {
+        showSnackbar(`Please upgrade your license to add ${type} components`);
+      } else {
+        showSnackbar(`No available ${type} components for your license tier`);
+      }
     }
     
     setOpenDialog(true);
@@ -689,7 +728,7 @@ const PipelineBuilder = () => {
     setSelectedComponent(component);
     
     // Make sure we get the correct component type as a string
-    let componentType: string;
+    let componentType = 'unknown';
     
     if (typeof component.type === 'string') {
       componentType = component.type;
@@ -709,8 +748,6 @@ const PipelineBuilder = () => {
         componentType = 'file'; // file sink
       } else if ((component as any).db_path ) {
         componentType = 'database'; // database sink
-      } else {
-        componentType = 'unknown';
       }
     }
 
@@ -1451,6 +1488,12 @@ const PipelineBuilder = () => {
       return objectDetectionAvailable;
     }
     
+    // Check license tier restrictions
+    const tierRestrictions = isComponentAllowedForLicenseTier(type, category, licenseInfo.tier_id);
+    if (!tierRestrictions) {
+      return false;
+    }
+    
     // If this component type has dependencies, check if they're satisfied
     if (dependencies[type]) {
       const requiredTypes = dependencies[type];
@@ -1468,6 +1511,48 @@ const PipelineBuilder = () => {
     }
     
     return true;
+  };
+
+  // Helper function to check if component is allowed for license tier
+  const isComponentAllowedForLicenseTier = (
+    componentType: string,
+    category: 'source' | 'processor' | 'sink',
+    tierId: number
+  ): boolean => {
+    console.log(`Checking if ${componentType} (${category}) is allowed for tier ${tierId}`);
+    
+    // If license is not valid, treat as BASIC tier (1)
+    const effectiveTier = licenseInfo.valid ? tierId : 1;
+    
+    // Check tier restrictions
+    switch (effectiveTier) {
+      case 1: // BASIC tier
+        // Basic tier: Only source and file sink allowed
+        if (category === 'source') {
+          return true;
+        } else if (category === 'sink') {
+          return componentType === 'file';
+        }
+        return false;
+      
+      case 2: // STANDARD tier
+        // Standard tier: Source, file sink, and object detection allowed
+        if (category === 'source') {
+          return true;
+        } else if (category === 'processor') {
+          return componentType === 'object_detection';
+        } else if (category === 'sink') {
+          return componentType === 'file';
+        }
+        return false;
+      
+      case 3: // PROFESSIONAL tier
+        // Professional tier: All components allowed
+        return true;
+      
+      default:
+        return false;
+    }
   };
 
   // Add function to get reason why component cannot be added
@@ -1515,6 +1600,17 @@ const PipelineBuilder = () => {
     
     if (type === 'object_detection' && !objectDetectionAvailable) {
       return "Object detection model not available";
+    }
+    
+    // Check license tier restrictions
+    if (!isComponentAllowedForLicenseTier(type, category, licenseInfo.tier_id)) {
+      const tierNames = {
+        1: "Basic",
+        2: "Standard",
+        3: "Professional"
+      };
+      const currentTier = tierNames[licenseInfo.tier_id as keyof typeof tierNames] || "Unknown";
+      return `Requires ${tierNames[3]} license tier (Current: ${currentTier})`;
     }
     
     if (dependencies[type]) {
@@ -2263,14 +2359,56 @@ const PipelineBuilder = () => {
             </Box>
           )}
           
+          {/* Add license information box */}
+          <Box sx={{ mt: 1, mb: 2, p: 2, bgcolor: licenseInfo.valid ? 'success.light' : 'warning.light', borderRadius: 1 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              License Information:
+            </Typography>
+            <Typography variant="body2">
+              Current License Tier: <strong>{licenseInfo.tier.charAt(0).toUpperCase() + licenseInfo.tier.slice(1)}</strong>
+            </Typography>
+            <Typography variant="body2" sx={{ mt: 0.5 }}>
+              {licenseInfo.tier_id === 1 && (
+                <>
+                  <strong>Basic tier:</strong> Limited to source components and file sink only.
+                  Upgrade to Standard or Professional tier for access to processing components.
+                </>
+              )}
+              {licenseInfo.tier_id === 2 && (
+                <>
+                  <strong>Standard tier:</strong> Access to source components, object detection, and file sink.
+                  Upgrade to Professional tier for advanced processing like tracking and zone management.
+                </>
+              )}
+              {licenseInfo.tier_id === 3 && (
+                <>
+                  <strong>Professional tier:</strong> Full access to all components and features.
+                </>
+              )}
+            </Typography>
+          </Box>
+          
           {/* Show a message when no components are available */}
-          {selectedComponentType === '' && (
-            <Alert severity="warning" sx={{ mt: 2, mb: 2 }}>
-              No available component types to add. {
-                dialogType === 'source' ? 'A source component already exists.' :
-                dialogType === 'processor' ? 'All processor components have been added or their dependencies are not met.' :
-                'All sink components have been added.'
-              }
+          {(!selectedComponentType || !componentTypes?.[dialogType === 'source' ? 'sources' : 
+                        dialogType === 'processor' ? 'processors' : 'sinks']
+                        .filter(type => isComponentAllowedForLicenseTier(type, dialogType, licenseInfo.tier_id))
+                        .some(t => canAddComponent(t, dialogType))) && (
+            <Alert severity={licenseInfo.tier_id < 3 ? "warning" : "info"} sx={{ mt: 2, mb: 2 }}>
+              {licenseInfo.tier_id < 3 ? (
+                <>
+                  <AlertTitle>License Tier Restriction</AlertTitle>
+                  Your current license tier doesn't include access to {dialogType === 'processor' ? 'these' : 'additional'} components.
+                  Please upgrade your license for access to more features.
+                </>
+              ) : (
+                <>
+                  No available component types to add. {
+                    dialogType === 'source' ? 'A source component already exists.' :
+                    dialogType === 'processor' ? 'All processor components have been added or their dependencies are not met.' :
+                    'All sink components have been added.'
+                  }
+                </>
+              )}
             </Alert>
           )}
           
@@ -2285,39 +2423,71 @@ const PipelineBuilder = () => {
                   onChange={handleTypeChange}
                   label="Component Type"
                 >
-                  {componentTypes && componentTypes[dialogType === 'source' ? 'sources' : 
-                                      dialogType === 'processor' ? 'processors' : 'sinks'].map(type => {
-                    const mapping = dialogType === 'source' 
-                      ? sourceTypeMapping 
-                      : dialogType === 'processor' 
-                        ? processorTypeMapping 
-                        : sinkTypeMapping;
-                    const icon = mapping[type]?.icon;
-                    const isDisabled = !canAddComponent(type, dialogType);
-                    const disabledReason = getDisabledReason(type, dialogType);
-                    
-                    return (
-                      <MenuItem 
-                        key={type} 
-                        value={type} 
-                        disabled={isDisabled}
-                        sx={{ flexDirection: 'column', alignItems: 'flex-start', py: 1 }}
-                      >
-                        <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                          {icon && <Box sx={{ mr: 1, color: 'primary.main' }}>{icon}</Box>}
-                          <Typography variant="body1">{getComponentTypeName(type, dialogType)}</Typography>
-                        </Box>
-                        <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
-                          {getComponentTypeDescription(type, dialogType)}
-                          {isDisabled && disabledReason && (
-                            <Box component="span" sx={{ color: 'error.main', ml: 1 }}>
-                              ({disabledReason})
+                  {componentTypes && 
+                    // Filter to only show components that are allowed for the current license tier
+                    componentTypes[dialogType === 'source' ? 'sources' : 
+                                  dialogType === 'processor' ? 'processors' : 'sinks']
+                      .filter(type => isComponentAllowedForLicenseTier(type, dialogType, licenseInfo.tier_id))
+                      .map(type => {
+                        const mapping = dialogType === 'source' 
+                          ? sourceTypeMapping 
+                          : dialogType === 'processor' 
+                            ? processorTypeMapping 
+                            : sinkTypeMapping;
+                        const icon = mapping[type]?.icon;
+                        // Even after filtering for license tier, there might be other reasons a component can't be added
+                        const isDisabled = !canAddComponent(type, dialogType);
+                        const disabledReason = getDisabledReason(type, dialogType);
+                        
+                        // Check if disabled due to license restrictions
+                        const isLicenseRestricted = disabledReason.includes("license tier");
+                        
+                        return (
+                          <MenuItem 
+                            key={type} 
+                            value={type} 
+                            disabled={isDisabled}
+                            sx={{ 
+                              flexDirection: 'column', 
+                              alignItems: 'flex-start', 
+                              py: 1,
+                              position: 'relative',
+                              ...(isLicenseRestricted && {
+                                '&::after': {
+                                  content: '"UPGRADE"',
+                                  position: 'absolute',
+                                  top: '50%',
+                                  right: '16px',
+                                  transform: 'translateY(-50%)',
+                                  backgroundColor: 'error.main',
+                                  color: 'white',
+                                  padding: '2px 8px',
+                                  borderRadius: '4px',
+                                  fontSize: '0.65rem',
+                                  fontWeight: 'bold'
+                                }
+                              })
+                            }}
+                          >
+                            <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                              {icon && <Box sx={{ mr: 1, color: 'primary.main' }}>{icon}</Box>}
+                              <Typography variant="body1">{getComponentTypeName(type, dialogType)}</Typography>
                             </Box>
-                          )}
-                        </Typography>
-                      </MenuItem>
-                    );
-                  })}
+                            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                              {getComponentTypeDescription(type, dialogType)}
+                              {isDisabled && disabledReason && (
+                                <Box component="span" sx={{ 
+                                  color: isLicenseRestricted ? 'error.main' : 'warning.main', 
+                                  ml: 1,
+                                  fontWeight: isLicenseRestricted ? 'bold' : 'normal'
+                                }}>
+                                  ({disabledReason})
+                                </Box>
+                              )}
+                            </Typography>
+                          </MenuItem>
+                        );
+                      })}
                 </Select>
               </FormControl>
             )}
@@ -2335,7 +2505,7 @@ const PipelineBuilder = () => {
             )}
             
             {/* Only render the appropriate form if component can be added or in edit mode */}
-            {selectedComponentType !== '' && (dialogMode === 'edit' || canAddComponent(selectedComponentType, dialogType)) && (
+            {selectedComponentType && (dialogMode === 'edit' || canAddComponent(selectedComponentType, dialogType)) && (
               <>
                 {/* Source - File type */}
                 {dialogType === 'source' && selectedComponentType === 'file' && (
@@ -3393,54 +3563,110 @@ const PipelineBuilder = () => {
             </Alert>
           )}
           
+          {!licenseInfo.valid && (
+            <Alert severity="error" sx={{ mb: 3 }}>
+              You need a valid license to use templates. Current license status: Invalid
+            </Alert>
+          )}
+          
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-            {pipelineTemplates.map((template) => (
-              <Card 
-                key={template.id}
-                variant="outlined"
-                sx={{ 
-                  cursor: 'pointer',
-                  border: selectedTemplate === template.id ? '2px solid' : '1px solid',
-                  borderColor: selectedTemplate === template.id ? 'primary.main' : 'divider',
-                  bgcolor: selectedTemplate === template.id ? 'action.selected' : 'background.paper'
-                }}
-                onClick={() => selectTemplate(template.id)}
-              >
-                <CardContent sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
-                  <Box sx={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center', 
-                    p: 1.5, 
-                    bgcolor: 'primary.light', 
-                    color: 'primary.contrastText',
-                    borderRadius: 1
-                  }}>
-                    {template.icon}
-                  </Box>
-                  <Box>
-                    <Typography variant="h6" gutterBottom>{template.name}</Typography>
-                    <Typography variant="body2" color="text.secondary">{template.description}</Typography>
-                    
-                    <Typography variant="subtitle2" sx={{ mt: 1.5, mb: 0.5 }}>Includes:</Typography>
-                    <CustomDivider spacing={0.5} />
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                      {template.components.processors.map((processor) => (
-                        <Chip
-                          key={processor.type}
-                          label={getComponentTypeName(processor.type, 'processor')}
-                          size="small"
-                          icon={processorTypeMapping[processor.type]?.icon ? 
-                            <Box sx={{ display: 'flex', alignItems: 'center', ml: 0.5 }}>
-                              {processorTypeMapping[processor.type]?.icon}
-                            </Box> : undefined}
-                        />
-                      ))}
+            {pipelineTemplates.map((template) => {
+              // Check if template is allowed for current license tier
+              const isAllowed = licenseInfo.tier_id >= template.requiredLicenseTier;
+              const disabledReason = !isAllowed 
+                ? `Requires ${template.requiredLicenseTier === 3 ? 'Professional' : 'Standard'} license tier` 
+                : !sourceComponent 
+                  ? "Need source component first" 
+                  : "";
+                
+              return (
+                <Card 
+                  key={template.id}
+                  variant="outlined"
+                  sx={{ 
+                    cursor: isAllowed && sourceComponent ? 'pointer' : 'not-allowed',
+                    border: selectedTemplate === template.id ? '2px solid' : '1px solid',
+                    borderColor: selectedTemplate === template.id ? 'primary.main' : 'divider',
+                    bgcolor: selectedTemplate === template.id ? 'action.selected' : isAllowed ? 'background.paper' : 'action.disabledBackground',
+                    opacity: isAllowed && sourceComponent ? 1 : 0.6,
+                    position: 'relative'
+                  }}
+                  onClick={() => {
+                    if (isAllowed && sourceComponent) {
+                      selectTemplate(template.id);
+                    }
+                  }}
+                >
+                  {!isAllowed && (
+                    <Box
+                      sx={{
+                        position: 'absolute',
+                        top: 10,
+                        right: 10,
+                        bgcolor: 'error.main',
+                        color: 'white',
+                        px: 1,
+                        py: 0.5,
+                        borderRadius: 1,
+                        fontSize: '0.75rem',
+                        fontWeight: 'bold',
+                        zIndex: 1
+                      }}
+                    >
+                      {template.requiredLicenseTier === 3 ? 'PRO' : 'STANDARD'}
                     </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            ))}
+                  )}
+                  
+                  <CardContent sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+                    <Box sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      p: 1.5, 
+                      bgcolor: 'primary.light', 
+                      color: 'primary.contrastText',
+                      borderRadius: 1
+                    }}>
+                      {template.icon}
+                    </Box>
+                    <Box>
+                      <Typography variant="h6" gutterBottom>{template.name}</Typography>
+                      <Typography variant="body2" color="text.secondary">{template.description}</Typography>
+                      
+                      {disabledReason && (
+                        <Typography 
+                          variant="caption" 
+                          sx={{ 
+                            color: 'error.main', 
+                            display: 'block', 
+                            mt: 1,
+                            fontWeight: 'bold'
+                          }}
+                        >
+                          {disabledReason}
+                        </Typography>
+                      )}
+                      
+                      <Typography variant="subtitle2" sx={{ mt: 1.5, mb: 0.5 }}>Includes:</Typography>
+                      <CustomDivider spacing={0.5} />
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                        {template.components.processors.map((processor) => (
+                          <Chip
+                            key={processor.type}
+                            label={getComponentTypeName(processor.type, 'processor')}
+                            size="small"
+                            icon={processorTypeMapping[processor.type]?.icon ? 
+                              <Box sx={{ display: 'flex', alignItems: 'center', ml: 0.5 }}>
+                                {processorTypeMapping[processor.type]?.icon}
+                              </Box> : undefined}
+                          />
+                        ))}
+                      </Box>
+                    </Box>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </Box>
         </DialogContent>
         <DialogActions>
@@ -3450,7 +3676,8 @@ const PipelineBuilder = () => {
             color="primary"
             loading={applyingTemplate}
             icon={<AutoFixHighIcon />}
-            disabled={!selectedTemplate || !sourceComponent}
+            disabled={!selectedTemplate || !sourceComponent || 
+              (selectedTemplate ? (pipelineTemplates.find(t => t.id === selectedTemplate)?.requiredLicenseTier || 0) > licenseInfo.tier_id : false)}
             onClick={applyTemplate}
           >
             Apply Template

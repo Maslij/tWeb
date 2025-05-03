@@ -20,6 +20,7 @@ export interface PipelineTemplate {
   name: string;
   description: string;
   icon: React.ReactNode;
+  requiredLicenseTier: 1 | 2 | 3; // 1=Basic, 2=Standard, 3=Professional
   components: {
     processors: {
       type: string;
@@ -39,6 +40,7 @@ export const pipelineTemplates: PipelineTemplate[] = [
     name: 'Basic Object Detection',
     description: 'Detect common objects in the video stream',
     icon: <VisibilityIcon />,
+    requiredLicenseTier: 2, // Requires Standard tier
     components: {
       processors: [
         {
@@ -61,6 +63,7 @@ export const pipelineTemplates: PipelineTemplate[] = [
     name: 'Person Counting',
     description: 'Count people crossing defined lines/zones',
     icon: <PeopleIcon />,
+    requiredLicenseTier: 3, // Requires Professional tier
     components: {
       processors: [
         {
@@ -133,6 +136,7 @@ export const pipelineTemplates: PipelineTemplate[] = [
     name: 'Traffic Analysis',
     description: 'Track and count vehicles crossing defined lines',
     icon: <DirectionsCarIcon />,
+    requiredLicenseTier: 3, // Requires Professional tier
     components: {
       processors: [
         {
