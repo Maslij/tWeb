@@ -20,9 +20,10 @@ import AddIcon from '@mui/icons-material/Add';
 import VerifiedIcon from '@mui/icons-material/Verified';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import apiService, { LicenseStatus } from '../services/api';
+import { getVersionString } from '../utils/version';
 
-// Get app version from Vite environment or fallback to default
-const APP_VERSION = import.meta.env.VITE_APP_VERSION || '1.0.0';
+// Get version display string
+const VERSION_DISPLAY = getVersionString();
 
 const Navbar = () => {
   const { theme, setTheme } = useTheme();
@@ -117,7 +118,7 @@ const Navbar = () => {
             {/* Version indicator */}
             <Tooltip title="Application Version">
               <Chip 
-                label={`v${APP_VERSION}`} 
+                label={VERSION_DISPLAY} 
                 size="small" 
                 variant="outlined"
                 sx={{ mr: 2, borderColor: 'rgba(255,255,255,0.3)' }}

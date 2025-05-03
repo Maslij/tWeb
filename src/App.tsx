@@ -8,14 +8,16 @@ import NewCamera from './pages/cameras/NewCamera';
 import PipelineBuilder from './pages/cameras/PipelineBuilder';
 import LicenseSetup from './pages/LicenseSetup';
 import apiService from './services/api';
-import { Box, CircularProgress, Typography, CssBaseline, Paper, Card, CardContent, Container } from '@mui/material';
+import { Box, CircularProgress, Typography, CssBaseline, Paper, Card, CardContent, Container, Chip } from '@mui/material';
 import VideocamIcon from '@mui/icons-material/Videocam';
 import LockIcon from '@mui/icons-material/Lock';
+import { getVersionString } from './utils/version';
 
 function App() {
   const [licenseChecked, setLicenseChecked] = useState(false);
   const [hasLicense, setHasLicense] = useState(false);
   const [checkingLicense, setCheckingLicense] = useState(true);
+  const versionString = getVersionString();
 
   useEffect(() => {
     const checkLicense = async () => {
@@ -64,6 +66,12 @@ function App() {
                   <Typography variant="h5" component="h1" fontWeight={600} gutterBottom>
                     Vision Dashboard
                   </Typography>
+                  <Chip 
+                    label={versionString} 
+                    size="small" 
+                    variant="outlined" 
+                    sx={{ mt: 1, borderColor: 'rgba(0,0,0,0.2)' }} 
+                  />
                 </Box>
                 
                 <Box sx={{ position: 'relative', height: 60, my: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
