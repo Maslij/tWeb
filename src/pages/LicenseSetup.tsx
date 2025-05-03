@@ -73,6 +73,16 @@ const SAMPLE_LICENSES = [
   { key: 'PRO-LICENSE-KEY-789', tier: 'Professional' }
 ];
 
+// Define a custom event for license changes that components like Navbar can listen for
+export const LICENSE_CHANGED_EVENT = 'license_status_changed';
+
+// Create a helper function to dispatch the event
+export const notifyLicenseChanged = () => {
+  // Create and dispatch a custom event
+  const event = new CustomEvent(LICENSE_CHANGED_EVENT);
+  document.dispatchEvent(event);
+};
+
 const LicenseSetup = () => {
   const navigate = useNavigate();
   const [licenseKey, setLicenseKey] = useState('');
@@ -137,6 +147,10 @@ const LicenseSetup = () => {
       const result = await apiService.license.setLicense(licenseData);
       if (result && result.valid) {
         setLicenseStatus(result);
+        
+        // Notify that license has changed
+        notifyLicenseChanged();
+        
         setTimeout(() => navigate('/'), 1500);
       } else {
         setError('Invalid license key. Please try again.');
@@ -165,6 +179,9 @@ const LicenseSetup = () => {
       if (result && result.valid) {
         setLicenseStatus(result);
         setShowEditDialog(false);
+        
+        // Notify that license has changed
+        notifyLicenseChanged();
       } else {
         setError('Failed to update license information.');
       }
@@ -188,6 +205,9 @@ const LicenseSetup = () => {
         setLicenseKey('');
         setLicenseOwner('');
         setLicenseEmail('');
+        
+        // Notify that license has changed
+        notifyLicenseChanged();
       } else {
         setError('Failed to delete license.');
       }
