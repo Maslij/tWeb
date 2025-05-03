@@ -194,6 +194,18 @@ export interface ClassHeatmapResponse {
   error?: string;
 }
 
+// Add Task interfaces
+export interface Task {
+  id: string;
+  type: string;
+  target_id: string;
+  state: 'pending' | 'running' | 'completed' | 'failed';
+  progress: number;
+  message: string;
+  created_at: number;
+  updated_at: number;
+}
+
 // API Service
 const apiService = {
   // License related API calls
@@ -270,12 +282,13 @@ const apiService = {
     },
 
     // Delete a camera
-    delete: async (id: string): Promise<{success: boolean, databaseCleaned?: boolean}> => {
+    delete: async (id: string, async: boolean = true): Promise<{success: boolean, databaseCleaned?: boolean, task_id?: string}> => {
       try {
-        const response = await axios.delete(getFullUrl(`/api/v1/cameras/${id}`));
+        const response = await axios.delete(getFullUrl(`/api/v1/cameras/${id}${async ? '?async=true' : ''}`));
         return {
           success: true,
-          databaseCleaned: response.data.database_cleaned
+          databaseCleaned: response.data.database_cleaned,
+          task_id: response.data.task_id
         };
       } catch (error) {
         console.error(`Error deleting camera ${id}:`, error);
@@ -628,6 +641,63 @@ const apiService = {
       
       // Return the URL directly, as it will be used in an <img> tag
       return url;
+    }
+  },
+
+  // Add tasks API
+  tasks: {
+    // Get all tasks
+    getAll: async (): Promise<Task[]> => {
+      try {
+        const response = await axios.get(getFullUrl('/api/v1/tasks'));
+        return response.data.tasks || [];
+      } catch (error) {
+        console.error('Error fetching tasks:', error);
+        return [];
+      }
+    },
+
+    // Get a specific task
+    getById: async (id: string): Promise<Task | null> => {
+      try {
+        const response = await axios.get(getFullUrl(`/api/v1/tasks/${id}`));
+        return response.data;
+      } catch (error) {
+        console.error(`Error fetching task ${id}:`, error);
+        return null;
+      }
+    },
+
+    // Poll a task until it completes or fails
+    pollUntilComplete: async (
+      id: string, 
+      onProgress?: (task: Task) => void, 
+      intervalMs: number = 1000,
+      timeoutMs: number = 300000 // 5 minutes default timeout
+    ): Promise<Task | null> => {
+      const startTime = Date.now();
+      let task: Task | null = null;
+      
+      while (Date.now() - startTime < timeoutMs) {
+        task = await apiService.tasks.getById(id);
+        
+        if (!task) {
+          return null;
+        }
+        
+        if (onProgress) {
+          onProgress(task);
+        }
+        
+        if (task.state === 'completed' || task.state === 'failed') {
+          return task;
+        }
+        
+        // Wait for the specified interval
+        await new Promise(resolve => setTimeout(resolve, intervalMs));
+      }
+      
+      return task; // Return the last known state if timeout occurs
     }
   }
 };

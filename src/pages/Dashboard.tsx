@@ -15,7 +15,12 @@ import {
   Chip,
   Skeleton,
   Tooltip,
-  Stack
+  Stack,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  LinearProgress
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -33,7 +38,7 @@ import TimelineIcon from '@mui/icons-material/Timeline';
 import SaveIcon from '@mui/icons-material/Save';
 import StorageIcon from '@mui/icons-material/Storage';
 
-import apiService, { Camera, Component } from '../services/api';
+import apiService, { Camera, Component, Task } from '../services/api';
 
 // Define additional interfaces to match the API structure for components
 interface CameraComponents {
@@ -149,6 +154,12 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cameraComponents, setCameraComponents] = useState<Record<string, CameraComponents>>({});
+  
+  // Add state for camera deletion
+  const [deletingCameraId, setDeletingCameraId] = useState<string | null>(null);
+  const [deleteProgress, setDeleteProgress] = useState(0);
+  const [deleteStatus, setDeleteStatus] = useState('');
+  const [showDeletionDialog, setShowDeletionDialog] = useState(false);
 
   const fetchCameras = async () => {
     setLoading(true);
@@ -201,15 +212,55 @@ const Dashboard = () => {
   const handleDeleteCamera = async (cameraId: string) => {
     if (window.confirm('Are you sure you want to delete this camera? All stored database records and analytics data for this camera will also be permanently deleted.')) {
       try {
-        const result = await apiService.cameras.delete(cameraId);
-        if (result.success) {
-          fetchCameras(); // Refresh camera list
+        // Set the camera as being deleted
+        setDeletingCameraId(cameraId);
+        setDeleteProgress(0);
+        setDeleteStatus('Starting deletion process...');
+        setShowDeletionDialog(true);
+        
+        // Call API with async deletion
+        const result = await apiService.cameras.delete(cameraId, true);
+        
+        if (result.success && result.task_id) {
+          // Poll the task until completion
+          apiService.tasks.pollUntilComplete(
+            result.task_id,
+            (task: Task) => {
+              setDeleteProgress(task.progress);
+              setDeleteStatus(task.message);
+              
+              // If task completed or failed, refresh camera list
+              if (task.state === 'completed' || task.state === 'failed') {
+                if (task.state === 'completed') {
+                  // Allow the user to see the success message for a moment
+                  setTimeout(() => {
+                    setShowDeletionDialog(false);
+                    setDeletingCameraId(null);
+                    fetchCameras(); // Refresh camera list
+                  }, 1000);
+                } else {
+                  setError(`Failed to delete camera: ${task.message}`);
+                  setShowDeletionDialog(false);
+                  setDeletingCameraId(null);
+                }
+              }
+            }
+          );
         } else {
-          setError('Failed to delete camera. Please try again.');
+          // Handle synchronous deletion response or failure
+          if (result.success) {
+            fetchCameras(); // Refresh camera list
+          } else {
+            setError('Failed to delete camera. Please try again.');
+          }
+          setShowDeletionDialog(false);
+          setDeletingCameraId(null);
         }
       } catch (err) {
         console.error('Error deleting camera:', err);
         setError('Failed to delete camera. Please try again.');
+        setShowDeletionDialog(false);
+        setDeletingCameraId(null);
       }
     }
   };
@@ -312,12 +363,21 @@ const Dashboard = () => {
                   <Typography variant="h6" component="h2">
                     {camera.name || `Camera ${camera.id.substring(0, 6)}`}
                   </Typography>
-                  <Chip
-                    icon={camera.running ? <VideocamIcon /> : <VideocamOffIcon />}
-                    label={camera.running ? "Running" : "Stopped"}
-                    color={camera.running ? "success" : "default"}
-                    size="small"
-                  />
+                  {deletingCameraId === camera.id ? (
+                    <Chip
+                      icon={<CircularProgress size={16} />}
+                      label="Deleting..."
+                      color="warning"
+                      size="small"
+                    />
+                  ) : (
+                    <Chip
+                      icon={camera.running ? <VideocamIcon /> : <VideocamOffIcon />}
+                      label={camera.running ? "Running" : "Stopped"}
+                      color={camera.running ? "success" : "default"}
+                      size="small"
+                    />
+                  )}
                 </Box>
                 {cameraComponents[camera.id] ? (
                   <ComponentChips components={cameraComponents[camera.id]} />
@@ -334,6 +394,7 @@ const Dashboard = () => {
                     color="error"
                     startIcon={<StopIcon />}
                     onClick={() => handleStopCamera(camera.id)}
+                    disabled={!!deletingCameraId}
                   >
                     Stop
                   </Button>
@@ -343,6 +404,7 @@ const Dashboard = () => {
                     color="success"
                     startIcon={<PlayArrowIcon />}
                     onClick={() => handleStartCamera(camera.id)}
+                    disabled={!!deletingCameraId}
                   >
                     Start
                   </Button>
@@ -352,6 +414,7 @@ const Dashboard = () => {
                   to={`/cameras/${camera.id}/pipeline`}
                   size="small"
                   startIcon={<SettingsIcon />}
+                  disabled={!!deletingCameraId}
                 >
                   Configure
                 </Button>
@@ -360,14 +423,40 @@ const Dashboard = () => {
                   size="small"
                   color="error"
                   onClick={() => handleDeleteCamera(camera.id)}
+                  disabled={!!deletingCameraId}
                 >
-                  <DeleteIcon fontSize="small" />
+                  {deletingCameraId === camera.id ? (
+                    <CircularProgress size={16} color="inherit" />
+                  ) : (
+                    <DeleteIcon fontSize="small" />
+                  )}
                 </Button>
               </CardActions>
             </Card>
           ))}
         </Box>
       )}
+
+      {/* Camera deletion dialog */}
+      <Dialog open={showDeletionDialog} onClose={() => {}} maxWidth="sm" fullWidth>
+        <DialogTitle>Deleting Camera</DialogTitle>
+        <DialogContent>
+          <Box sx={{ width: '100%', mt: 2 }}>
+            <Typography variant="body1" gutterBottom>
+              {deleteStatus}
+            </Typography>
+            <LinearProgress variant="determinate" value={deleteProgress} sx={{ my: 2 }} />
+            <Typography variant="body2" color="text.secondary" align="right">
+              {Math.round(deleteProgress)}%
+            </Typography>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Typography variant="caption" color="text.secondary">
+            Please wait while the camera is being deleted...
+          </Typography>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Paper,
   Divider,
   Alert,
-  Box
+  Box,
+  Switch,
+  FormControlLabel
 } from '@mui/material';
 import Typography from '../../components/ui/Typography';
 import Button from '../../components/ui/Button';
@@ -34,6 +36,71 @@ const LivePlaybackTab: React.FC<LivePlaybackTabProps> = ({
   isStartingPipeline,
   sourceComponent
 }) => {
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const refreshIntervalRef = useRef<number | null>(null);
+  const REFRESH_INTERVAL = 2000; // 2 seconds between refreshes
+
+  // Handle tab visibility changes
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Tab is not visible, clear the refresh interval
+        if (refreshIntervalRef.current !== null) {
+          clearInterval(refreshIntervalRef.current);
+          refreshIntervalRef.current = null;
+        }
+      } else if (autoRefresh && camera?.running) {
+        // Tab is visible again and auto-refresh is on, restart interval
+        startRefreshInterval();
+      }
+    };
+
+    // Listen for visibility changes
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      // Clean up interval on component unmount
+      if (refreshIntervalRef.current !== null) {
+        clearInterval(refreshIntervalRef.current);
+      }
+    };
+  }, [autoRefresh, camera?.running]);
+
+  // Start/stop refresh interval when autoRefresh or camera.running changes
+  useEffect(() => {
+    if (autoRefresh && camera?.running && !document.hidden) {
+      startRefreshInterval();
+    } else {
+      if (refreshIntervalRef.current !== null) {
+        clearInterval(refreshIntervalRef.current);
+        refreshIntervalRef.current = null;
+      }
+    }
+
+    return () => {
+      if (refreshIntervalRef.current !== null) {
+        clearInterval(refreshIntervalRef.current);
+      }
+    };
+  }, [autoRefresh, camera?.running]);
+
+  const startRefreshInterval = () => {
+    // Clear any existing interval first
+    if (refreshIntervalRef.current !== null) {
+      clearInterval(refreshIntervalRef.current);
+    }
+    
+    // Set up new interval
+    refreshIntervalRef.current = window.setInterval(() => {
+      refreshFrame();
+    }, REFRESH_INTERVAL);
+  };
+
+  const toggleAutoRefresh = () => {
+    setAutoRefresh(prev => !prev);
+  };
+
   return (
     <Paper elevation={2} sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
@@ -44,23 +111,43 @@ const LivePlaybackTab: React.FC<LivePlaybackTabProps> = ({
             {!camera?.running && pipelineHasRunOnce && " (Last Frame)"}
           </Typography>
         </Box>
-        {(camera?.running || pipelineHasRunOnce) && (
-          <Button 
-            variant="contained" 
-            onClick={refreshFrame}
-            icon={<RedoIcon />}
-            disabled={!camera?.running}
-          >
-            Refresh Frame
-          </Button>
-        )}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          {camera?.running && (
+            <FormControlLabel
+              control={
+                <Switch 
+                  checked={autoRefresh}
+                  onChange={toggleAutoRefresh}
+                  color="primary"
+                />
+              }
+              label="Auto refresh"
+            />
+          )}
+          {(camera?.running || pipelineHasRunOnce) && (
+            <Button 
+              variant="contained" 
+              onClick={refreshFrame}
+              icon={<RedoIcon />}
+              disabled={!camera?.running}
+            >
+              Refresh Frame
+            </Button>
+          )}
+        </Box>
       </Box>
       
       <Divider sx={{ mb: 2 }} />
       
-      {camera?.running && (
+      {camera?.running && !autoRefresh && (
         <Alert severity="info" sx={{ mb: 2 }}>
           Automatic refreshing has been disabled. Click the "Refresh Frame" button to manually update the view.
+        </Alert>
+      )}
+      
+      {camera?.running && autoRefresh && (
+        <Alert severity="success" sx={{ mb: 2 }}>
+          Auto-refreshing is enabled. The frame will update every 2 seconds while this tab is visible.
         </Alert>
       )}
       
