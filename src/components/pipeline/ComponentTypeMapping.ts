@@ -44,6 +44,11 @@ export const processorTypeMapping: ComponentTypeMapping = {
     name: "Line Crossing Detection",
     description: "Count objects crossing defined line zones",
     icon: React.createElement(MemoryIcon)
+  },
+  "object_classification": {
+    name: "Image Classification",
+    description: "Classify the entire scene with image recognition",
+    icon: React.createElement(MemoryIcon)
   }
 };
 
