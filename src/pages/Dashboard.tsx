@@ -37,6 +37,8 @@ import FilterCenterFocusIcon from '@mui/icons-material/FilterCenterFocus';
 import TimelineIcon from '@mui/icons-material/Timeline';
 import SaveIcon from '@mui/icons-material/Save';
 import StorageIcon from '@mui/icons-material/Storage';
+import LockIcon from '@mui/icons-material/Lock';
+import InfoIcon from '@mui/icons-material/Info';
 
 import apiService, { Camera, Component, Task, LicenseStatus } from '../services/api';
 
@@ -163,6 +165,9 @@ const Dashboard = () => {
   const [deleteStatus, setDeleteStatus] = useState('');
   const [showDeletionDialog, setShowDeletionDialog] = useState(false);
 
+  // Track cameras with unlicensed components
+  const [unlicensedCameras, setUnlicensedCameras] = useState<Record<string, boolean>>({});
+  
   // Check license first
   useEffect(() => {
     const checkLicense = async () => {
@@ -201,6 +206,61 @@ const Dashboard = () => {
     }
   }, [isLicenseChecked, licenseStatus]);
 
+  // Function to check if all components of a camera are covered by the license
+  const checkCameraComponentLicenseCoverage = (cameraId: string, components: CameraComponents): boolean => {
+    if (!licenseStatus || !licenseStatus.tier_id) {
+      return false; // If we don't have license info, mark as unlicensed
+    }
+    
+    const currentTier = licenseStatus.tier_id;
+    
+    // Check source component
+    if (components.source) {
+      const sourceType = getComponentType(components.source);
+      // Basic licensing logic based on component permissions
+      // For simplicity, we'll assume some components need higher tiers
+      if (sourceType === 'usb' || sourceType === 'http') {
+        if (currentTier < 3) { // These require Professional tier
+          return false;
+        }
+      }
+    }
+    
+    // Check processor components
+    for (const processor of components.processors) {
+      const processorType = getComponentType(processor);
+      
+      // More advanced processors require higher tiers
+      if (processorType === 'object_detection') {
+        if (currentTier < 2) { // Requires at least Standard tier
+          return false;
+        }
+      } else if (processorType === 'object_tracking' || 
+                 processorType === 'line_zone_manager' || 
+                 processorType === 'face_recognition') {
+        if (currentTier < 3) { // Requires Professional tier
+          return false;
+        }
+      }
+    }
+    
+    // Check sink components
+    for (const sink of components.sinks) {
+      const sinkType = getComponentType(sink);
+      
+      if (sinkType === 'database' || 
+          sinkType === 'rtmp' || 
+          sinkType === 'websocket' || 
+          sinkType === 'mqtt') {
+        if (currentTier < 3) { // These require Professional tier
+          return false;
+        }
+      }
+    }
+    
+    return true; // All components are covered by the license
+  };
+
   const fetchCameras = async () => {
     setLoading(true);
     try {
@@ -209,11 +269,17 @@ const Dashboard = () => {
       
       // Fetch components for each camera
       const componentsMap: Record<string, CameraComponents> = {};
+      const unlicensedMap: Record<string, boolean> = {};
+      
       for (const camera of camerasData) {
         try {
           const components = await apiService.components.getAll(camera.id);
           if (components) {
             componentsMap[camera.id] = components;
+            
+            // Check if camera has components not covered by license
+            const isFullyLicensed = checkCameraComponentLicenseCoverage(camera.id, components);
+            unlicensedMap[camera.id] = !isFullyLicensed;
           }
         } catch (err: any) {
           console.error(`Error fetching components for camera ${camera.id}:`, err);
@@ -227,6 +293,7 @@ const Dashboard = () => {
         }
       }
       setCameraComponents(componentsMap);
+      setUnlicensedCameras(unlicensedMap);
       setError(null);
     } catch (err: any) {
       if (err.response && err.response.status === 401) {
@@ -457,9 +524,33 @@ const Dashboard = () => {
         </Paper>
       ) : (
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' }, gap: 3 }}>
-          {cameras.map((camera) => (
-            <Card key={camera.id} sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-              {camera.running ? (
+          {cameras.map((camera) => {
+            const isUnlicensed = unlicensedCameras[camera.id] || false;
+            return (
+            <Card key={camera.id} sx={{ 
+              height: '100%', 
+              display: 'flex', 
+              flexDirection: 'column',
+              position: 'relative',
+              ...(isUnlicensed && { 
+                border: '1px solid', 
+                borderColor: 'warning.light',
+                boxShadow: theme => `0 0 8px ${theme.palette.warning.light}`
+              })
+            }}>
+              {isUnlicensed && (
+                <Box position="absolute" top={8} right={8} zIndex={2}>
+                  <Tooltip title="This camera uses features not included in your current license tier. Please upgrade your license to use this camera.">
+                    <Chip
+                      icon={<LockIcon />}
+                      label="License Required"
+                      color="warning"
+                      size="small"
+                    />
+                  </Tooltip>
+                </Box>
+              )}
+              {camera.running && !isUnlicensed ? (
                 <CardMedia
                   component="img"
                   height="200"
@@ -474,9 +565,19 @@ const Dashboard = () => {
                   display="flex"
                   alignItems="center"
                   justifyContent="center"
+                  flexDirection="column"
                   bgcolor="action.disabledBackground"
                 >
-                  <VideocamOffIcon sx={{ fontSize: 60, color: 'text.secondary' }} />
+                  {isUnlicensed ? (
+                    <>
+                      <LockIcon sx={{ fontSize: 60, color: 'warning.main' }} />
+                      <Typography variant="caption" color="warning.main" sx={{ mt: 1 }}>
+                        License Upgrade Required
+                      </Typography>
+                    </>
+                  ) : (
+                    <VideocamOffIcon sx={{ fontSize: 60, color: 'text.secondary' }} />
+                  )}
                 </Box>
               )}
               <CardContent sx={{ flexGrow: 1 }}>
@@ -507,6 +608,11 @@ const Dashboard = () => {
                     No components configured
                   </Typography>
                 )}
+                {isUnlicensed && (
+                  <Alert severity="warning" sx={{ mt: 2, fontSize: '0.75rem' }} icon={<InfoIcon fontSize="small" />}>
+                    This camera contains components that require a higher license tier.
+                  </Alert>
+                )}
               </CardContent>
               <CardActions sx={{ padding: 2, pt: 0 }}>
                 {camera.running ? (
@@ -515,7 +621,7 @@ const Dashboard = () => {
                     color="error"
                     startIcon={<StopIcon />}
                     onClick={() => handleStopCamera(camera.id)}
-                    disabled={!!deletingCameraId}
+                    disabled={!!deletingCameraId || isUnlicensed}
                   >
                     Stop
                   </Button>
@@ -525,20 +631,32 @@ const Dashboard = () => {
                     color="success"
                     startIcon={<PlayArrowIcon />}
                     onClick={() => handleStartCamera(camera.id)}
-                    disabled={!!deletingCameraId}
+                    disabled={!!deletingCameraId || isUnlicensed}
                   >
                     Start
                   </Button>
                 )}
-                <Button
-                  component={Link}
-                  to={`/cameras/${camera.id}/pipeline`}
-                  size="small"
-                  startIcon={<SettingsIcon />}
-                  disabled={!!deletingCameraId}
-                >
-                  Configure
-                </Button>
+                {isUnlicensed ? (
+                  <Button
+                    component={Link}
+                    to="/license"
+                    size="small"
+                    color="warning"
+                    startIcon={<VpnKeyIcon />}
+                  >
+                    Upgrade
+                  </Button>
+                ) : (
+                  <Button
+                    component={Link}
+                    to={`/cameras/${camera.id}/pipeline`}
+                    size="small"
+                    startIcon={<SettingsIcon />}
+                    disabled={!!deletingCameraId}
+                  >
+                    Configure
+                  </Button>
+                )}
                 <Box flexGrow={1} />
                 <Button
                   size="small"
@@ -554,7 +672,7 @@ const Dashboard = () => {
                 </Button>
               </CardActions>
             </Card>
-          ))}
+          )})}
         </Box>
       )}
 
