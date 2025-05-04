@@ -2,6 +2,7 @@ import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import ThemeToggleIcon from './ThemeToggleIcon';
+import LicenseBadge from './LicenseBadge';
 import {
   AppBar,
   Box,
@@ -19,6 +20,10 @@ import VideocamIcon from '@mui/icons-material/Videocam';
 import AddIcon from '@mui/icons-material/Add';
 import VerifiedIcon from '@mui/icons-material/Verified';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import StarIcon from '@mui/icons-material/Star';
+import DiamondIcon from '@mui/icons-material/Diamond';
+import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium';
+import LockIcon from '@mui/icons-material/Lock';
 import apiService, { LicenseStatus } from '../services/api';
 import { getVersionString } from '../utils/version';
 import { LICENSE_CHANGED_EVENT } from '../pages/LicenseSetup';
@@ -142,13 +147,65 @@ const Navbar = () => {
     }
   };
 
-  // Helper function to get tier display text
-  const getTierDisplay = () => {
-    if (!licenseStatus?.tier) return 'Licensed';
+  // Helper function to get tier display text and associated properties
+  const getTierInfo = () => {
+    if (!licenseStatus?.tier || !isLicenseValid) {
+      return {
+        label: 'Unlicensed',
+        icon: <LockIcon fontSize="small" />,
+        color: 'default',
+        backgroundColor: '#6e6e6e',
+        textColor: '#ffffff'
+      };
+    }
     
-    // Capitalize first letter of tier
-    const tier = licenseStatus.tier.charAt(0).toUpperCase() + licenseStatus.tier.slice(1);
-    return tier;
+    const tier = licenseStatus.tier.toLowerCase();
+    
+    switch(tier) {
+      case 'basic':
+        return {
+          label: 'Basic',
+          icon: <VerifiedIcon fontSize="small" />,
+          color: 'primary',
+          backgroundColor: '#2196f3',
+          textColor: '#ffffff'
+        };
+      case 'professional':
+      case 'pro':
+        return {
+          label: 'Pro',
+          icon: <WorkspacePremiumIcon fontSize="small" />,
+          color: 'secondary',
+          backgroundColor: '#673ab7',
+          textColor: '#ffffff'
+        };
+      case 'business':
+        return {
+          label: 'Business',
+          icon: <StarIcon fontSize="small" />,
+          color: 'success',
+          backgroundColor: '#388e3c',
+          textColor: '#ffffff'
+        };
+      case 'enterprise':
+        return {
+          label: 'Enterprise',
+          icon: <DiamondIcon fontSize="small" />,
+          color: 'warning',
+          backgroundColor: '#ff9800',
+          textColor: '#ffffff'
+        };
+      default:
+        // Capitalize first letter of tier
+        const displayTier = tier.charAt(0).toUpperCase() + tier.slice(1);
+        return {
+          label: displayTier,
+          icon: <VerifiedIcon fontSize="small" />,
+          color: 'success',
+          backgroundColor: '#4caf50',
+          textColor: '#ffffff'
+        };
+    }
   };
 
   return (
@@ -213,29 +270,19 @@ const Navbar = () => {
             </Tooltip>
             
             {/* License status indicator */}
-            <Tooltip title={
-              isLicenseValid 
-                ? `License valid - ${licenseStatus?.tier || 'Basic'} tier` 
-                : checkingLicense 
-                  ? "Checking license..." 
-                  : "License invalid or expired. Click to manage license."
-            }>
-              <Chip
-                icon={isLicenseValid 
-                  ? <VerifiedIcon fontSize="small" /> 
-                  : <ErrorOutlineIcon fontSize="small" />
-                }
-                label={isLicenseValid 
-                  ? getTierDisplay()
-                  : "Unlicensed"
-                }
-                color={isLicenseValid ? "success" : "error"}
-                size="small"
-                sx={{ mr: 2 }}
-                onClick={() => window.location.pathname !== '/license' && (window.location.href = '/license')}
-                clickable
-              />
-            </Tooltip>
+            <LicenseBadge
+              tier={licenseStatus?.tier || 'none'}
+              isValid={isLicenseValid}
+              tooltipText={
+                isLicenseValid 
+                  ? `License valid - ${licenseStatus?.tier || 'Basic'} tier` 
+                  : checkingLicense 
+                    ? "Checking license..." 
+                    : "License invalid or expired. Click to manage license."
+              }
+              onClick={() => window.location.pathname !== '/license' && (window.location.href = '/license')}
+              style={{ marginRight: '16px' }}
+            />
             
             <Tooltip title="Add new camera">
               <Button

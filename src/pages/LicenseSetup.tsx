@@ -35,6 +35,7 @@ import VerifiedIcon from '@mui/icons-material/Verified';
 import WarningIcon from '@mui/icons-material/Warning';
 
 import apiService, { LicenseStatus, LicenseUpdate } from '../services/api';
+import LicenseBadge from '../components/LicenseBadge';
 
 // Define tier information interface
 interface TierInfo {
@@ -68,9 +69,9 @@ const LICENSE_TIERS: Record<string, TierInfo> = {
 
 // Sample license keys for demonstration
 const SAMPLE_LICENSES = [
-  { key: 'BASIC-LICENSE-KEY-123', tier: 'Basic' },
-  { key: 'STANDARD-LICENSE-KEY-456', tier: 'Standard' },
-  { key: 'PRO-LICENSE-KEY-789', tier: 'Professional' }
+  { key: 'BASIC-LICENSE-KEY-123', tier: 'basic' },
+  { key: 'STANDARD-LICENSE-KEY-456', tier: 'standard' },
+  { key: 'PRO-LICENSE-KEY-789', tier: 'professional' }
 ];
 
 // Define a custom event for license changes that components like Navbar can listen for
@@ -253,14 +254,11 @@ const LicenseSetup = () => {
             <Typography variant="h4" component="h1" gutterBottom>
               License Active
             </Typography>
-            <Chip 
-              label={tierInfo.name} 
-              color={
-                licenseStatus.tier === 'professional' ? 'success' :
-                licenseStatus.tier === 'standard' ? 'primary' :
-                'default'
-              }
-              sx={{ mt: 1 }}
+            <LicenseBadge 
+              tier={licenseStatus.tier || 'none'} 
+              isValid={true}
+              size="medium"
+              style={{ marginTop: '8px' }}
             />
           </Box>
 
@@ -532,19 +530,14 @@ const LicenseSetup = () => {
                 {SAMPLE_LICENSES.map((license) => (
                   <TableRow key={license.key}>
                     <TableCell>
-                      <Chip 
-                        label={license.tier} 
-                        size="small" 
-                        color={
-                          license.tier === 'Professional' ? 'success' :
-                          license.tier === 'Standard' ? 'primary' :
-                          'default'
-                        }
+                      <LicenseBadge 
+                        tier={license.tier} 
+                        isValid={true}
                       />
                     </TableCell>
                     <TableCell>{license.key}</TableCell>
                     <TableCell>
-                      {LICENSE_TIERS[license.tier.toLowerCase()]?.description}
+                      {LICENSE_TIERS[license.tier]?.description}
                     </TableCell>
                     <TableCell>
                       <Button 
