@@ -72,6 +72,19 @@ export interface ComponentTypes {
   sources: string[];
   processors: string[];
   sinks: string[];
+  
+  // License tier information
+  current_tier?: number;
+  current_tier_name?: string;
+  
+  // Permissions information by component category and type
+  permissions?: {
+    source: Record<string, boolean>;
+    processor: Record<string, boolean>;
+    sink: Record<string, boolean>;
+  };
+  
+  // Dependencies between components
   dependencies?: {
     [key: string]: string[];
   };

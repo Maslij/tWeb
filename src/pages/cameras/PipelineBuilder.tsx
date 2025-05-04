@@ -31,13 +31,6 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TablePagination,
   Skeleton,
   AlertTitle
 } from '@mui/material';
@@ -136,6 +129,11 @@ interface ComponentTypes {
   sinks: string[];
   dependencies: ComponentDependencyMap;
   dependency_rules: string[];
+  permissions?: {
+    [category: string]: {
+      [componentType: string]: boolean;
+    };
+  };
 }
 
 // Add model interfaces
@@ -1521,6 +1519,15 @@ const PipelineBuilder = () => {
   ): boolean => {
     console.log(`Checking if ${componentType} (${category}) is allowed for tier ${tierId}`);
     
+    // If we have permission information from the API, use it (preferred method)
+    if (componentTypes?.permissions) {
+      const permissionMap = componentTypes.permissions[category];
+      if (permissionMap && permissionMap[componentType] !== undefined) {
+        return permissionMap[componentType];
+      }
+    }
+    
+    // Fallback to the hardcoded tier logic if API permissions not available
     // If license is not valid, treat as BASIC tier (1)
     const effectiveTier = licenseInfo.valid ? tierId : 1;
     
