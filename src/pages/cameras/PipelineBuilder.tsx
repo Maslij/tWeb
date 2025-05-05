@@ -32,7 +32,8 @@ import {
   AccordionSummary,
   AccordionDetails,
   Skeleton,
-  AlertTitle
+  AlertTitle,
+  InputAdornment
 } from '@mui/material';
 
 // Import our custom UI components
@@ -109,6 +110,9 @@ import TuneIcon from '@mui/icons-material/Tune';
 import DatabaseIcon from '@mui/icons-material/Storage';
 import LiveTvIcon from '@mui/icons-material/LiveTv';
 import WarningIcon from '@mui/icons-material/Warning';
+import EditIcon from '@mui/icons-material/Edit';
+import CheckIcon from '@mui/icons-material/Check';
+import CancelIcon from '@mui/icons-material/Cancel';
 
 import apiService, { 
   Camera, 
@@ -394,6 +398,11 @@ const PipelineBuilder = () => {
   // Add the state variables at the top of the component
   const [hasZoneLineData, setHasZoneLineData] = useState<boolean>(true);
   const [hasHeatmapData, setHasHeatmapData] = useState<boolean>(true);
+
+  // Add state variables for editing the camera name
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editedName, setEditedName] = useState('');
+  const [isSavingName, setIsSavingName] = useState(false);
 
   // Fetch data on mount
   useEffect(() => {
@@ -2205,6 +2214,52 @@ const PipelineBuilder = () => {
   }, [mainTabValue, sourceComponent, hasLineZoneManagerComponent, dbComponentExists, 
       fetchDatabaseRecords, fetchZoneLineCounts, fetchClassHeatmapData]);
 
+  // Add useEffect to initialize editedName when camera data is loaded
+  useEffect(() => {
+    if (camera) {
+      setEditedName(camera.name || '');
+    }
+  }, [camera]);
+
+  // Add function to handle name edit
+  const handleStartNameEdit = () => {
+    setEditedName(camera?.name || '');
+    setIsEditingName(true);
+  };
+
+  const handleCancelNameEdit = () => {
+    setIsEditingName(false);
+  };
+
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setEditedName(e.target.value);
+  };
+
+  const handleSaveName = async () => {
+    if (!cameraId || !editedName.trim()) return;
+    
+    try {
+      setIsSavingName(true);
+      // Call the API to update the camera name
+      const result = await apiService.cameras.update(cameraId, { name: editedName.trim() });
+      if (result) {
+        setCamera({
+          ...camera!,
+          name: editedName.trim()
+        });
+        showSnackbar('Pipeline name updated successfully');
+      } else {
+        showSnackbar('Failed to update pipeline name');
+      }
+      setIsEditingName(false);
+    } catch (err) {
+      console.error('Error updating camera name:', err);
+      showSnackbar('Error updating pipeline name');
+    } finally {
+      setIsSavingName(false);
+    }
+  };
+
   if (loading) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -2295,9 +2350,55 @@ const PipelineBuilder = () => {
           >
             Back to Dashboard
           </Button>
-          <Typography variant="h4" component="h1" gutterBottom>
-            {camera.name || `Camera ${camera.id.substring(0, 6)}`} - Pipeline Configuration
-          </Typography>
+          {isEditingName ? (
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <TextField
+                value={editedName}
+                onChange={handleNameChange}
+                variant="outlined"
+                size="small"
+                placeholder="Pipeline name"
+                autoFocus
+                sx={{ mr: 1 }}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <Box sx={{ display: 'flex' }}>
+                        <CustomIconButton 
+                          onClick={handleSaveName} 
+                          disabled={isSavingName || !editedName.trim()}
+                          title="Save"
+                          size="small"
+                          sx={{ mr: 0.5 }}
+                        >
+                          {isSavingName ? <CircularProgress size={20} /> : <CheckIcon fontSize="small" />}
+                        </CustomIconButton>
+                        <CustomIconButton 
+                          onClick={handleCancelNameEdit}
+                          title="Cancel"
+                          size="small"
+                        >
+                          <CancelIcon fontSize="small" />
+                        </CustomIconButton>
+                      </Box>
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Box>
+          ) : (
+            <Typography variant="h4" component="h1" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+              {camera.name || `Camera ${camera.id.substring(0, 6)}`} - Pipeline Configuration
+              <CustomIconButton 
+                onClick={handleStartNameEdit} 
+                title="Edit pipeline name"
+                size="small"
+                sx={{ ml: 1 }}
+              >
+                <EditIcon fontSize="small" />
+              </CustomIconButton>
+            </Typography>
+          )}
         </Box>
         <Box>
           <Button
