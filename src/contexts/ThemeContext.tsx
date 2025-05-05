@@ -66,25 +66,50 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     palette: {
       mode: effectiveTheme,
       primary: {
-        main: '#2196f3', // Blue
+        main: effectiveTheme === 'light' ? '#2C3E66' : '#3FB8AF', // Deep Blue for light, Sky Teal for dark
       },
       secondary: {
-        main: '#f50057', // Pink
+        main: effectiveTheme === 'light' ? '#3FB8AF' : '#C5E86C', // Sky Teal for light, Vibrant Lime for dark
       },
       background: {
-        default: effectiveTheme === 'light' ? '#f5f5f5' : '#121212',
-        paper: effectiveTheme === 'light' ? '#ffffff' : '#1e1e1e',
+        default: effectiveTheme === 'light' ? '#F7F9FC' : '#1e2536', // Soft White for light, Dark version of Deep Blue for dark
+        paper: effectiveTheme === 'light' ? '#ffffff' : '#2C3E66', // White for light, Deep Blue for dark
+      },
+      text: {
+        primary: effectiveTheme === 'light' ? '#4A4A4A' : '#F7F9FC', // Graphite Grey for light, Soft White for dark
+        secondary: effectiveTheme === 'light' ? '#666666' : '#b0b0b0',
+      },
+      success: {
+        main: '#C5E86C', // Vibrant Lime for both themes
       },
     },
     components: {
       MuiAppBar: {
         styleOverrides: {
           root: {
-            backgroundColor: effectiveTheme === 'light' ? '#ffffff' : '#1e1e1e',
-            color: effectiveTheme === 'light' ? '#333333' : '#ffffff',
+            backgroundColor: effectiveTheme === 'light' ? '#ffffff' : '#2C3E66', // White for light, Deep Blue for dark
+            color: effectiveTheme === 'light' ? '#4A4A4A' : '#F7F9FC', // Graphite Grey for light, Soft White for dark
             boxShadow: effectiveTheme === 'light' 
               ? '0 1px 3px rgba(0,0,0,0.12)' 
               : '0 1px 3px rgba(0,0,0,0.5)',
+          },
+        },
+      },
+      MuiButton: {
+        styleOverrides: {
+          containedPrimary: {
+            backgroundColor: effectiveTheme === 'light' ? '#2C3E66' : '#3FB8AF', // Deep Blue for light, Sky Teal for dark
+            color: effectiveTheme === 'light' ? '#ffffff' : '#ffffff',
+            '&:hover': {
+              backgroundColor: effectiveTheme === 'light' ? '#1e2c4c' : '#35a098', // Darker versions
+            },
+          },
+          containedSecondary: {
+            backgroundColor: effectiveTheme === 'light' ? '#3FB8AF' : '#C5E86C', // Sky Teal for light, Vibrant Lime for dark
+            color: effectiveTheme === 'light' ? '#ffffff' : '#4A4A4A', // White for light, Graphite Grey for dark
+            '&:hover': {
+              backgroundColor: effectiveTheme === 'light' ? '#35a098' : '#b4d457', // Darker versions
+            },
           },
         },
       },

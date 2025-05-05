@@ -1,0 +1,106 @@
+/* Color Palette for tWeb
+ * 
+ * This file documents the color palette used throughout the application.
+ * These colors are defined as CSS variables in index.css and used in various components.
+ */
+
+:root {
+  /* Color Palette */
+  --deep-blue: #2C3E66; /* Primary background, logo */
+  --sky-teal: #3FB8AF; /* Accents, highlights */
+  --graphite-grey: #4A4A4A; /* Text, secondary elements */
+  --soft-white: #F7F9FC; /* Backgrounds */
+  --vibrant-lime: #C5E86C; /* Call-to-actions, emphasis */
+  
+  /* Darker shades for hover states */
+  --deep-blue-dark: #1e2c4c;
+  --sky-teal-dark: #35a098;
+  --vibrant-lime-dark: #b4d457;
+}
+
+/* Color Palette Demo (for documentation purposes) */
+.color-palette-demo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 20px;
+  background-color: var(--bg-color);
+  border-radius: 8px;
+  margin-bottom: 30px;
+}
+
+.color-swatch {
+  width: 120px;
+  padding: 15px;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.color-circle {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.color-info {
+  text-align: center;
+}
+
+.color-name {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 5px;
+}
+
+.color-hex {
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.color-usage {
+  font-size: 11px;
+  margin-top: 5px;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* Individual swatches */
+.deep-blue-swatch .color-circle {
+  background-color: var(--deep-blue);
+}
+
+.sky-teal-swatch .color-circle {
+  background-color: var(--sky-teal);
+}
+
+.graphite-grey-swatch .color-circle {
+  background-color: var(--graphite-grey);
+}
+
+.soft-white-swatch .color-circle {
+  background-color: var(--soft-white);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.vibrant-lime-swatch .color-circle {
+  background-color: var(--vibrant-lime);
+}
+
+/* Dark mode adaptations - demo colors remain true to their values */
+[data-theme="dark"] .color-palette-demo {
+  background-color: var(--card-bg);
+}
+
+[data-theme="dark"] .color-name {
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .color-swatch {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+} 
