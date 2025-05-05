@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { useState, useEffect, ReactElement } from 'react';
 import './App.css';
 import Navbar from './components/Navbar';
+import Footer from './components/Footer';
 import { ThemeProvider } from './contexts/ThemeContext';
 import Dashboard from './pages/Dashboard';
 import NewCamera from './pages/cameras/NewCamera';
@@ -13,6 +14,7 @@ import VideocamIcon from '@mui/icons-material/Videocam';
 import LockIcon from '@mui/icons-material/Lock';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import { getVersionString } from './utils/version';
+import appConfig from './utils/appConfig';
 
 // Higher-order component to protect routes that require a valid license
 const ProtectedRoute = ({ children }: { children: ReactElement }) => {
@@ -114,7 +116,7 @@ function App() {
                 <Box sx={{ mb: 3, display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}>
                   <VideocamIcon sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
                   <Typography variant="h5" component="h1" fontWeight={600} gutterBottom>
-                    Vision Dashboard
+                    {appConfig.appName}
                   </Typography>
                   <Chip 
                     label={versionString} 
@@ -192,6 +194,7 @@ function App() {
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </main>
+          <Footer />
         </div>
       </Router>
     </ThemeProvider>

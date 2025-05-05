@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 import ThemeToggleIcon from './ThemeToggleIcon';
 import LicenseBadge from './LicenseBadge';
+import appConfig from '../utils/appConfig';
 import {
   AppBar,
   Box,
@@ -226,7 +227,7 @@ const Navbar = () => {
               textDecoration: 'none',
             }}
           >
-            Vision Dashboard
+            {appConfig.appName}
           </Typography>
 
           {/* Mobile logo */}
@@ -245,7 +246,7 @@ const Navbar = () => {
               textDecoration: 'none',
             }}
           >
-            Vision
+            {appConfig.appName.split(' ')[0]}
           </Typography>
 
           <Box sx={{ flexGrow: 1, display: 'flex' }}>
