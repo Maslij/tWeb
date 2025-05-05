@@ -29,6 +29,24 @@ const StyledButton = styled(MuiButton)(({ theme }) => ({
     padding: '4px 10px',
     fontSize: '0.8rem',
   },
+  '&.MuiButton-containedPrimary:hover': {
+    color: '#ffffff',
+  },
+  '&.MuiButton-containedSecondary:hover': {
+    color: theme.palette.mode === 'light' ? '#ffffff' : '#4A4A4A',
+  },
+  '&.MuiButton-outlinedPrimary:hover': {
+    color: theme.palette.mode === 'light' ? '#1e2c4c' : '#35a098',
+  },
+  '&.MuiButton-outlinedSecondary:hover': {
+    color: theme.palette.mode === 'light' ? '#35a098' : '#b4d457',
+  },
+  '&.MuiButton-textPrimary:hover': {
+    color: theme.palette.mode === 'light' ? '#1e2c4c' : '#35a098',
+  },
+  '&.MuiButton-textSecondary:hover': {
+    color: theme.palette.mode === 'light' ? '#35a098' : '#b4d457',
+  },
 }));
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(

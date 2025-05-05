@@ -237,12 +237,14 @@ button {
   font-weight: 500;
   font-family: inherit;
   background-color: var(--button-bg);
+  color: var(--text-primary);
   cursor: pointer;
-  transition: border-color 0.25s;
+  transition: border-color 0.25s, background-color 0.25s, color 0.25s;
 }
 
 button:hover {
   border-color: var(--link-color);
+  color: var(--text-primary);
 }
 
 button:focus,

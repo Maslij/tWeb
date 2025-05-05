@@ -148,6 +148,7 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
             color: effectiveTheme === 'light' ? '#ffffff' : '#ffffff',
             '&:hover': {
               backgroundColor: effectiveTheme === 'light' ? '#1e2c4c' : '#35a098', // Darker versions
+              color: '#ffffff', // Ensure text stays white on hover
             },
           },
           containedSecondary: {
@@ -155,6 +156,50 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
             color: effectiveTheme === 'light' ? '#ffffff' : '#4A4A4A', // White for light, Graphite Grey for dark
             '&:hover': {
               backgroundColor: effectiveTheme === 'light' ? '#35a098' : '#b4d457', // Darker versions
+              color: effectiveTheme === 'light' ? '#ffffff' : '#4A4A4A', // Keep the same text color on hover
+            },
+          },
+          outlined: {
+            '&:hover': {
+              backgroundColor: effectiveTheme === 'light' ? 'rgba(44, 62, 102, 0.04)' : 'rgba(63, 184, 175, 0.04)',
+              borderColor: effectiveTheme === 'light' ? '#2C3E66' : '#3FB8AF',
+            },
+          },
+          outlinedPrimary: {
+            borderColor: effectiveTheme === 'light' ? '#2C3E66' : '#3FB8AF',
+            color: effectiveTheme === 'light' ? '#2C3E66' : '#3FB8AF',
+            '&:hover': {
+              backgroundColor: effectiveTheme === 'light' ? 'rgba(44, 62, 102, 0.04)' : 'rgba(63, 184, 175, 0.04)',
+              borderColor: effectiveTheme === 'light' ? '#1e2c4c' : '#35a098',
+              color: effectiveTheme === 'light' ? '#1e2c4c' : '#35a098',
+            },
+          },
+          outlinedSecondary: {
+            borderColor: effectiveTheme === 'light' ? '#3FB8AF' : '#C5E86C',
+            color: effectiveTheme === 'light' ? '#3FB8AF' : '#C5E86C',
+            '&:hover': {
+              backgroundColor: effectiveTheme === 'light' ? 'rgba(63, 184, 175, 0.04)' : 'rgba(197, 232, 108, 0.04)',
+              borderColor: effectiveTheme === 'light' ? '#35a098' : '#b4d457',
+              color: effectiveTheme === 'light' ? '#35a098' : '#b4d457',
+            },
+          },
+          text: {
+            '&:hover': {
+              backgroundColor: effectiveTheme === 'light' ? 'rgba(44, 62, 102, 0.04)' : 'rgba(63, 184, 175, 0.04)',
+            },
+          },
+          textPrimary: {
+            color: effectiveTheme === 'light' ? '#2C3E66' : '#3FB8AF',
+            '&:hover': {
+              backgroundColor: effectiveTheme === 'light' ? 'rgba(44, 62, 102, 0.04)' : 'rgba(63, 184, 175, 0.04)',
+              color: effectiveTheme === 'light' ? '#1e2c4c' : '#35a098',
+            },
+          },
+          textSecondary: {
+            color: effectiveTheme === 'light' ? '#3FB8AF' : '#C5E86C',
+            '&:hover': {
+              backgroundColor: effectiveTheme === 'light' ? 'rgba(63, 184, 175, 0.04)' : 'rgba(197, 232, 108, 0.04)',
+              color: effectiveTheme === 'light' ? '#35a098' : '#b4d457',
             },
           },
         },
