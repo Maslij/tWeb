@@ -1,7 +1,11 @@
 import { Box, Container, Typography, Link } from '@mui/material';
 import appConfig from '../utils/appConfig';
+import { useTheme } from '../contexts/ThemeContext';
 
 const Footer = () => {
+  const { effectiveTheme } = useTheme();
+  const isLightMode = effectiveTheme === 'light';
+
   return (
     <Box
       component="footer"
@@ -9,9 +13,12 @@ const Footer = () => {
         py: 3,
         px: 2,
         mt: 'auto',
-        backgroundColor: '#2C3E66', // Deep Blue brand color
-        color: '#F7F9FC', // Soft White for text
+        backgroundColor: isLightMode ? '#ffffff' : '#2C3E66', // White for light, Deep Blue for dark
+        color: isLightMode ? '#4A4A4A' : '#F7F9FC', // Graphite Grey for light, Soft White for dark
         fontFamily: 'Montserrat, sans-serif',
+        boxShadow: isLightMode 
+          ? '0 -1px 3px rgba(0,0,0,0.12)' 
+          : '0 -1px 3px rgba(0,0,0,0.5)',
       }}
     >
       <Container maxWidth="xl">
@@ -20,7 +27,7 @@ const Footer = () => {
           align="center"
           sx={{ 
             fontFamily: 'Montserrat, sans-serif',
-            color: '#F7F9FC',
+            color: 'inherit',
           }}
         >
           {'© '}
@@ -28,9 +35,9 @@ const Footer = () => {
           <Link 
             href="https://brinkbyte.com"
             sx={{ 
-              color: '#3FB8AF', // Sky Teal for link
+              color: isLightMode ? '#2C3E66' : '#3FB8AF', // Deep Blue for light, Sky Teal for dark
               '&:hover': {
-                color: '#C5E86C', // Vibrant Lime on hover
+                color: isLightMode ? '#1e2c4c' : '#C5E86C', // Darker Deep Blue for light, Vibrant Lime for dark
               },
               textDecoration: 'none',
               fontWeight: 500,
