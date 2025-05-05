@@ -255,6 +255,16 @@ const PipelineBuilder = () => {
     newClass: string;
   }
 
+  // Add AgeGenderDetectionForm type after ObjectClassificationForm
+  interface AgeGenderDetectionForm {
+    model_id: string;
+    server_url: string;
+    confidence_threshold: number;
+    draw_detections: boolean;
+    use_shared_memory: boolean;
+    text_font_scale: number;
+  }
+
   const [objectClassificationForm, setObjectClassificationForm] = useState<ObjectClassificationForm>({
     model_id: "image_classification",
     server_url: "http://localhost:8080",
@@ -264,6 +274,16 @@ const PipelineBuilder = () => {
     text_font_scale: 0.7,
     classes: [],
     newClass: ""
+  });
+
+  // Add state for AgeGenderDetectionForm after the objectClassificationForm state
+  const [ageGenderDetectionForm, setAgeGenderDetectionForm] = useState<AgeGenderDetectionForm>({
+    model_id: "age_gender_detection",
+    server_url: "http://localhost:8080",
+    confidence_threshold: 0.5,
+    draw_detections: true,
+    use_shared_memory: false,
+    text_font_scale: 0.6
   });
 
   const [objectDetectionForm, setObjectDetectionForm] = useState<ObjectDetectionForm>({
@@ -341,6 +361,7 @@ const PipelineBuilder = () => {
     objectClassification: false,
     objectTracking: false,
     lineZoneManager: false,
+    ageGenderDetection: false, // Add this line
     fileSink: false
   });
 
@@ -898,6 +919,20 @@ const PipelineBuilder = () => {
           };
           fetchModelClasses();
         }
+      } else if (componentType === 'age_gender_detection') {
+        // For age_gender_detection processor
+        setAgeGenderDetectionForm({
+          model_id: component.model_id || configData.model_id || "age_gender_detection",
+          server_url: component.server_url || configData.server_url || "http://localhost:8080",
+          confidence_threshold: component.confidence_threshold !== undefined ? component.confidence_threshold : 
+                              configData.confidence_threshold !== undefined ? configData.confidence_threshold : 0.5,
+          draw_detections: component.draw_detections !== undefined ? component.draw_detections : 
+                          configData.draw_detections !== undefined ? configData.draw_detections : true,
+          use_shared_memory: component.use_shared_memory !== undefined ? component.use_shared_memory : 
+                           configData.use_shared_memory !== undefined ? configData.use_shared_memory : false,
+          text_font_scale: component.text_font_scale !== undefined ? component.text_font_scale : 
+                           configData.text_font_scale !== undefined ? configData.text_font_scale : 0.6
+        });
       } else if (componentType === 'object_tracking') {
         setObjectTrackingForm({
           frame_rate: component.frame_rate || configData.frame_rate || 30,
@@ -1102,6 +1137,13 @@ const PipelineBuilder = () => {
     }
   };
 
+  const handleAgeGenderDetectionFormChange = (field: keyof AgeGenderDetectionForm, value: any) => {
+    setAgeGenderDetectionForm(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
   const handleObjectTrackingFormChange = (field: keyof ObjectTrackingForm, value: any) => {
     setObjectTrackingForm(prev => ({
       ...prev,
@@ -1187,6 +1229,15 @@ const PipelineBuilder = () => {
             use_shared_memory: objectClassificationForm.use_shared_memory,
             text_font_scale: objectClassificationForm.text_font_scale,
             classes: objectClassificationForm.classes
+          };
+        } else if (selectedComponentType === 'age_gender_detection') {
+          config = {
+            model_id: ageGenderDetectionForm.model_id,
+            server_url: ageGenderDetectionForm.server_url,
+            confidence_threshold: ageGenderDetectionForm.confidence_threshold,
+            draw_detections: ageGenderDetectionForm.draw_detections,
+            use_shared_memory: ageGenderDetectionForm.use_shared_memory,
+            text_font_scale: ageGenderDetectionForm.text_font_scale
           };
         } else if (selectedComponentType === 'object_tracking') {
           config = { ...objectTrackingForm };
@@ -1893,12 +1944,23 @@ const PipelineBuilder = () => {
         }
       } else if (componentType === 'object_classification') {
         setObjectClassificationForm({
-          model_id: objectClassificationForm.model_id,
-          server_url: objectClassificationForm.server_url,
-          confidence_threshold: objectClassificationForm.confidence_threshold,
-          draw_classification: objectClassificationForm.draw_classification,
-          use_shared_memory: objectClassificationForm.use_shared_memory,
-          text_font_scale: objectClassificationForm.text_font_scale
+          model_id: "image_classification",
+          server_url: "http://localhost:8080",
+          confidence_threshold: 0.2,
+          draw_classification: true,
+          use_shared_memory: true,
+          text_font_scale: 0.7,
+          classes: [],
+          newClass: ""
+        });
+      } else if (componentType === 'age_gender_detection') {
+        setAgeGenderDetectionForm({
+          model_id: "age_gender_detection",
+          server_url: "http://localhost:8080",
+          confidence_threshold: 0.5,
+          draw_detections: true,
+          use_shared_memory: false,
+          text_font_scale: 0.6
         });
       } else if (componentType === 'object_tracking') {
         setObjectTrackingForm({
@@ -3835,6 +3897,121 @@ const PipelineBuilder = () => {
                       sx={{ mt: 2 }}
                     />
                   </>
+                )}
+                
+                {/* Age & Gender Detection Processor Form */}
+                {dialogType === 'processor' && selectedComponentType === 'age_gender_detection' && (
+                  <Box>
+                    <Typography variant="h6" gutterBottom>
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <MemoryIcon sx={{ mr: 1, fontSize: 20 }} />
+                        Age & Gender Detection Configuration
+                      </Box>
+                    </Typography>
+                    
+                    <TextField
+                      label="Server URL"
+                      value={ageGenderDetectionForm.server_url}
+                      onChange={(e) => handleAgeGenderDetectionFormChange('server_url', e.target.value)}
+                      fullWidth
+                      margin="normal"
+                      helperText="URL of the AI server, e.g., http://localhost:8080"
+                    />
+                    
+                    <Box sx={{ width: '100%', px: 2, mt: 2 }}>
+                      <Typography variant="body2" gutterBottom>
+                        Confidence Threshold: {ageGenderDetectionForm.confidence_threshold.toFixed(2)}
+                      </Typography>
+                      <Slider
+                        value={ageGenderDetectionForm.confidence_threshold}
+                        onChange={(_, value) => handleAgeGenderDetectionFormChange('confidence_threshold', value as number)}
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        valueLabelDisplay="auto"
+                      />
+                    </Box>
+                    
+                    <Typography variant="subtitle1" gutterBottom sx={{ mt: 3 }}>Visualization Options</Typography>
+                    
+                    <FormGroup sx={{ mt: 2 }}>
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={ageGenderDetectionForm.draw_detections}
+                            onChange={(e) => handleAgeGenderDetectionFormChange('draw_detections', e.target.checked)}
+                          />
+                        }
+                        label="Draw Detections"
+                      />
+                    </FormGroup>
+
+                    {/* Advanced Settings Accordion */}
+                    <Accordion 
+                      expanded={advancedSettingsExpanded.ageGenderDetection}
+                      onChange={() => toggleAdvancedSettings('ageGenderDetection')}
+                      sx={{ mt: 2 }}
+                    >
+                      <AccordionSummary
+                        expandIcon={<ExpandMoreIcon />}
+                        aria-controls="age-gender-detection-advanced-settings-content"
+                        id="age-gender-detection-advanced-settings-header"
+                      >
+                        <Typography sx={{ display: 'flex', alignItems: 'center' }}>
+                          <SettingsIcon sx={{ mr: 1, fontSize: 'small' }} />
+                          Advanced Settings
+                        </Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <Box sx={{ width: '100%', px: 2, mt: 2 }}>
+                          <Typography variant="body2" gutterBottom>
+                            Text Font Scale: {ageGenderDetectionForm.text_font_scale.toFixed(1)}
+                          </Typography>
+                          <Slider
+                            value={ageGenderDetectionForm.text_font_scale}
+                            onChange={(_, value) => handleAgeGenderDetectionFormChange('text_font_scale', value as number)}
+                            min={0.1}
+                            max={2.0}
+                            step={0.1}
+                            valueLabelDisplay="auto"
+                          />
+                        </Box>
+                        
+                        <FormGroup sx={{ mt: 2 }}>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={ageGenderDetectionForm.use_shared_memory}
+                                onChange={(e) => handleAgeGenderDetectionFormChange('use_shared_memory', e.target.checked)}
+                              />
+                            }
+                            label="Use Shared Memory"
+                          />
+                        </FormGroup>
+                        
+                        {/* JSON Preview */}
+                        <TextField
+                          label="Configuration Preview (JSON)"
+                          multiline
+                          rows={6}
+                          value={JSON.stringify({
+                            model_id: ageGenderDetectionForm.model_id,
+                            server_url: ageGenderDetectionForm.server_url,
+                            confidence_threshold: ageGenderDetectionForm.confidence_threshold,
+                            draw_detections: ageGenderDetectionForm.draw_detections,
+                            use_shared_memory: ageGenderDetectionForm.use_shared_memory,
+                            text_font_scale: ageGenderDetectionForm.text_font_scale
+                          }, null, 2)}
+                          fullWidth
+                          variant="outlined"
+                          sx={{ mt: 3 }}
+                          InputProps={{
+                            readOnly: true,
+                          }}
+                        />
+                      </AccordionDetails>
+                    </Accordion>
+                  </Box>
                 )}
               </>
             )}
