@@ -239,6 +239,29 @@ const PipelineBuilder = () => {
     latency: 200
   });
 
+  // Add Object Classification form type and state
+  interface ObjectClassificationForm {
+    model_id: string;
+    server_url: string;
+    confidence_threshold: number;
+    draw_classification: boolean;
+    use_shared_memory: boolean;
+    text_font_scale: number;
+    classes: string[];
+    newClass: string;
+  }
+
+  const [objectClassificationForm, setObjectClassificationForm] = useState<ObjectClassificationForm>({
+    model_id: "image_classification",
+    server_url: "http://localhost:8080",
+    confidence_threshold: 0.2,
+    draw_classification: true,
+    use_shared_memory: true,
+    text_font_scale: 0.7,
+    classes: [],
+    newClass: ""
+  });
+
   const [objectDetectionForm, setObjectDetectionForm] = useState<ObjectDetectionForm>({
     model_id: "yolov4-tiny",
     server_url: "http://localhost:8080",
@@ -311,6 +334,7 @@ const PipelineBuilder = () => {
     fileSource: false,
     rtspSource: false,
     objectDetection: false,
+    objectClassification: false,
     objectTracking: false,
     lineZoneManager: false,
     fileSink: false
@@ -821,6 +845,50 @@ const PipelineBuilder = () => {
           };
           fetchModelClasses();
         }
+      } else if (componentType === 'object_classification') {
+        // For object classification, set the form and find the available classes for the selected model
+        const modelId = component.model_id || configData.model_id || "image_classification";
+        setObjectClassificationForm({
+          model_id: modelId,
+          server_url: component.server_url || configData.server_url || "http://localhost:8080",
+          confidence_threshold: component.confidence_threshold !== undefined ? component.confidence_threshold : 
+                              configData.confidence_threshold !== undefined ? configData.confidence_threshold : 0.2,
+          draw_classification: component.draw_classification !== undefined ? component.draw_classification : 
+                             configData.draw_classification !== undefined ? configData.draw_classification : true,
+          use_shared_memory: component.use_shared_memory !== undefined ? component.use_shared_memory : 
+                           configData.use_shared_memory !== undefined ? configData.use_shared_memory : true,
+          text_font_scale: component.text_font_scale !== undefined ? component.text_font_scale : 
+                          configData.text_font_scale !== undefined ? configData.text_font_scale : 0.7,
+          classes: Array.isArray(component.classes) ? component.classes : 
+                 Array.isArray(configData.classes) ? configData.classes : [],
+          newClass: ""
+        });
+        
+        // Find the corresponding model to get its available classes
+        const selectedModel = availableModels.find(model => 
+          model.id === modelId && model.type === 'image_classification'
+        );
+        if (selectedModel && selectedModel.classes) {
+          setSelectedModelClasses(selectedModel.classes);
+        } else {
+          // If model not found in available models, try to get it from API
+          const fetchModelClasses = async () => {
+            try {
+              const modelResponse = await apiService.models.getObjectDetectionModels();
+              if (modelResponse && modelResponse.models) {
+                const model = modelResponse.models.find((m: AIModel) => 
+                  m.id === modelId && m.type === 'image_classification'
+                );
+                if (model && model.classes) {
+                  setSelectedModelClasses(model.classes);
+                }
+              }
+            } catch (err) {
+              console.error('Error fetching model classes:', err);
+            }
+          };
+          fetchModelClasses();
+        }
       } else if (componentType === 'object_tracking') {
         setObjectTrackingForm({
           frame_rate: component.frame_rate || configData.frame_rate || 30,
@@ -1002,6 +1070,29 @@ const PipelineBuilder = () => {
     }
   };
 
+  const handleObjectClassificationFormChange = (field: keyof ObjectClassificationForm, value: any) => {
+    setObjectClassificationForm(prev => ({
+      ...prev,
+      [field]: value
+    }));
+
+    // If model_id changes, update the available classes
+    if (field === 'model_id') {
+      const selectedModel = availableModels.find(model => 
+        model.id === value && model.type === 'image_classification'
+      );
+      if (selectedModel && selectedModel.classes) {
+        setSelectedModelClasses(selectedModel.classes);
+        // Reset selected classes when changing the model
+        setObjectClassificationForm(prev => ({
+          ...prev,
+          model_id: value,
+          classes: []
+        }));
+      }
+    }
+  };
+
   const handleObjectTrackingFormChange = (field: keyof ObjectTrackingForm, value: any) => {
     setObjectTrackingForm(prev => ({
       ...prev,
@@ -1077,6 +1168,16 @@ const PipelineBuilder = () => {
             use_shared_memory: objectDetectionForm.use_shared_memory,
             label_font_scale: objectDetectionForm.label_font_scale,
             classes: objectDetectionForm.classes
+          };
+        } else if (selectedComponentType === 'object_classification') {
+          config = {
+            model_id: objectClassificationForm.model_id,
+            server_url: objectClassificationForm.server_url,
+            confidence_threshold: objectClassificationForm.confidence_threshold,
+            draw_classification: objectClassificationForm.draw_classification,
+            use_shared_memory: objectClassificationForm.use_shared_memory,
+            text_font_scale: objectClassificationForm.text_font_scale,
+            classes: objectClassificationForm.classes
           };
         } else if (selectedComponentType === 'object_tracking') {
           config = { ...objectTrackingForm };
@@ -1517,7 +1618,6 @@ const PipelineBuilder = () => {
     category: 'source' | 'processor' | 'sink',
     tierId: number
   ): boolean => {
-    console.log(`Checking if ${componentType} (${category}) is allowed for tier ${tierId}`);
     
     // If we have permission information from the API, use it (preferred method)
     if (componentTypes?.permissions) {
@@ -1782,6 +1882,15 @@ const PipelineBuilder = () => {
         if (defaultModel?.classes) {
           setSelectedModelClasses(defaultModel.classes);
         }
+      } else if (componentType === 'object_classification') {
+        setObjectClassificationForm({
+          model_id: objectClassificationForm.model_id,
+          server_url: objectClassificationForm.server_url,
+          confidence_threshold: objectClassificationForm.confidence_threshold,
+          draw_classification: objectClassificationForm.draw_classification,
+          use_shared_memory: objectClassificationForm.use_shared_memory,
+          text_font_scale: objectClassificationForm.text_font_scale
+        });
       } else if (componentType === 'object_tracking') {
         setObjectTrackingForm({
           frame_rate: 30,
@@ -2916,6 +3025,140 @@ const PipelineBuilder = () => {
                   </Box>
                 )}
                 
+
+                {/* Object Classification Processor Form */}
+                {dialogType === "processor" && selectedComponentType === "object_classification" && (
+                  <Box>
+                    <Typography variant="h6" gutterBottom>
+                      <Box sx={{ display: "flex", alignItems: "center" }}>
+                        <MemoryIcon sx={{ mr: 1, fontSize: 20 }} />
+                        Object Classification Configuration
+                      </Box>
+                    </Typography>
+                    
+                    <FormControl fullWidth sx={{ mb: 3, mt: 2 }}>
+                      <InputLabel id="classification-model-label">Model</InputLabel>
+                      <Select
+                        labelId="classification-model-label"
+                        value={objectClassificationForm.model_id}
+                        onChange={(e) => handleObjectClassificationFormChange("model_id", e.target.value)}
+                        label="Model"
+                      >
+                        {availableModels
+                          .filter(model => model.type === "image_classification" && model.status === "loaded")
+                          .map((model) => (
+                            <MenuItem key={model.id} value={model.id}>
+                              {model.id}
+                            </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    
+                    <Box sx={{ width: "100%", px: 2, mt: 2 }}>
+                      <Typography variant="body2" gutterBottom>
+                        Confidence Threshold: {objectClassificationForm.confidence_threshold.toFixed(2)}
+                      </Typography>
+                      <Slider
+                        value={objectClassificationForm.confidence_threshold}
+                        onChange={(_, value) => handleObjectClassificationFormChange("confidence_threshold", value as number)}
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        valueLabelDisplay="auto"
+                      />
+                    </Box>
+                    
+                    <Typography variant="subtitle1" gutterBottom sx={{ mt: 3 }}>Visualization Options</Typography>
+                    
+                    <FormGroup sx={{ mt: 2 }}>
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={objectClassificationForm.draw_classification}
+                            onChange={(e) => handleObjectClassificationFormChange("draw_classification", e.target.checked)}
+                          />
+                        }
+                        label="Draw Classification Results"
+                      />
+                    </FormGroup>
+                    
+                    <Box sx={{ width: "100%", px: 2, mt: 2 }}>
+                      <Typography variant="body2" gutterBottom>
+                        Text Font Scale: {objectClassificationForm.text_font_scale.toFixed(1)}
+                      </Typography>
+                      <Slider
+                        value={objectClassificationForm.text_font_scale}
+                        onChange={(_, value) => handleObjectClassificationFormChange("text_font_scale", value as number)}
+                        min={0.1}
+                        max={2.0}
+                        step={0.1}
+                        valueLabelDisplay="auto"
+                      />
+                    </Box>
+                    
+                    {/* Advanced Settings Accordion */}
+                    <Accordion 
+                      expanded={advancedSettingsExpanded.objectClassification}
+                      onChange={() => toggleAdvancedSettings("objectClassification")}
+                      sx={{ mt: 2 }}
+                    >
+                      <AccordionSummary
+                        expandIcon={<ExpandMoreIcon />}
+                        aria-controls="object-classification-advanced-settings-content"
+                        id="object-classification-advanced-settings-header"
+                      >
+                        <Typography sx={{ display: "flex", alignItems: "center" }}>
+                          <SettingsIcon sx={{ mr: 1, fontSize: "small" }} />
+                          Advanced Settings
+                        </Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <TextField
+                          label="Server URL"
+                          value={objectClassificationForm.server_url}
+                          onChange={(e) => handleObjectClassificationFormChange("server_url", e.target.value)}
+                          fullWidth
+                          margin="normal"
+                          helperText="URL of the AI server, e.g., http://localhost:8080"
+                        />
+                        
+                        <FormGroup sx={{ mt: 2 }}>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                checked={objectClassificationForm.use_shared_memory}
+                                onChange={(e) => handleObjectClassificationFormChange("use_shared_memory", e.target.checked)}
+                              />
+                            }
+                            label="Use Shared Memory"
+                          />
+                        </FormGroup>
+                        
+                        {/* JSON Preview */}
+                        <TextField
+                          label="Configuration Preview (JSON)"
+                          multiline
+                          rows={6}
+                          value={JSON.stringify({
+                            model_id: objectClassificationForm.model_id,
+                            server_url: objectClassificationForm.server_url,
+                            confidence_threshold: objectClassificationForm.confidence_threshold,
+                            draw_classification: objectClassificationForm.draw_classification,
+                            use_shared_memory: objectClassificationForm.use_shared_memory,
+                            text_font_scale: objectClassificationForm.text_font_scale,
+                            classes: objectClassificationForm.classes
+                          }, null, 2)}
+                          fullWidth
+                          variant="outlined"
+                          sx={{ mt: 3 }}
+                          InputProps={{
+                            readOnly: true,
+                          }}
+                        />
+                      </AccordionDetails>
+                    </Accordion>
+                  </Box>
+                )}
                 {/* Object Tracking Processor Form */}
                 {dialogType === 'processor' && selectedComponentType === 'object_tracking' && (
                   <Box>
