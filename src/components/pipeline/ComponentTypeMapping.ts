@@ -49,6 +49,11 @@ export const processorTypeMapping: ComponentTypeMapping = {
     name: "Image Classification",
     description: "Classify the entire scene with image recognition",
     icon: React.createElement(MemoryIcon)
+  },
+  "age_gender_detection": {
+    name: "Age & Gender Detection",
+    description: "Detect faces and analyze age and gender attributes",
+    icon: React.createElement(MemoryIcon)
   }
 };
 
