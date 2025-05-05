@@ -1,0 +1,158 @@
+/* Typography styles for tWeb application
+ * Primary font: Montserrat (Headings, UI elements)
+ * Secondary font: Inter (Body text, digital interfaces)
+ */
+
+/* Base text styles */
+body {
+  font-family: var(--font-secondary);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height);
+  color: var(--text-primary);
+}
+
+/* Heading styles - Montserrat Bold */
+h1, h2, h3, h4 {
+  font-family: var(--font-primary);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  margin-bottom: 0.5em;
+  line-height: 1.2;
+}
+
+/* Subheading styles - Montserrat Semi-Bold */
+h5, h6, .subheading {
+  font-family: var(--font-primary);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  margin-bottom: 0.5em;
+  line-height: 1.2;
+}
+
+/* Body text styles - Inter Regular */
+p, .body-text {
+  font-family: var(--font-secondary);
+  font-weight: var(--font-weight-regular);
+  margin-bottom: 1em;
+  line-height: var(--line-height);
+}
+
+/* UI Components */
+.button, button {
+  font-family: var(--font-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.label, label {
+  font-family: var(--font-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+.input, input, textarea, select {
+  font-family: var(--font-secondary);
+  font-weight: var(--font-weight-regular);
+}
+
+/* Typography Demo Classes */
+.typography-demo {
+  padding: 30px;
+  background-color: var(--bg-color);
+  border-radius: 8px;
+  margin-bottom: 30px;
+}
+
+.typography-demo h1 {
+  margin-bottom: 30px;
+}
+
+.font-sample {
+  margin-bottom: 40px;
+}
+
+.font-header {
+  font-family: var(--font-primary);
+  font-weight: var(--font-weight-bold);
+  font-size: 1.5rem;
+  margin-bottom: 15px;
+  color: var(--primary-color);
+  border-bottom: 2px solid var(--accent-color);
+  padding-bottom: 5px;
+}
+
+.font-description {
+  font-family: var(--font-secondary);
+  font-size: 0.9rem;
+  margin-bottom: 20px;
+  color: var(--text-secondary);
+}
+
+.font-examples {
+  background-color: var(--card-bg);
+  border-radius: 6px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.font-example-item {
+  margin-bottom: 15px;
+  display: flex;
+}
+
+.font-example-label {
+  width: 150px;
+  font-family: var(--font-secondary);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  padding-top: 5px;
+}
+
+.font-example-content {
+  flex: 1;
+}
+
+/* Montserrat examples */
+.montserrat-regular {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 400;
+}
+
+.montserrat-medium {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 500;
+}
+
+.montserrat-semibold {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 600;
+}
+
+.montserrat-bold {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+}
+
+/* Inter examples */
+.inter-regular {
+  font-family: 'Inter', sans-serif;
+  font-weight: 400;
+}
+
+.inter-medium {
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
+}
+
+.inter-semibold {
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+}
+
+/* Dark mode adaptations */
+[data-theme="dark"] .typography-demo {
+  background-color: var(--card-bg);
+}
+
+[data-theme="dark"] .font-examples {
+  background-color: var(--background-primary);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+} 

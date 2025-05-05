@@ -63,6 +63,52 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
 
   // Create Material-UI theme
   const muiTheme = createTheme({
+    typography: {
+      fontFamily: [
+        'Inter',
+        '"Segoe UI"',
+        'Roboto',
+        'Arial',
+        'sans-serif'
+      ].join(','),
+      h1: {
+        fontFamily: 'Montserrat, sans-serif',
+        fontWeight: 700,
+      },
+      h2: {
+        fontFamily: 'Montserrat, sans-serif',
+        fontWeight: 700,
+      },
+      h3: {
+        fontFamily: 'Montserrat, sans-serif',
+        fontWeight: 700,
+      },
+      h4: {
+        fontFamily: 'Montserrat, sans-serif',
+        fontWeight: 700,
+      },
+      h5: {
+        fontFamily: 'Montserrat, sans-serif',
+        fontWeight: 600,
+      },
+      h6: {
+        fontFamily: 'Montserrat, sans-serif',
+        fontWeight: 600,
+      },
+      subtitle1: {
+        fontFamily: 'Montserrat, sans-serif',
+        fontWeight: 600,
+      },
+      subtitle2: {
+        fontFamily: 'Montserrat, sans-serif',
+        fontWeight: 600,
+      },
+      button: {
+        fontFamily: 'Montserrat, sans-serif',
+        fontWeight: 600,
+        textTransform: 'none',
+      },
+    },
     palette: {
       mode: effectiveTheme,
       primary: {
@@ -110,6 +156,37 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
             '&:hover': {
               backgroundColor: effectiveTheme === 'light' ? '#35a098' : '#b4d457', // Darker versions
             },
+          },
+        },
+      },
+      MuiTypography: {
+        styleOverrides: {
+          root: {
+            fontFamily: 'Inter, sans-serif',
+          },
+          h1: {
+            fontFamily: 'Montserrat, sans-serif',
+            fontWeight: 700,
+          },
+          h2: {
+            fontFamily: 'Montserrat, sans-serif',
+            fontWeight: 700,
+          },
+          h3: {
+            fontFamily: 'Montserrat, sans-serif',
+            fontWeight: 700,
+          },
+          h4: {
+            fontFamily: 'Montserrat, sans-serif',
+            fontWeight: 700,
+          },
+          h5: {
+            fontFamily: 'Montserrat, sans-serif',
+            fontWeight: 600,
+          },
+          h6: {
+            fontFamily: 'Montserrat, sans-serif',
+            fontWeight: 600,
           },
         },
       },

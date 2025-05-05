@@ -15,7 +15,8 @@ export interface ButtonProps extends MuiButtonProps {
 const StyledButton = styled(MuiButton)(({ theme }) => ({
   borderRadius: 4,
   textTransform: 'none',
-  fontWeight: 500,
+  fontFamily: 'Montserrat, sans-serif',
+  fontWeight: 600,
   '&.MuiButton-sizeLarge': {
     padding: '10px 22px',
     fontSize: '1rem',

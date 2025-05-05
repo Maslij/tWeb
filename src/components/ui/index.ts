@@ -26,6 +26,9 @@ export * from './Skeleton';
 export { default as Typography } from './Typography';
 export * from './Typography';
 
+export { default as TextField } from './TextField';
+export * from './TextField';
+
 // Re-export Material UI components that we haven't customized yet
 // This allows us to import everything from our UI library consistently
 export {
@@ -86,7 +89,6 @@ export {
   TablePagination,
   TableRow,
   Tabs,
-  TextField,
   Toolbar,
   Tooltip
 } from '@mui/material'; 
