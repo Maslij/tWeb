@@ -490,8 +490,6 @@ const Dashboard = () => {
       {loading ? (
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' }, gap: 3 }}>
           <CameraSkeleton />
-          <CameraSkeleton />
-          <CameraSkeleton />
         </Box>
       ) : cameras.length === 0 ? (
         <Paper
