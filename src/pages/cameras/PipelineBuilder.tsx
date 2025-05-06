@@ -2777,6 +2777,7 @@ const PipelineBuilder = () => {
               setHasUnsavedZoneChanges={setHasUnsavedPolygonZoneChanges}
               showSnackbar={showSnackbar}
               cameraId={cameraId}
+              refreshFrame={refreshFrame}
             />
           </TabPanel>
         )}
