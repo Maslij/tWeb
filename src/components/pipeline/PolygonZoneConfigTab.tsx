@@ -88,7 +88,7 @@ const PolygonZoneConfigTab: React.FC<PolygonZoneConfigTabProps> = ({
 
   const handleSaveZones = async () => {
     if (!polygonZoneManagerComponent || !cameraId) return;
-    
+    console.log(polygonZoneManagerForm);
     try {
       setIsSaving(true);
       
