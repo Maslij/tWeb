@@ -3,15 +3,28 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import PeopleIcon from '@mui/icons-material/People';
 import DirectionsCarIcon from '@mui/icons-material/DirectionsCar';
 
-// Default line zone definition
+// Default line zone used as a template
 export const defaultLineZone = {
   id: "zone1",
-  start_x: 0.2, // Normalized (0-1) instead of pixel value
-  start_y: 0.5, // Normalized (0-1) instead of pixel value
-  end_x: 0.8,   // Normalized (0-1) instead of pixel value
-  end_y: 0.5,   // Normalized (0-1) instead of pixel value
+  start_x: 0.2,
+  start_y: 0.5,
+  end_x: 0.8,
+  end_y: 0.5,
   min_crossing_threshold: 1,
-  triggering_anchors: ["BOTTOM_LEFT", "BOTTOM_RIGHT"]
+  triggering_anchors: ["BOTTOM_CENTER", "CENTER"]
+};
+
+// Default polygon zone used as a template
+export const defaultPolygonZone = {
+  id: "zone1",
+  polygon: [
+    { x: 0.2, y: 0.2 },
+    { x: 0.8, y: 0.2 },
+    { x: 0.8, y: 0.8 },
+    { x: 0.2, y: 0.8 }
+  ],
+  min_crossing_threshold: 1,
+  triggering_anchors: ["BOTTOM_CENTER", "CENTER"]
 };
 
 // Pipeline Template interface

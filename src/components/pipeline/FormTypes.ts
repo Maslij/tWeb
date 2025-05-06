@@ -56,7 +56,39 @@ export interface LineZoneManagerForm {
   text_color: number[];
   text_scale: number;
   text_thickness: number;
-  zones: Zone[];
+  zones: {
+    id: string;
+    start_x: number;
+    start_y: number;
+    end_x: number;
+    end_y: number;
+    min_crossing_threshold: number;
+    triggering_anchors: string[];
+    in_count?: number;
+    out_count?: number;
+  }[];
+}
+
+// Polygon Zone Manager form interface
+export interface PolygonZoneManagerForm {
+  draw_zones: boolean;
+  fill_color: number[];
+  opacity: number;
+  outline_color: number[];
+  outline_thickness: number;
+  draw_labels: boolean;
+  text_color: number[];
+  text_scale: number;
+  text_thickness: number;
+  zones: {
+    id: string;
+    polygon: { x: number; y: number; }[];
+    min_crossing_threshold: number;
+    triggering_anchors: string[];
+    in_count?: number;
+    out_count?: number;
+    current_count?: number;
+  }[];
 }
 
 // File Sink form interface

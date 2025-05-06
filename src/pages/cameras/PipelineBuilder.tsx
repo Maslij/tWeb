@@ -64,11 +64,13 @@ import {
   ObjectTrackingForm,
   LineZoneManagerForm,
   FileSinkForm,
-  DatabaseSinkForm
+  DatabaseSinkForm,
+  PolygonZoneManagerForm
 } from '../../components/pipeline/FormTypes';
 import { 
   pipelineTemplates,
   defaultLineZone,
+  defaultPolygonZone,
 } from '../../components/pipeline/PipelineTemplates';
 import {
   ComponentCardSkeleton,
@@ -174,6 +176,7 @@ import PipelineConfigTab from '../../components/pipeline/PipelineConfigTab';
 import LivePlaybackTab from '../../components/pipeline/LivePlaybackTab';
 import LineZoneConfigTab from '../../components/pipeline/LineZoneConfigTab';
 import TelemetryTab from '../../components/pipeline/TelemetryTab';
+import PolygonZoneConfigTab from '../../components/pipeline/PolygonZoneConfigTab';
 
 const PipelineBuilder = () => {
   // After user state declarations, add state for license information
@@ -377,6 +380,9 @@ const PipelineBuilder = () => {
   // Add a state to track unsaved zone changes near the other state declarations in PipelineBuilder
   const [hasUnsavedZoneChanges, setHasUnsavedZoneChanges] = useState<boolean>(false);
 
+  // Add unsaved changes state for polygon zones after hasUnsavedZoneChanges
+  const [hasUnsavedPolygonZoneChanges, setHasUnsavedPolygonZoneChanges] = useState<boolean>(false);
+
   // Define hasLineZoneManagerComponent and lineZoneManagerComponent here to ensure
   // our hooks are called in the same order every render
   const hasLineZoneManagerComponent = processorComponents.some(
@@ -385,6 +391,15 @@ const PipelineBuilder = () => {
 
   const lineZoneManagerComponent = processorComponents.find(
     component => component.type === 'line_zone_manager'
+  );
+
+  // Add check for polygon zone manager component after hasLineZoneManagerComponent
+  const hasPolygonZoneManagerComponent = processorComponents.some(
+    component => component.type === 'polygon_zone_manager'
+  );
+
+  const polygonZoneManagerComponent = processorComponents.find(
+    component => component.type === 'polygon_zone_manager'
   );
 
   // Make showSnackbar a useCallback
@@ -424,6 +439,20 @@ const PipelineBuilder = () => {
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState('');
   const [isSavingName, setIsSavingName] = useState(false);
+
+  // Add state for polygon zone manager form after lineZoneManagerForm
+  const [polygonZoneManagerForm, setPolygonZoneManagerForm] = useState<PolygonZoneManagerForm>({
+    draw_zones: true,
+    fill_color: [0, 100, 0],
+    opacity: 0.3,
+    outline_color: [0, 255, 0],
+    outline_thickness: 2,
+    draw_labels: true,
+    text_color: [255, 255, 255],
+    text_scale: 0.5,
+    text_thickness: 2,
+    zones: [defaultPolygonZone]
+  });
 
   // Fetch data on mount
   useEffect(() => {
@@ -794,11 +823,13 @@ const PipelineBuilder = () => {
         componentType = 'object_detection';
       } else if (component.track_thresh !== undefined) {
         componentType = 'object_tracking';
-      } else if (component.zones) {
+      } else if ((component as any).zones) {
         componentType = 'line_zone_manager';
+      } else if ((component as any).config && (component as any).config.zones) {
+        componentType = 'polygon_zone_manager';
       } else if (component.path && component.fourcc) {
         componentType = 'file'; // file sink
-      } else if ((component as any).db_path ) {
+      } else if ((component as any).db_path) {
         componentType = 'database'; // database sink
       }
     }
@@ -883,12 +914,16 @@ const PipelineBuilder = () => {
           server_url: component.server_url || configData.server_url || "http://localhost:8080",
           confidence_threshold: component.confidence_threshold !== undefined ? component.confidence_threshold : 
                               configData.confidence_threshold !== undefined ? configData.confidence_threshold : 0.2,
-          draw_classification: component.draw_classification !== undefined ? component.draw_classification : 
-                             configData.draw_classification !== undefined ? configData.draw_classification : true,
+          draw_classification: (component as any).draw_classification !== undefined ? 
+                              (component as any).draw_classification : 
+                              configData.draw_classification !== undefined ? 
+                              configData.draw_classification : true,
           use_shared_memory: component.use_shared_memory !== undefined ? component.use_shared_memory : 
                            configData.use_shared_memory !== undefined ? configData.use_shared_memory : true,
-          text_font_scale: component.text_font_scale !== undefined ? component.text_font_scale : 
-                          configData.text_font_scale !== undefined ? configData.text_font_scale : 0.7,
+          text_font_scale: (component as any).text_font_scale !== undefined ? 
+                          (component as any).text_font_scale : 
+                          configData.text_font_scale !== undefined ? 
+                          configData.text_font_scale : 0.7,
           classes: Array.isArray(component.classes) ? component.classes : 
                  Array.isArray(configData.classes) ? configData.classes : [],
           newClass: ""
@@ -926,12 +961,14 @@ const PipelineBuilder = () => {
           server_url: component.server_url || configData.server_url || "http://localhost:8080",
           confidence_threshold: component.confidence_threshold !== undefined ? component.confidence_threshold : 
                               configData.confidence_threshold !== undefined ? configData.confidence_threshold : 0.5,
-          draw_detections: component.draw_detections !== undefined ? component.draw_detections : 
+          draw_detections: (component as any).draw_detections !== undefined ? (component as any).draw_detections : 
                           configData.draw_detections !== undefined ? configData.draw_detections : true,
           use_shared_memory: component.use_shared_memory !== undefined ? component.use_shared_memory : 
                            configData.use_shared_memory !== undefined ? configData.use_shared_memory : false,
-          text_font_scale: component.text_font_scale !== undefined ? component.text_font_scale : 
-                           configData.text_font_scale !== undefined ? configData.text_font_scale : 0.6
+          text_font_scale: (component as any).text_font_scale !== undefined ? 
+                           (component as any).text_font_scale : 
+                           configData.text_font_scale !== undefined ? 
+                           configData.text_font_scale : 0.6
         });
       } else if (componentType === 'object_tracking') {
         setObjectTrackingForm({
@@ -1006,6 +1043,60 @@ const PipelineBuilder = () => {
                      configData.draw_counts !== undefined ? configData.draw_counts : true,
           text_color: Array.isArray(component.text_color) ? component.text_color : 
                     Array.isArray(configData.text_color) ? configData.text_color : [0, 0, 0],
+          text_scale: component.text_scale || configData.text_scale || 0.5,
+          text_thickness: component.text_thickness || configData.text_thickness || 2,
+          zones: normalizedZones
+        });
+      } else if (componentType === 'polygon_zone_manager') {
+        // Extract zones from either the component directly or its config
+        let zones: any[] = [];
+        
+        if (Array.isArray(component.zones)) {
+          zones = component.zones;
+        } else if (configData && Array.isArray(configData.zones)) {
+          zones = configData.zones;
+        }
+        
+        // Normalize the zones data to ensure it's in the correct format
+        const normalizedZones = zones.length > 0 ? zones.map(zone => {
+          return {
+            id: zone.id || `zone${Math.random().toString(36).substr(2, 9)}`,
+            polygon: Array.isArray(zone.polygon) ? zone.polygon.map((point: any) => ({
+              x: typeof point.x === 'number' ? point.x : parseFloat(String(point.x)) || 0,
+              y: typeof point.y === 'number' ? point.y : parseFloat(String(point.y)) || 0
+            })) : defaultPolygonZone.polygon,
+            min_crossing_threshold: zone.min_crossing_threshold || 1,
+            triggering_anchors: Array.isArray(zone.triggering_anchors) ? 
+              zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"],
+            in_count: zone.in_count !== undefined ? zone.in_count : undefined,
+            out_count: zone.out_count !== undefined ? zone.out_count : undefined,
+            current_count: zone.current_count !== undefined ? zone.current_count : undefined
+          };
+        }) : [defaultPolygonZone];
+        
+        setPolygonZoneManagerForm({
+          draw_zones: component.draw_zones !== undefined ? component.draw_zones : 
+                    configData.draw_zones !== undefined ? configData.draw_zones : true,
+          fill_color: Array.isArray((component as any).fill_color) ? 
+                    (component as any).fill_color : 
+                    Array.isArray(configData.fill_color) ? 
+                    configData.fill_color : [0, 100, 0],
+          opacity: (component as any).opacity !== undefined ? 
+                 (component as any).opacity : 
+                 configData.opacity !== undefined ? 
+                 configData.opacity : 0.3,
+          outline_color: Array.isArray((component as any).outline_color) ? 
+                       (component as any).outline_color : 
+                       Array.isArray(configData.outline_color) ? 
+                       configData.outline_color : [0, 255, 0],
+          outline_thickness: (component as any).outline_thickness || 
+                           configData.outline_thickness || 2,
+          draw_labels: (component as any).draw_labels !== undefined ? 
+                     (component as any).draw_labels : 
+                     configData.draw_labels !== undefined ? 
+                     configData.draw_labels : true,
+          text_color: Array.isArray(component.text_color) ? component.text_color : 
+                    Array.isArray(configData.text_color) ? configData.text_color : [255, 255, 255],
           text_scale: component.text_scale || configData.text_scale || 0.5,
           text_thickness: component.text_thickness || configData.text_thickness || 2,
           zones: normalizedZones
@@ -1161,6 +1252,16 @@ const PipelineBuilder = () => {
     }));
   };
 
+  const handlePolygonZoneManagerFormChange = (field: keyof PolygonZoneManagerForm, value: any) => {
+    // Skip zone updates if we're in the dialog
+    if (field === 'zones' && openDialog) return;
+    
+    setPolygonZoneManagerForm(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
   const handleFileSinkFormChange = (field: keyof FileSinkForm, value: any) => {
     setFileSinkForm(prev => ({
       ...prev,
@@ -1257,6 +1358,25 @@ const PipelineBuilder = () => {
               start_y: zone.start_y,
               end_x: zone.end_x,
               end_y: zone.end_y,
+              min_crossing_threshold: zone.min_crossing_threshold,
+              triggering_anchors: zone.triggering_anchors
+            }))
+          };
+        } else if (selectedComponentType === 'polygon_zone_manager') {
+          // Ensure we're creating the exactly correct format for the polygon zone manager
+          config = {
+            draw_zones: polygonZoneManagerForm.draw_zones,
+            fill_color: polygonZoneManagerForm.fill_color,
+            opacity: polygonZoneManagerForm.opacity,
+            outline_color: polygonZoneManagerForm.outline_color,
+            outline_thickness: polygonZoneManagerForm.outline_thickness,
+            draw_labels: polygonZoneManagerForm.draw_labels,
+            text_color: polygonZoneManagerForm.text_color,
+            text_scale: polygonZoneManagerForm.text_scale,
+            text_thickness: polygonZoneManagerForm.text_thickness,
+            zones: polygonZoneManagerForm.zones.map(zone => ({
+              id: zone.id,
+              polygon: zone.polygon,
               min_crossing_threshold: zone.min_crossing_threshold,
               triggering_anchors: zone.triggering_anchors
             }))
@@ -1986,6 +2106,19 @@ const PipelineBuilder = () => {
           text_thickness: 2,
           zones: [defaultLineZone]
         });
+      } else if (componentType === 'polygon_zone_manager') {
+        setPolygonZoneManagerForm({
+          draw_zones: true,
+          fill_color: [0, 100, 0],
+          opacity: 0.3,
+          outline_color: [0, 255, 0],
+          outline_thickness: 2,
+          draw_labels: true,
+          text_color: [255, 255, 255],
+          text_scale: 0.5,
+          text_thickness: 2,
+          zones: [defaultPolygonZone]
+        });
       }
     } else if (dialogType === 'sink') {
       if (componentType === 'file') {
@@ -2322,6 +2455,51 @@ const PipelineBuilder = () => {
     }
   };
 
+  // Add the polygon zone manager form update
+  // Update the useEffect that sets the line zones to include polygon zones
+  useEffect(() => {
+    // Look for polygon zone manager component and initialize its zones if found
+    const polygonZoneManager = processorComponents?.find(
+      comp => comp.type === 'polygon_zone_manager'
+    );
+    
+    if (polygonZoneManager) {
+      // Determine where the zones are stored in the component data
+      let zones: any[] = [];
+      
+      if (Array.isArray(polygonZoneManager.zones)) {
+        zones = polygonZoneManager.zones;
+      } else if (polygonZoneManager.config && Array.isArray(polygonZoneManager.config.zones)) {
+        zones = polygonZoneManager.config.zones;
+      }
+      
+      if (zones.length > 0) {
+        // Ensure zones have all required properties in the correct format
+        const normalizedZones = zones.map(zone => {
+          return {
+            id: zone.id || `zone${Math.random().toString(36).substr(2, 9)}`,
+            polygon: Array.isArray(zone.polygon) ? zone.polygon.map((point: any) => ({
+              x: typeof point.x === 'number' ? point.x : parseFloat(String(point.x)) || 0,
+              y: typeof point.y === 'number' ? point.y : parseFloat(String(point.y)) || 0
+            })) : defaultPolygonZone.polygon,
+            min_crossing_threshold: zone.min_crossing_threshold || 1,
+            triggering_anchors: Array.isArray(zone.triggering_anchors) ? 
+              zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"],
+            in_count: zone.in_count !== undefined ? zone.in_count : undefined,
+            out_count: zone.out_count !== undefined ? zone.out_count : undefined,
+            current_count: zone.current_count !== undefined ? zone.current_count : undefined
+          };
+        });
+        
+        // Update the polygon zone manager form with the normalized zones
+        setPolygonZoneManagerForm(prev => ({
+          ...prev,
+          zones: normalizedZones
+        }));
+      }
+    }
+  }, [processorComponents]);
+
   if (loading) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
@@ -2503,6 +2681,9 @@ const PipelineBuilder = () => {
             {hasLineZoneManagerComponent && 
               <Tab icon={<VisibilityIcon />} iconPosition="start" label="Line Zone Configuration" />
             }
+            {hasPolygonZoneManagerComponent && 
+              <Tab icon={<VisibilityIcon />} iconPosition="start" label="Polygon Zone Configuration" />
+            }
             {dbComponentExists && 
               <Tab 
                 icon={<DatabaseIcon />} 
@@ -2569,7 +2750,43 @@ const PipelineBuilder = () => {
           </TabPanel>
         )}
         
-        <TabPanel value={mainTabValue} index={sourceComponent ? (hasLineZoneManagerComponent ? 3 : 2) : (hasLineZoneManagerComponent ? 2 : 1)} sx={{ p: 0, mt: 3 }}>
+        {/* Polygon Zone Configuration Tab */}
+        {hasPolygonZoneManagerComponent && (
+          <TabPanel 
+            value={mainTabValue} 
+            index={sourceComponent ? 
+              (hasLineZoneManagerComponent ? 3 : 2) : 
+              (hasLineZoneManagerComponent ? 2 : 1)} 
+            sx={{ p: 0, mt: 3 }}
+          >
+            <PolygonZoneConfigTab
+              camera={camera}
+              frameUrl={frameUrl}
+              lastFrameUrl={lastFrameUrl}
+              pipelineHasRunOnce={pipelineHasRunOnce}
+              polygonZoneManagerForm={polygonZoneManagerForm}
+              handlePolygonZonesUpdate={(zones) => handlePolygonZoneManagerFormChange('zones', zones)}
+              isSavingZones={isSavingZones}
+              handleStartStop={handleStartStop}
+              isStartingPipeline={isStartingPipeline}
+              sourceComponent={sourceComponent}
+              isRefreshingComponents={isRefreshingComponents}
+              fetchComponents={fetchComponents}
+              polygonZoneManagerComponent={polygonZoneManagerComponent}
+              hasUnsavedZoneChanges={hasUnsavedPolygonZoneChanges}
+              setHasUnsavedZoneChanges={setHasUnsavedPolygonZoneChanges}
+              showSnackbar={showSnackbar}
+              cameraId={cameraId}
+            />
+          </TabPanel>
+        )}
+        
+        <TabPanel value={mainTabValue} index={sourceComponent ? 
+          (hasLineZoneManagerComponent && hasPolygonZoneManagerComponent ? 4 : 
+           hasLineZoneManagerComponent || hasPolygonZoneManagerComponent ? 3 : 2) : 
+          (hasLineZoneManagerComponent && hasPolygonZoneManagerComponent ? 3 : 
+           hasLineZoneManagerComponent || hasPolygonZoneManagerComponent ? 2 : 1)} 
+          sx={{ p: 0, mt: 3 }}>
           {/* Telemetry Tab */}
           {dbComponentExists && (
             <TelemetryTab

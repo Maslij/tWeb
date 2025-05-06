@@ -45,6 +45,11 @@ export const processorTypeMapping: ComponentTypeMapping = {
     description: "Count objects crossing defined line zones",
     icon: React.createElement(MemoryIcon)
   },
+  "polygon_zone_manager": {
+    name: "Polygon Zone Detection",
+    description: "Define polygon zones for object counting and event detection",
+    icon: React.createElement(MemoryIcon)
+  },
   "object_classification": {
     name: "Image Classification",
     description: "Classify the entire scene with image recognition",
