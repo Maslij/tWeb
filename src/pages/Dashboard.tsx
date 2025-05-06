@@ -58,7 +58,8 @@ const sourceTypeMapping: Record<string, { icon: React.ReactElement, label: strin
 const processorTypeMapping: Record<string, { icon: React.ReactElement, label: string }> = {
   object_detection: { icon: <LocalPoliceIcon fontSize="small" />, label: "Object Detection" },
   object_tracking: { icon: <TimelineIcon fontSize="small" />, label: "Object Tracking" },
-  line_zone_manager: { icon: <FilterCenterFocusIcon fontSize="small" />, label: "Line Zone Manager" }
+  line_zone_manager: { icon: <FilterCenterFocusIcon fontSize="small" />, label: "Line Zone Manager" },
+  polygon_zone_manager: { icon: <FilterCenterFocusIcon fontSize="small" />, label: "Polygon Zone Manager" }
 };
 
 const sinkTypeMapping: Record<string, { icon: React.ReactElement, label: string }> = {
