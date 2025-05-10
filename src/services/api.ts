@@ -41,6 +41,59 @@ export interface Camera {
   };
 }
 
+// Stream interface for StreamCard and other components
+export interface Stream {
+  id: string;
+  name: string;
+  status: string;
+  type?: string;
+  width?: number;
+  height?: number;
+  pipeline?: {
+    nodes: {
+      id: string;
+      componentId: string;
+      name: string;
+    }[];
+  };
+}
+
+// Point interface for zone configuration
+export interface Point {
+  x: number;
+  y: number;
+}
+
+// Polygon interface
+export interface Polygon {
+  id: string;
+  name: string;
+  points: Point[];
+}
+
+// CreatePolygonPayload interface
+export interface CreatePolygonPayload {
+  name: string;
+  points: Point[];
+}
+
+// UpdatePolygonPayload interface
+export interface UpdatePolygonPayload {
+  id: string;
+  name?: string;
+  points?: Point[];
+}
+
+// AlarmEvent interface
+export interface AlarmEvent {
+  id: string;
+  timestamp: number;
+  objectClass?: string;
+  confidence?: number;
+  message?: string;
+  image_data?: string;
+}
+
 // Camera creation/update interface
 export interface CameraInput {
   id?: string;
@@ -745,7 +798,168 @@ const apiService = {
       
       return task; // Return the last known state if timeout occurs
     }
+  },
+
+  // Add stream frame utilities
+  getFrameUrlWithTimestamp: (streamId: string, quality: number = 90): string => {
+    const timestamp = Date.now();
+    return getFullUrl(`/api/v1/streams/${streamId}/frame?quality=${quality}&t=${timestamp}`);
+  },
+
+  // Add stream and pipeline API functions
+  getStreamById: async (streamId: string): Promise<Stream | null> => {
+    try {
+      const response = await axios.get(getFullUrl(`/api/v1/streams/${streamId}`));
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching stream ${streamId}:`, error);
+      return null;
+    }
+  },
+
+  getStreamAlarms: async (streamId: string): Promise<AlarmEvent[]> => {
+    try {
+      const response = await axios.get(getFullUrl(`/api/v1/streams/${streamId}/alarms`));
+      return response.data.alarms || [];
+    } catch (error) {
+      console.error(`Error fetching alarms for stream ${streamId}:`, error);
+      return [];
+    }
+  },
+
+  getPolygons: async (streamId: string): Promise<Polygon[]> => {
+    try {
+      const response = await axios.get(getFullUrl(`/api/v1/streams/${streamId}/polygons`));
+      return response.data.polygons || [];
+    } catch (error) {
+      console.error(`Error fetching polygons for stream ${streamId}:`, error);
+      return [];
+    }
+  },
+
+  createPolygon: async (streamId: string, payload: CreatePolygonPayload): Promise<Polygon | null> => {
+    try {
+      const response = await axios.post(getFullUrl(`/api/v1/streams/${streamId}/polygons`), payload);
+      return response.data;
+    } catch (error) {
+      console.error(`Error creating polygon for stream ${streamId}:`, error);
+      return null;
+    }
+  },
+
+  updatePolygon: async (streamId: string, payload: UpdatePolygonPayload): Promise<Polygon | null> => {
+    try {
+      const response = await axios.put(getFullUrl(`/api/v1/streams/${streamId}/polygons/${payload.id}`), payload);
+      return response.data;
+    } catch (error) {
+      console.error(`Error updating polygon for stream ${streamId}:`, error);
+      return null;
+    }
+  },
+
+  deletePolygon: async (streamId: string, polygonId: string): Promise<boolean> => {
+    try {
+      await axios.delete(getFullUrl(`/api/v1/streams/${streamId}/polygons/${polygonId}`));
+      return true;
+    } catch (error) {
+      console.error(`Error deleting polygon for stream ${streamId}:`, error);
+      return false;
+    }
+  },
+
+  hasPipelineComponent: async (streamId: string, componentType: string): Promise<boolean> => {
+    try {
+      const response = await axios.get(getFullUrl(`/api/v1/streams/${streamId}/pipeline/components/${componentType}`));
+      return response.data.exists || false;
+    } catch (error) {
+      console.error(`Error checking for component ${componentType} in stream ${streamId}:`, error);
+      return false;
+    }
+  },
+
+  isPipelineProcessing: async (streamId: string): Promise<boolean> => {
+    try {
+      const response = await axios.get(getFullUrl(`/api/v1/streams/${streamId}/pipeline/status`));
+      return response.data.processing || false;
+    } catch (error) {
+      console.error(`Error checking pipeline processing status for stream ${streamId}:`, error);
+      return false;
+    }
+  },
+
+  waitForPipelineProcessing: async (
+    streamId: string, 
+    onProgress?: (isProcessing: boolean) => void, 
+    intervalMs: number = 1000,
+    timeoutMs: number = 60000 // 1 minute default timeout
+  ): Promise<boolean> => {
+    const startTime = Date.now();
+    
+    while (Date.now() - startTime < timeoutMs) {
+      const isProcessing = await apiService.isPipelineProcessing(streamId);
+      
+      if (onProgress) {
+        onProgress(isProcessing);
+      }
+      
+      if (!isProcessing) {
+        return false; // Not processing anymore
+      }
+      
+      // Wait for the specified interval
+      await new Promise(resolve => setTimeout(resolve, intervalMs));
+    }
+    
+    return true; // Still processing after timeout
+  },
+
+  getActivePipeline: async (streamId: string): Promise<string | null> => {
+    try {
+      const response = await axios.get(getFullUrl(`/api/v1/streams/${streamId}/pipeline/active`));
+      return response.data.pipeline_id || null;
+    } catch (error) {
+      console.error(`Error getting active pipeline for stream ${streamId}:`, error);
+      return null;
+    }
+  },
+
+  getVisionModels: async (): Promise<any[]> => {
+    try {
+      const response = await axios.get(getFullUrl(`/api/v1/models/vision`));
+      return response.data.models || [];
+    } catch (error) {
+      console.error('Error fetching vision models:', error);
+      return [];
+    }
+  },
+
+  checkServerHealth: async (): Promise<boolean> => {
+    try {
+      const response = await axios.get(getFullUrl(`/api/v1/health`));
+      return response.data.status === 'ok';
+    } catch (error) {
+      console.error('Error checking server health:', error);
+      return false;
+    }
+  },
+
+  getWebSocketHost: (): string => {
+    if (window.location.hostname === 'localhost') {
+      const apiServer = import.meta.env.VITE_TAPI_SERVER || 'localhost:8090';
+      return `ws://${apiServer}/ws`;
+    }
+    
+    // Use secure websocket in production
+    return `wss://${window.location.host}/ws`;
   }
 };
+
+// Export all the standalone functions
+export const getStreamAlarms = apiService.getStreamAlarms;
+export const hasPipelineComponent = apiService.hasPipelineComponent;
+export const isPipelineProcessing = apiService.isPipelineProcessing;
+export const waitForPipelineProcessing = apiService.waitForPipelineProcessing;
+export const getActivePipeline = apiService.getActivePipeline;
+export const getVisionModels = apiService.getVisionModels;
 
 export default apiService;
