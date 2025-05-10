@@ -1,5 +1,13 @@
 FROM node:20-slim as builder
 
+# Add build arguments
+ARG APP_VERSION
+ARG BUILD_ID
+
+# Set as environment variables
+ENV VITE_APP_VERSION=${APP_VERSION}
+ENV VITE_BUILD_ID=${BUILD_ID}
+
 # Set working directory
 WORKDIR /app
 

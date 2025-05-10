@@ -7,9 +7,22 @@ ECR_REGISTRY="246261010633.dkr.ecr.ap-southeast-2.amazonaws.com"
 ECR_REPOSITORY="bbweb-jetson"
 IMAGE_TAG=$(date +%Y%m%d-%H%M%S)
 
+# Change directory to current script location
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "$SCRIPT_DIR"
+
+# Extract version from package.json
+APP_VERSION=$(grep -o '"version": *"[^"]*"' package.json | sed 's/"version": *"\(.*\)"/\1/')
+echo "App version from package.json: ${APP_VERSION}"
+
+# Get git commit hash
+BUILD_ID=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+echo "Build ID (git commit): ${BUILD_ID}"
+
 echo "Building and deploying tWeb ARM64 image to ECR..."
 echo "Repository: ${ECR_REGISTRY}/${ECR_REPOSITORY}"
 echo "Tag: ${IMAGE_TAG}"
+echo "Version: v${APP_VERSION}-${BUILD_ID}"
 
 # Authenticate Docker to ECR
 echo "Authenticating with AWS ECR..."
@@ -28,6 +41,8 @@ docker buildx inspect --bootstrap
 # Build and push the image
 echo "Building and pushing Docker image for ARM64..."
 docker buildx build --platform linux/arm64 \
+  --build-arg APP_VERSION="${APP_VERSION}" \
+  --build-arg BUILD_ID="${BUILD_ID}" \
   --tag ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG} \
   --tag ${ECR_REGISTRY}/${ECR_REPOSITORY}:latest \
   --push \
@@ -36,6 +51,7 @@ docker buildx build --platform linux/arm64 \
 echo "Deployment completed successfully!"
 echo "Image: ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
 echo "Image: ${ECR_REGISTRY}/${ECR_REPOSITORY}:latest"
+echo "Version: v${APP_VERSION}-${BUILD_ID}"
 echo ""
 echo "To pull this image on your ARM device:"
 echo "1. Authenticate with ECR:"

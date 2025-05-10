@@ -19,9 +19,19 @@ ORIGINAL_DIR=$(pwd)
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
+# Extract version from package.json
+APP_VERSION=$(grep -o '"version": *"[^"]*"' package.json | sed 's/"version": *"\(.*\)"/\1/')
+echo "App version from package.json: ${APP_VERSION}"
+
+# Get git commit hash
+BUILD_ID=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+echo "Build ID (git commit): ${BUILD_ID}"
+
 # Build the image for arm64 platform
 echo "Building Docker image for ARM64..."
 docker buildx build --platform linux/arm64 \
+  --build-arg APP_VERSION="${APP_VERSION}" \
+  --build-arg BUILD_ID="${BUILD_ID}" \
   --tag ${FULL_IMAGE_NAME} \
   --load \
   .
@@ -31,6 +41,7 @@ cd "$ORIGINAL_DIR"
 
 echo "Build completed successfully!"
 echo "Image: ${FULL_IMAGE_NAME}"
+echo "Version: v${APP_VERSION}-${BUILD_ID}"
 echo ""
 echo "To push this image to ECR, use:"
 echo "1. Tag the image:"
