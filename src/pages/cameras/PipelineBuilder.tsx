@@ -1500,7 +1500,7 @@ const PipelineBuilder = () => {
         
         // Find all components that depend on this one
         for (const [depType, requiredTypes] of Object.entries(dependencies)) {
-          if (requiredTypes.includes(String(componentTypeName))) {
+          if (requiredTypes && Array.isArray(requiredTypes) && requiredTypes.includes(String(componentTypeName))) {
             // This component is a dependency for depType
             // Find all components of type depType and mark them for deletion
             const componentsToDelete = processorComponents.filter(proc => {
