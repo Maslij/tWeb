@@ -16,7 +16,17 @@ import {
   TableBody,
   TablePagination,
   Paper,
-  Tooltip
+  Tooltip,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  OutlinedInput,
+  Checkbox,
+  ListItemText,
+  SelectChangeEvent,
+  Stack,
+  IconButton
 } from '@mui/material';
 import Typography from '../../components/ui/Typography';
 import Button from '../../components/ui/Button';
@@ -88,8 +98,66 @@ const TelemetryTab: React.FC<TelemetryTabProps> = ({
   hasHeatmapData = true,
   hasZoneLineData = true
 }) => {
-  // Add state for direction filter
+  // State declaration updates
   const [directionFilter, setDirectionFilter] = React.useState<'all' | 'in' | 'out'>('all');
+  
+  // Add state for heatmap parameters
+  const [heatmapAnchor, setHeatmapAnchor] = React.useState<string>('CENTER');
+  const [heatmapQuality, setHeatmapQuality] = React.useState<number>(90);
+  const [selectedClasses, setSelectedClasses] = React.useState<string[]>([]);
+  const [availableClasses, setAvailableClasses] = React.useState<string[]>([]);
+  const [isLoadingClasses, setIsLoadingClasses] = React.useState<boolean>(false);
+
+  // Replace the existing useEffect that extracts classes from records with a new one that fetches from API
+  React.useEffect(() => {
+    // Fetch available classes when camera ID changes or when data changes
+    fetchAvailableClasses();
+  }, [cameraId, totalEvents]);
+
+  // Add function to fetch available classes
+  const fetchAvailableClasses = async () => {
+    if (!cameraId) return;
+    
+    setIsLoadingClasses(true);
+    try {
+      const response = await fetch(`/api/v1/cameras/${cameraId}/database/available-classes`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.classes && Array.isArray(data.classes)) {
+          setAvailableClasses(data.classes);
+          
+          // Clear selected classes that are no longer available
+          setSelectedClasses(prevSelected => 
+            prevSelected.filter(cls => data.classes.includes(cls))
+          );
+        }
+      } else {
+        console.error('Failed to fetch available classes');
+        setAvailableClasses([]);
+      }
+    } catch (error) {
+      console.error('Error fetching available classes:', error);
+      setAvailableClasses([]);
+    } finally {
+      setIsLoadingClasses(false);
+    }
+  };
+
+  // Handle class selection change
+  const handleClassChange = (event: SelectChangeEvent<string[]>) => {
+    const value = event.target.value;
+    setSelectedClasses(typeof value === 'string' ? value.split(',') : value);
+  };
+
+  // Handle anchor change
+  const handleAnchorChange = (event: SelectChangeEvent) => {
+    setHeatmapAnchor(event.target.value);
+  };
+
+  // Handle quality change
+  const handleQualityChange = (event: SelectChangeEvent) => {
+    setHeatmapQuality(Number(event.target.value));
+  };
 
   // Zone Line Counts Chart component
   const ZoneLineCountsChart = () => {
@@ -329,9 +397,23 @@ const TelemetryTab: React.FC<TelemetryTabProps> = ({
       );
     }
 
-    // Generate the heatmap image URL
-    const heatmapImageUrl = cameraId ? 
-      `/api/v1/cameras/${cameraId}/database/heatmap-image?quality=90` : '';
+    // Generate the heatmap image URL with parameters
+    const buildHeatmapUrl = () => {
+      let url = `/api/v1/cameras/${cameraId}/database/heatmap-image?quality=${heatmapQuality}&anchor=${heatmapAnchor}`;
+      
+      // Add class filters if selected
+      if (selectedClasses.length > 0) {
+        const classParam = selectedClasses.map(encodeURIComponent).join(',');
+        url += `&class=${classParam}`;
+      }
+      
+      // Add timestamp to prevent caching
+      url += `&t=${new Date().getTime()}`;
+      
+      return url;
+    };
+
+    const heatmapImageUrl = cameraId ? buildHeatmapUrl() : '';
 
     if (!heatmapImageUrl && !isLoadingHeatmapData) {
       return (
@@ -356,64 +438,152 @@ const TelemetryTab: React.FC<TelemetryTabProps> = ({
     }
 
     return (
-      <Box 
-        sx={{ 
-          height: 400, 
-          width: "100%", 
-          display: 'flex', 
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          border: '1px solid',
-          borderColor: 'divider',
-          borderRadius: 1,
-          position: 'relative'
-        }}
-      >
-        {shouldRenderData && (
-          <img 
-            id="heatmap-image"
-            src={`${heatmapImageUrl}&t=${new Date().getTime()}`} // Add timestamp to prevent caching
-            alt="Detection Heatmap" 
-            style={{ 
-              maxWidth: '100%', 
-              maxHeight: '100%', 
-              objectFit: 'contain'
-            }}
-            onError={(e) => {
-              // Handle image load error
-              const target = e.target as HTMLImageElement;
-              target.style.display = 'none';
-              // Show error message
-              const errorDiv = document.createElement('div');
-              errorDiv.textContent = 'Failed to load heatmap image. No data may be available yet.';
-              errorDiv.style.color = '#666';
-              errorDiv.style.textAlign = 'center';
-              errorDiv.style.padding = '20px';
-              target.parentNode?.appendChild(errorDiv);
-            }}
-          />
-        )}
+      <>
+        <Box sx={{ mb: 2, display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+          {/* Anchor point selection */}
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel id="anchor-select-label">Anchor Point</InputLabel>
+            <Select
+              labelId="anchor-select-label"
+              id="anchor-select"
+              value={heatmapAnchor}
+              label="Anchor Point"
+              onChange={handleAnchorChange}
+            >
+              <MenuItem value="CENTER">Center</MenuItem>
+              <MenuItem value="BOTTOM_CENTER">Bottom Center</MenuItem>
+              <MenuItem value="TOP_CENTER">Top Center</MenuItem>
+              <MenuItem value="LEFT_CENTER">Left Center</MenuItem>
+              <MenuItem value="RIGHT_CENTER">Right Center</MenuItem>
+              <MenuItem value="TOP_LEFT">Top Left</MenuItem>
+              <MenuItem value="TOP_RIGHT">Top Right</MenuItem>
+              <MenuItem value="BOTTOM_LEFT">Bottom Left</MenuItem>
+              <MenuItem value="BOTTOM_RIGHT">Bottom Right</MenuItem>
+            </Select>
+          </FormControl>
+
+          {/* Image quality selection */}
+          <FormControl size="small" sx={{ minWidth: 120 }}>
+            <InputLabel id="quality-select-label">Quality</InputLabel>
+            <Select
+              labelId="quality-select-label"
+              id="quality-select"
+              value={heatmapQuality.toString()}
+              label="Quality"
+              onChange={handleQualityChange}
+            >
+              <MenuItem value="70">Low</MenuItem>
+              <MenuItem value="85">Medium</MenuItem>
+              <MenuItem value="95">High</MenuItem>
+              <MenuItem value="100">Best</MenuItem>
+            </Select>
+          </FormControl>
+
+          {/* Class filter selection */}
+          <FormControl size="small" sx={{ minWidth: 200, maxWidth: 300 }}>
+            <InputLabel id="class-filter-label">Class Filter</InputLabel>
+            <Select
+              labelId="class-filter-label"
+              id="class-filter"
+              multiple
+              value={selectedClasses}
+              onChange={handleClassChange}
+              input={<OutlinedInput label="Class Filter" />}
+              renderValue={(selected) => selected.join(', ')}
+              startAdornment={isLoadingClasses ? (
+                <CircularProgress size={18} sx={{ mr: 1 }} />
+              ) : null}
+              endAdornment={
+                <Tooltip title="Refresh available classes">
+                  <IconButton 
+                    size="small" 
+                    sx={{ ml: -1 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      fetchAvailableClasses();
+                    }}
+                  >
+                    <RedoIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              }
+              disabled={isLoadingClasses}
+            >
+              {availableClasses.length === 0 ? (
+                <MenuItem disabled>
+                  <em>No classes available</em>
+                </MenuItem>
+              ) : (
+                availableClasses.map((name) => (
+                  <MenuItem key={name} value={name}>
+                    <Checkbox checked={selectedClasses.indexOf(name) > -1} />
+                    <ListItemText primary={name} />
+                  </MenuItem>
+                ))
+              )}
+            </Select>
+          </FormControl>
+        </Box>
         
-        {isLoadingHeatmapData && (
-          <Box 
-            position="absolute"
-            top={0}
-            left={0}
-            right={0}
-            bottom={0}
-            display="flex"
-            alignItems="center"
-            justifyContent="center"
-            bgcolor="transparent"
-            zIndex={10}
-          >
-            <CircularProgress />
-          </Box>
-        )}
-        
-        {!shouldRenderData && isLoadingHeatmapData && <TelemetryChartSkeleton />}
-      </Box>
+        <Box 
+          sx={{ 
+            height: 400, 
+            width: "100%", 
+            display: 'flex', 
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 1,
+            position: 'relative'
+          }}
+        >
+          {shouldRenderData && (
+            <img 
+              id="heatmap-image"
+              src={heatmapImageUrl}
+              alt="Detection Heatmap" 
+              style={{ 
+                maxWidth: '100%', 
+                maxHeight: '100%', 
+                objectFit: 'contain'
+              }}
+              onError={(e) => {
+                // Handle image load error
+                const target = e.target as HTMLImageElement;
+                target.style.display = 'none';
+                // Show error message
+                const errorDiv = document.createElement('div');
+                errorDiv.textContent = 'Failed to load heatmap image. No data may be available yet.';
+                errorDiv.style.color = '#666';
+                errorDiv.style.textAlign = 'center';
+                errorDiv.style.padding = '20px';
+                target.parentNode?.appendChild(errorDiv);
+              }}
+            />
+          )}
+          
+          {isLoadingHeatmapData && (
+            <Box 
+              position="absolute"
+              top={0}
+              left={0}
+              right={0}
+              bottom={0}
+              display="flex"
+              alignItems="center"
+              justifyContent="center"
+              bgcolor="transparent"
+              zIndex={10}
+            >
+              <CircularProgress />
+            </Box>
+          )}
+          
+          {!shouldRenderData && isLoadingHeatmapData && <TelemetryChartSkeleton />}
+        </Box>
+      </>
     );
   };
 
@@ -501,8 +671,11 @@ const TelemetryTab: React.FC<TelemetryTabProps> = ({
             <Button
               variant="contained"
               startIcon={isLoadingHeatmapData ? <CircularProgress size={20} /> : <RedoIcon />}
-              onClick={fetchClassHeatmapData}
-              disabled={isLoadingHeatmapData}
+              onClick={() => {
+                fetchClassHeatmapData();
+                fetchAvailableClasses(); // Also refresh available classes
+              }}
+              disabled={isLoadingHeatmapData || isLoadingClasses}
               size="small"
             >
               Refresh
