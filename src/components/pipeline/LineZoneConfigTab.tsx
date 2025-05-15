@@ -146,7 +146,7 @@ const LineZoneConfigTab: React.FC<LineZoneConfigTabProps> = ({
                   start_y: typeof zone.start_y === 'number' ? zone.start_y : parseFloat(String(zone.start_y)) || 0.5,
                   end_x: typeof zone.end_x === 'number' ? zone.end_x : parseFloat(String(zone.end_x)) || 0.8,
                   end_y: typeof zone.end_y === 'number' ? zone.end_y : parseFloat(String(zone.end_y)) || 0.5,
-                  min_crossing_threshold: zone.min_crossing_threshold || 1,
+                  min_crossing_threshold: Math.min(Math.max(parseInt(String(zone.min_crossing_threshold)) || 1, 1), 10),
                   triggering_anchors: Array.isArray(zone.triggering_anchors) ? 
                     zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"],
                   // Preserve the counts if they exist

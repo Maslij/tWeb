@@ -5,10 +5,12 @@ import {
   ListItem,
   ListItemText,
   TextField,
-  Chip
+  Chip,
+  Tooltip
 } from '@mui/material';
 import { IconButton } from '../../components/ui/IconButton';
 import DeleteIcon from '@mui/icons-material/Delete';
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 
 // Interface for Zone
 export interface Zone {
@@ -121,17 +123,29 @@ const LineZoneList: React.FC<LineZoneListProps> = ({
               secondary={
                 <Box component="div" sx={{ mt: 1 }}>
                   <Box component="span" sx={{ display: 'flex', alignItems: 'center', color: 'text.secondary' }}>
-                    Threshold: 
+                    <Tooltip title="Minimum number of frames required for an object to be counted as crossing the line. Higher values reduce false positives but may miss quick movements. Valid range: 1-10." arrow>
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        Threshold <HelpOutlineIcon sx={{ fontSize: 16, ml: 0.5, color: 'text.secondary' }} />:
+                      </Box>
+                    </Tooltip>
                     <TextField
                       type="number"
                       size="small"
                       variant="standard"
                       value={zone.min_crossing_threshold}
-                      onChange={(e) => onUpdateZone(index, 'min_crossing_threshold', parseInt(e.target.value) || 1)}
+                      onChange={(e) => {
+                        // Convert to number, ensure it's at least 1 and at most 10
+                        const value = e.target.value === '' ? 1 : Math.min(Math.max(parseInt(e.target.value) || 1, 1), 10);
+                        onUpdateZone(index, 'min_crossing_threshold', value);
+                      }}
                       onClick={(e) => e.stopPropagation()}
                       disabled={disabled}
                       sx={{ width: '60px', mx: 1 }}
-                      inputProps={{ min: 1 }}
+                      inputProps={{ 
+                        min: 1, 
+                        max: 10,
+                        step: 1
+                      }}
                     />
                   </Box>
                   <Box component="span" sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
