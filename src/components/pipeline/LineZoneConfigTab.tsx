@@ -154,6 +154,13 @@ const LineZoneConfigTab: React.FC<LineZoneConfigTabProps> = ({
                   out_count: zone.out_count
                 }));
 
+                // Validate that all zones have at least one anchor point
+                const invalidZones = normalizedZones.filter(zone => !zone.triggering_anchors.length);
+                if (invalidZones.length > 0) {
+                  showSnackbar('Error: All zones must have at least one anchor point selected');
+                  return;
+                }
+
                 // Create a new config object without spreading the old config
                 // This ensures we don't accidentally keep old zones data
                 const config: Record<string, any> = {

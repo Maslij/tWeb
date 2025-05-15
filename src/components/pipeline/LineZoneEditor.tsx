@@ -518,7 +518,8 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
           end_x: endNormalized.x,
           end_y: endNormalized.y,
           min_crossing_threshold: 1,
-          triggering_anchors: ["BOTTOM_CENTER", "CENTER"]
+          // Always ensure at least one anchor point is selected by default
+          triggering_anchors: ["BOTTOM_CENTER", "CENTER", "CENTER_LEFT", "CENTER_RIGHT"]
         };
         
         onZonesChange([...localZonesRef.current, newZone]);
