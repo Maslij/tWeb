@@ -1623,7 +1623,16 @@ const PipelineBuilder = () => {
     }
   };
 
-  // Modify handleStartStop function to track if pipeline has run once
+  // Add this function before handleStartStop
+  const hasAIDependentComponents = useCallback((): boolean => {
+    // Check if any processor components require the AI server
+    return processorComponents.some(component => {
+      const componentType = component.type;
+      return ['object_detection', 'object_classification', 'age_gender_detection'].includes(String(componentType));
+    });
+  }, [processorComponents]);
+
+  // Modify handleStartStop function to check for AI server availability
   const handleStartStop = async () => {
     if (!camera || !cameraId) return;
     
@@ -1644,14 +1653,33 @@ const PipelineBuilder = () => {
           return;
         }
         
+        // Check if pipeline has AI components but the inference server is unavailable
+        if (hasAIDependentComponents() && !inferenceServerAvailable) {
+          showSnackbar('Cannot start pipeline: AI server is unavailable. Please remove AI components or ensure the server is running.');
+          return;
+        }
+        
         setIsStartingPipeline(true);
-        const result = await apiService.cameras.start(cameraId);
-        if (result) {
-          setCamera(result);
-          setPipelineHasRunOnce(true);
-          showSnackbar('Pipeline started successfully');
-        } else {
-          showSnackbar('Failed to start pipeline');
+        try {
+          const result = await apiService.cameras.start(cameraId);
+          if (result) {
+            setCamera(result);
+            setPipelineHasRunOnce(true);
+            showSnackbar('Pipeline started successfully');
+          } else {
+            showSnackbar('Failed to start pipeline');
+          }
+        } catch (err: any) {
+          console.error('Error starting pipeline:', err);
+          
+          // Handle specific error responses
+          if (err.response && err.response.status === 503) {
+            // Extract the error message from the response if available
+            const errorMessage = err.response.data || 'Service unavailable';
+            showSnackbar(`Error starting pipeline: ${errorMessage}`);
+          } else {
+            showSnackbar('Error starting pipeline. Please check server logs for details.');
+          }
         }
       }
     } catch (err) {
@@ -2683,25 +2711,35 @@ const PipelineBuilder = () => {
           )}
         </Box>
         <Box>
-          <Button
-            variant="contained"
-            color={camera.running ? "error" : "success"}
-            startIcon={
-              isStartingPipeline || isStoppingPipeline ? 
-                <CircularProgress size={24} color="inherit" /> : 
-                camera.running ? <StopIcon /> : <PlayArrowIcon />
+          <Tooltip 
+            title={
+              hasAIDependentComponents() && !inferenceServerAvailable ? 
+              "Cannot start: AI server is unavailable. Please remove AI components or ensure the AI server is running." : ""
             }
-            onClick={handleStartStop}
-            disabled={isStartingPipeline || isStoppingPipeline}
           >
-            {isStartingPipeline ? "Starting..." : 
-             isStoppingPipeline ? "Stopping..." :
-             camera.running ? "Stop Pipeline" : "Start Pipeline"}
-          </Button>
-        </Box>
-      </Box>
+            <span>
+              <Button
+                variant="contained"
+                color={camera.running ? "error" : "success"}
+                startIcon={
+                  isStartingPipeline || isStoppingPipeline ? 
+                    <CircularProgress size={24} color="inherit" /> : 
+                    camera.running ? <StopIcon /> : <PlayArrowIcon />
+                }
+                onClick={handleStartStop}
+                disabled={isStartingPipeline || isStoppingPipeline || 
+                         (!camera.running && hasAIDependentComponents() && !inferenceServerAvailable)}
+              >
+                {isStartingPipeline ? "Starting..." : 
+                 isStoppingPipeline ? "Stopping..." :
+                 camera.running ? "Stop Pipeline" : "Start Pipeline"}
+              </Button>
+            </span>
+          </Tooltip>
+              </Box>
+    </Box>
 
-      <Box sx={{ width: '100%', mb: 4 }}>
+        <Box sx={{ width: '100%', mb: 4 }}>
         <Paper elevation={3} sx={{ borderRadius: '4px 4px 0 0' }}>
           <Tabs 
             value={mainTabValue} 
@@ -4359,10 +4397,33 @@ const PipelineBuilder = () => {
             </Alert>
           )}
           
-          {/* Add alert for inference server status */}
+          {/* Add enhanced alert for inference server status */}
           {!inferenceServerAvailable && (
-            <Alert severity="error" sx={{ mb: 3 }}>
-              Triton inference server is not available. AI-dependent templates will not function correctly.
+            <Alert 
+              severity="error" 
+              sx={{ mb: 3 }}
+              action={
+                <Button 
+                  color="inherit" 
+                  size="small"
+                  onClick={() => {
+                    // Close this dialog and navigate back to main view
+                    closeTemplateDialog();
+                  }}
+                >
+                  Close
+                </Button>
+              }
+            >
+              <AlertTitle>AI Server Unavailable</AlertTitle>
+              <Typography variant="body2">
+                The Triton inference server is currently offline or not responding. 
+                AI-dependent components and templates requiring object detection, classification, 
+                or other AI features will not be available until the server is back online.
+              </Typography>
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                If you have AI components in your pipeline, you'll need to remove them before starting the pipeline.
+              </Typography>
             </Alert>
           )}
           
@@ -4484,20 +4545,19 @@ const PipelineBuilder = () => {
           <Button onClick={closeTemplateDialog}>Cancel</Button>
           <Button
             variant="contained"
-            color="primary"
-            loading={applyingTemplate}
-            icon={<AutoFixHighIcon />}
-                  disabled={!selectedTemplate || !sourceComponent || 
-              (selectedTemplate && (() => {
+            color="primary" 
+            disabled={
+              !selectedTemplate || 
+              !sourceComponent || 
+              (() => {
+                if (!selectedTemplate) return true;
                 const template = pipelineTemplates.find(t => t.id === selectedTemplate);
-                return template ? 
-                  // Disable button if the template requires a higher license tier 
-                  // or if it requires the inference server but the server is offline
-                  template.requiredLicenseTier > licenseInfo.tier_id || 
-                  (template.requiresInferenceServer && !inferenceServerAvailable)
-                : true;
-              })())
+                if (!template) return true;
+                return template.requiredLicenseTier > licenseInfo.tier_id || 
+                      (template.requiresInferenceServer && !inferenceServerAvailable);
+              })()
             }
+            startIcon={applyingTemplate ? <CircularProgress size={20} /> : <AutoFixHighIcon />}
             onClick={applyTemplate}
           >
             Apply Template
