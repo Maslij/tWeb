@@ -3775,7 +3775,8 @@ const PipelineBuilder = () => {
                             onChange={(e) => handleLineZoneManagerFormChange('text_scale', parseFloat(e.target.value))}
                             fullWidth
                             margin="normal"
-                            inputProps={{ step: 0.1 }}
+                            inputProps={{ step: 0.1, min: 0.1, max: 2.0 }}
+                            helperText="Base text size that adapts to camera resolution. Higher values = larger text."
                           />
                           <TextField
                             label="Text Thickness"
