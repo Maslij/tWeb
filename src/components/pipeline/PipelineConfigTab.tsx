@@ -4,7 +4,8 @@ import {
   Divider,
   Alert,
   Stack,
-  Box
+  Box,
+  AlertTitle
 } from '@mui/material';
 import Typography from '../../components/ui/Typography';
 import Button from '../../components/ui/Button';
@@ -27,6 +28,7 @@ interface PipelineConfigTabProps {
   camera: Camera;
   areAllComponentTypesUsed: (category: 'processor' | 'sink') => boolean;
   openTemplateDialog: () => void;
+  inferenceServerAvailable: boolean;
 }
 
 const PipelineConfigTab: React.FC<PipelineConfigTabProps> = ({
@@ -39,7 +41,8 @@ const PipelineConfigTab: React.FC<PipelineConfigTabProps> = ({
   isDeletingComponent,
   camera,
   areAllComponentTypesUsed,
-  openTemplateDialog
+  openTemplateDialog,
+  inferenceServerAvailable
 }) => {
   // Render component card
   const renderComponentCard = (component: Component, type: 'source' | 'processor' | 'sink') => {
@@ -58,6 +61,16 @@ const PipelineConfigTab: React.FC<PipelineConfigTabProps> = ({
 
   return (
     <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 3 }}>
+      {/* Inference Server Status Alert */}
+      {!inferenceServerAvailable && (
+        <Alert severity="warning" sx={{ mb: 0 }}>
+          <AlertTitle>Triton Inference Server Unavailable</AlertTitle>
+          The AI model server is currently offline or not responding. AI-dependent components 
+          and templates requiring object detection, classification, or other AI features will not be available until 
+          the server is back online.
+        </Alert>
+      )}
+      
       {/* Source Card */}
       <Paper elevation={2} sx={{ p: 3, width: '100%' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
@@ -105,7 +118,7 @@ const PipelineConfigTab: React.FC<PipelineConfigTabProps> = ({
               color="secondary"
               icon={<AutoFixHighIcon />}
               onClick={openTemplateDialog}
-              disabled={!sourceComponent || camera.running}
+              disabled={!sourceComponent || camera.running || !inferenceServerAvailable}
               size="small"
             >
               Use Template

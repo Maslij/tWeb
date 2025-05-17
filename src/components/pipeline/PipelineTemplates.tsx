@@ -34,6 +34,7 @@ export interface PipelineTemplate {
   description: string;
   icon: React.ReactNode;
   requiredLicenseTier: 1 | 2 | 3; // 1=Basic, 2=Standard, 3=Professional
+  requiresInferenceServer: boolean;
   components: {
     processors: {
       type: string;
@@ -54,13 +55,14 @@ export const pipelineTemplates: PipelineTemplate[] = [
     description: 'Detect common objects in the video stream',
     icon: <VisibilityIcon />,
     requiredLicenseTier: 2, // Requires Standard tier
+    requiresInferenceServer: true, // Requires Triton inference server
     components: {
       processors: [
         {
           type: 'object_detection',
           config: {
-            model_id: "yolov4-tiny",
-            server_url: "http://localhost:8080",
+            model_id: "yolov7",
+            server_url: "http://localhost:8000",
             confidence_threshold: 0.5,
             draw_bounding_boxes: true,
             use_shared_memory: true,
@@ -77,13 +79,14 @@ export const pipelineTemplates: PipelineTemplate[] = [
     description: 'Count people crossing defined lines/zones',
     icon: <PeopleIcon />,
     requiredLicenseTier: 3, // Requires Professional tier
+    requiresInferenceServer: true, // Requires Triton inference server
     components: {
       processors: [
         {
           type: 'object_detection',
           config: {
-            model_id: "yolov4-tiny",
-            server_url: "http://localhost:8080",
+            model_id: "yolov7_qat",
+            server_url: "http://localhost:8000",
             confidence_threshold: 0.5,
             draw_bounding_boxes: true,
             use_shared_memory: true,
@@ -150,13 +153,14 @@ export const pipelineTemplates: PipelineTemplate[] = [
     description: 'Track and count vehicles crossing defined lines',
     icon: <DirectionsCarIcon />,
     requiredLicenseTier: 3, // Requires Professional tier
+    requiresInferenceServer: true, // Requires Triton inference server
     components: {
       processors: [
         {
           type: 'object_detection',
           config: {
-            model_id: "yolov4-tiny",
-            server_url: "http://localhost:8080",
+            model_id: "yolov7_qat",
+            server_url: "http://localhost:8000",
             confidence_threshold: 0.4,
             draw_bounding_boxes: true,
             use_shared_memory: true,
