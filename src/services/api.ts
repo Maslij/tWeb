@@ -18,9 +18,7 @@ const getFullUrl = (path: string): string => {
   if (window.location.hostname === 'localhost') {
     // When using Vite's built-in proxy, we should use relative URLs
     // The proxy in vite.config.ts will forward /api requests to the backend
-    // If proxy is not working, connect directly to the API server
-    const apiServer = import.meta.env.VITE_TAPI_SERVER || 'localhost:8090';
-    return `http://${apiServer}${path}`;
+    return path; // Just use the relative path to leverage the proxy
   }
   
   // For production, we need to use the actual API server
@@ -407,13 +405,7 @@ const apiService = {
 
     // Get the latest frame from a camera
     getFrame: (cameraId: string, quality: number = 90): string => {
-      // For frames, we need to use the direct URL even in development
-      // because the img src tag doesn't go through the proxy
-      if (window.location.hostname === 'localhost') {
-        const apiServer = import.meta.env.VITE_TAPI_SERVER || 'localhost:8090';
-        const protocol = window.location.protocol;
-        return `${protocol}//${apiServer}/api/v1/cameras/${cameraId}/frame?quality=${quality}`;
-      }
+      // Use relative path for frames too, to leverage the proxy
       return getFullUrl(`/api/v1/cameras/${cameraId}/frame?quality=${quality}`);
     }
   },
@@ -944,13 +936,9 @@ const apiService = {
   },
 
   getWebSocketHost: (): string => {
-    if (window.location.hostname === 'localhost') {
-      const apiServer = import.meta.env.VITE_TAPI_SERVER || 'localhost:8090';
-      return `ws://${apiServer}/ws`;
-    }
-    
-    // Use secure websocket in production
-    return `wss://${window.location.host}/ws`;
+    // Use the current host and just replace the protocol
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${wsProtocol}//${window.location.host}/ws`;
   }
 };
 
