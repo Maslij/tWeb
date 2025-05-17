@@ -356,6 +356,9 @@ const PipelineBuilder = () => {
   const [objectDetectionModels, setObjectDetectionModels] = useState<AIModel[]>([]);
   const [selectedModelClasses, setSelectedModelClasses] = useState<string[]>([]);
   const [objectDetectionAvailable, setObjectDetectionAvailable] = useState(false);
+  const [objectClassificationAvailable, setObjectClassificationAvailable] = useState(false);
+  const [ageGenderDetectionAvailable, setAgeGenderDetectionAvailable] = useState(false);
+  const [inferenceServerAvailable, setInferenceServerAvailable] = useState(false);
 
   const [advancedSettingsExpanded, setAdvancedSettingsExpanded] = useState({
     fileSource: false,
@@ -563,6 +566,9 @@ const PipelineBuilder = () => {
         if (modelResponse && modelResponse.models) {
           setAvailableModels(modelResponse.models);
           
+          // Check overall inference server availability
+          setInferenceServerAvailable(modelResponse.models.length > 0);
+          
           // Filter out object detection models
           const detectionModels = modelResponse.models.filter(
             (model: AIModel) => model.type === 'object_detection' && model.status === 'loaded'
@@ -570,6 +576,18 @@ const PipelineBuilder = () => {
           
           setObjectDetectionModels(detectionModels);
           setObjectDetectionAvailable(detectionModels.length > 0);
+          
+          // Check for classification models
+          const classificationModels = modelResponse.models.filter(
+            (model: AIModel) => model.type === 'image_classification' && model.status === 'loaded'
+          );
+          setObjectClassificationAvailable(classificationModels.length > 0);
+          
+          // Check for age gender detection models
+          const ageGenderModels = modelResponse.models.filter(
+            (model: AIModel) => model.type === 'age_gender_detection' && model.status === 'loaded'
+          );
+          setAgeGenderDetectionAvailable(ageGenderModels.length > 0);
           
           // If object detection models are available, set default model
           if (detectionModels.length > 0) {
@@ -595,6 +613,11 @@ const PipelineBuilder = () => {
       } catch (err) {
         console.error('Error fetching data:', err);
         setError('Failed to load data. Please try again later.');
+        // If we can't fetch models, assume the inference server is down
+        setInferenceServerAvailable(false);
+        setObjectDetectionAvailable(false);
+        setObjectClassificationAvailable(false);
+        setAgeGenderDetectionAvailable(false);
       } finally {
         setLoading(false);
       }
@@ -1762,9 +1785,15 @@ const PipelineBuilder = () => {
       }
     }
     
-    // For object_detection processor, check if it's available
-    if (type === 'object_detection' && category === 'processor') {
-      return objectDetectionAvailable;
+    // For AI-dependent components, check if the corresponding model type is available
+    if (category === 'processor') {
+      if (type === 'object_detection') {
+        return objectDetectionAvailable;
+      } else if (type === 'object_classification') {
+        return objectClassificationAvailable;
+      } else if (type === 'age_gender_detection') {
+        return ageGenderDetectionAvailable;
+      }
     }
     
     // Check license tier restrictions
@@ -1885,8 +1914,15 @@ const PipelineBuilder = () => {
       }
     }
     
-    if (type === 'object_detection' && !objectDetectionAvailable) {
-      return "Object detection model not available";
+    // Check for AI-dependent components
+    if (category === 'processor') {
+      if (type === 'object_detection' && !objectDetectionAvailable) {
+        return "Object detection model not available - check Triton server";
+      } else if (type === 'object_classification' && !objectClassificationAvailable) {
+        return "Classification model not available - check Triton server";
+      } else if (type === 'age_gender_detection' && !ageGenderDetectionAvailable) {
+        return "Age/gender model not available - check Triton server";
+      }
     }
     
     // Check license tier restrictions
@@ -2152,6 +2188,12 @@ const PipelineBuilder = () => {
     
     const template = pipelineTemplates.find(t => t.id === selectedTemplate);
     if (!template) return;
+    
+    // Check if the template requires the inference server but it's not available
+    if (template.requiresInferenceServer && !inferenceServerAvailable) {
+      showSnackbar('Cannot apply template: Triton inference server is not available');
+      return;
+    }
     
     setApplyingTemplate(true);
     
@@ -2706,6 +2748,7 @@ const PipelineBuilder = () => {
             camera={camera}
             areAllComponentTypesUsed={areAllComponentTypesUsed}
             openTemplateDialog={openTemplateDialog}
+            inferenceServerAvailable={inferenceServerAvailable}
           />
         </TabPanel>
 
@@ -4316,15 +4359,29 @@ const PipelineBuilder = () => {
             </Alert>
           )}
           
+          {/* Add alert for inference server status */}
+          {!inferenceServerAvailable && (
+            <Alert severity="error" sx={{ mb: 3 }}>
+              Triton inference server is not available. AI-dependent templates will not function correctly.
+            </Alert>
+          )}
+          
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
             {pipelineTemplates.map((template) => {
-              // Check if template is allowed for current license tier
-              const isAllowed = licenseInfo.tier_id >= template.requiredLicenseTier;
-              const disabledReason = !isAllowed 
-                ? `Requires ${template.requiredLicenseTier === 3 ? 'Professional' : 'Standard'} license tier` 
-                : !sourceComponent 
-                  ? "Need source component first" 
-                  : "";
+              // Check if template is allowed for current license tier and server availability
+              const isAllowed = licenseInfo.tier_id >= template.requiredLicenseTier && 
+                              (!template.requiresInferenceServer || inferenceServerAvailable);
+              
+              // Determine reason why template can't be applied
+              const disabledReason = !licenseInfo.valid ? 
+                "Invalid license" : 
+                licenseInfo.tier_id < template.requiredLicenseTier ? 
+                  `Requires ${template.requiredLicenseTier === 3 ? 'Professional' : 'Standard'} license tier` : 
+                  !sourceComponent ? 
+                    "Need source component first" :
+                    template.requiresInferenceServer && !inferenceServerAvailable ?
+                      "Inference server not available" :
+                      "";
                 
               return (
                 <Card 
@@ -4344,13 +4401,15 @@ const PipelineBuilder = () => {
                     }
                   }}
                 >
-                  {!isAllowed && (
+                  {/* Add combined license tier / server status indicator */}
+                  {(!isAllowed || template.requiresInferenceServer) && (
                     <Box
                       sx={{
                         position: 'absolute',
                         top: 10,
                         right: 10,
-                        bgcolor: 'error.main',
+                        bgcolor: !licenseInfo.valid || (template.requiresInferenceServer && !inferenceServerAvailable) ? 
+                                 'error.main' : 'warning.main',
                         color: 'white',
                         px: 1,
                         py: 0.5,
@@ -4360,7 +4419,12 @@ const PipelineBuilder = () => {
                         zIndex: 1
                       }}
                     >
-                      {template.requiredLicenseTier === 3 ? 'PRO' : 'STANDARD'}
+                      {!licenseInfo.valid ? 'LICENSE INVALID' :
+                       licenseInfo.tier_id < template.requiredLicenseTier ? 
+                         (template.requiredLicenseTier === 3 ? 'PRO' : 'STANDARD') :
+                         template.requiresInferenceServer && !inferenceServerAvailable ? 
+                           'SERVER OFFLINE' : 
+                           template.requiresInferenceServer ? 'AI REQUIRED' : ''}
                     </Box>
                   )}
                   
@@ -4423,8 +4487,17 @@ const PipelineBuilder = () => {
             color="primary"
             loading={applyingTemplate}
             icon={<AutoFixHighIcon />}
-            disabled={!selectedTemplate || !sourceComponent || 
-              (selectedTemplate ? (pipelineTemplates.find(t => t.id === selectedTemplate)?.requiredLicenseTier || 0) > licenseInfo.tier_id : false)}
+                  disabled={!selectedTemplate || !sourceComponent || 
+              (selectedTemplate && (() => {
+                const template = pipelineTemplates.find(t => t.id === selectedTemplate);
+                return template ? 
+                  // Disable button if the template requires a higher license tier 
+                  // or if it requires the inference server but the server is offline
+                  template.requiredLicenseTier > licenseInfo.tier_id || 
+                  (template.requiresInferenceServer && !inferenceServerAvailable)
+                : true;
+              })())
+            }
             onClick={applyTemplate}
           >
             Apply Template
