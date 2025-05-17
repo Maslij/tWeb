@@ -11,7 +11,7 @@ import {
 } from '@mui/material';
 import { IconButton } from '../../components/ui/IconButton';
 import DeleteIcon from '@mui/icons-material/Delete';
-import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
+import AnchorPointsSelector from './AnchorPointsSelector';
 
 // Interface for PolygonZone
 export interface PolygonZone {
@@ -24,15 +24,8 @@ export interface PolygonZone {
   current_count?: number;
 }
 
-// Anchor options for polygon zones (same as line zones)
-export const ANCHOR_OPTIONS = [
-  "BOTTOM_LEFT", 
-  "BOTTOM_RIGHT", 
-  "CENTER", 
-  "TOP_LEFT", 
-  "TOP_RIGHT", 
-  "BOTTOM_CENTER"
-];
+// Export the ANCHOR_OPTIONS from the shared component
+export { ANCHOR_OPTIONS } from './AnchorPointsSelector';
 
 interface PolygonZoneListProps {
   zones: PolygonZone[];
@@ -156,41 +149,14 @@ const PolygonZoneList: React.FC<PolygonZoneListProps> = ({
                       inputProps={{ min: 1 }}
                     />
                   </Box>
-                  <Typography variant="caption" sx={{ display: 'block', mt: 1, mb: 0.5 }}>
-                    Triggering Anchors:
-                  </Typography>
-                  <Box component="span" sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                    {ANCHOR_OPTIONS.map((anchor) => (
-                      <Chip
-                        key={anchor}
-                        label={anchor.split('_').map(word => word.charAt(0) + word.slice(1).toLowerCase()).join(' ')}
-                        size="small"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (!disabled) {
-                            const currentAnchors = [...(zone.triggering_anchors || [])];
-                            if (currentAnchors.includes(anchor)) {
-                              onUpdateZone(
-                                index, 
-                                'triggering_anchors', 
-                                currentAnchors.filter(a => a !== anchor)
-                              );
-                            } else {
-                              onUpdateZone(
-                                index, 
-                                'triggering_anchors', 
-                                [...currentAnchors, anchor]
-                              );
-                            }
-                          }
-                        }}
-                        color={(zone.triggering_anchors || []).includes(anchor) ? "primary" : "default"}
-                        variant={(zone.triggering_anchors || []).includes(anchor) ? "filled" : "outlined"}
-                        disabled={disabled}
-                        sx={{ mt: 0.5 }}
-                      />
-                    ))}
-                  </Box>
+                  
+                  {/* Use shared AnchorPointsSelector component */}
+                  <AnchorPointsSelector
+                    triggering_anchors={zone.triggering_anchors || []}
+                    onUpdateAnchors={(newAnchors) => onUpdateZone(index, 'triggering_anchors', newAnchors)}
+                    disabled={disabled}
+                    index={index}
+                  />
                 </Box>
               }
               onClick={() => onSelectZone(index)}

@@ -64,7 +64,7 @@ const PipelineConfigTab: React.FC<PipelineConfigTabProps> = ({
       {/* Inference Server Status Alert */}
       {!inferenceServerAvailable && (
         <Alert severity="warning" sx={{ mb: 0 }}>
-          <AlertTitle>Triton Inference Server Unavailable</AlertTitle>
+          <AlertTitle>AI Server Unavailable</AlertTitle>
           The AI model server is currently offline or not responding. AI-dependent components 
           and templates requiring object detection, classification, or other AI features will not be available until 
           the server is back online.
