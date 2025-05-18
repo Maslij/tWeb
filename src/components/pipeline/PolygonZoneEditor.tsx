@@ -11,6 +11,7 @@ import { IconButton } from '../../components/ui/IconButton';
 import CreateIcon from '@mui/icons-material/Create';
 import DeleteIcon from '@mui/icons-material/Delete';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import AddIcon from '@mui/icons-material/Add';
 import PolygonZoneList, { PolygonZone } from './PolygonZoneList';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
@@ -649,6 +650,41 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
       setSelectedVertex(null);
     }
   }, [selectedZone, selectedVertex, onZonesChange]);
+  
+  // Handle adding a new vertex between the last and first vertices
+  const handleAddVertex = useCallback(() => {
+    if (selectedZone === null) return;
+    
+    const zone = localZonesRef.current[selectedZone];
+    const polygon = zone.polygon;
+    
+    if (polygon.length < 3) return; // Need at least 3 vertices to have a valid polygon
+    
+    // Get the first and last vertices
+    const firstVertex = polygon[0];
+    const lastVertex = polygon[polygon.length - 1];
+    
+    // Calculate the midpoint between the last and first vertices
+    const newVertex = {
+      x: (lastVertex.x + firstVertex.x) / 2,
+      y: (lastVertex.y + firstVertex.y) / 2
+    };
+    
+    // Create updated polygon with the new vertex added at the end
+    const updatedPolygon = [...polygon, newVertex];
+    
+    // Update the zone with the new polygon
+    const updatedZones = [...localZonesRef.current];
+    updatedZones[selectedZone] = {
+      ...updatedZones[selectedZone],
+      polygon: updatedPolygon
+    };
+    
+    onZonesChange(updatedZones);
+    
+    // Select the new vertex
+    setSelectedVertex(updatedPolygon.length - 1);
+  }, [selectedZone, onZonesChange]);
 
   return (
     <Box sx={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -678,6 +714,16 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
                 size="small"
               >
                 Delete Zone
+              </Button>
+              <Button
+                variant="outlined"
+                color="primary"
+                startIcon={<AddIcon />}
+                onClick={handleAddVertex}
+                disabled={selectedZone === null || disabled}
+                size="small"
+              >
+                Add Vertex
               </Button>
               {selectedVertex !== null && (
                 <Button
