@@ -109,19 +109,23 @@ const PolygonZoneList: React.FC<PolygonZoneListProps> = ({
                   {/* Display in/out/current counts if available */}
                   {(zone.in_count !== undefined || zone.out_count !== undefined || zone.current_count !== undefined) && (
                     <Box sx={{ ml: 2, display: 'flex', gap: 1 }}>
-                      <Chip
-                        size="small"
-                        label={`In: ${zone.in_count || 0}`}
-                        color="success"
-                        variant="outlined"
-                      />
-                      <Chip
-                        size="small"
-                        label={`Out: ${zone.out_count || 0}`}
-                        color="primary"
-                        variant="outlined"
-                      />
-                      {zone.current_count !== undefined && (
+                      {zone.in_count !== undefined && zone.in_count > 0 && (
+                        <Chip
+                          size="small"
+                          label={`In: ${zone.in_count}`}
+                          color="success"
+                          variant="outlined"
+                        />
+                      )}
+                      {zone.out_count !== undefined && zone.out_count > 0 && (
+                        <Chip
+                          size="small"
+                          label={`Out: ${zone.out_count}`}
+                          color="primary"
+                          variant="outlined"
+                        />
+                      )}
+                      {zone.current_count !== undefined && zone.current_count > 0 && (
                         <Chip
                           size="small"
                           label={`Current: ${zone.current_count}`}
