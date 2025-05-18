@@ -70,12 +70,6 @@ const LineZoneConfigTab: React.FC<LineZoneConfigTabProps> = ({
       
       <Divider sx={{ mb: 2 }} />
       
-      {camera?.running && (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          Automatic refreshing has been disabled. Use the "Refresh Counts" button to manually update zone counts.
-        </Alert>
-      )}
-      
       <Typography variant="body2" color="text.secondary" paragraph>
         Draw crossing lines on the image to define detection zones. Objects crossing these lines will be counted.
         {camera?.running ? 
@@ -84,14 +78,35 @@ const LineZoneConfigTab: React.FC<LineZoneConfigTabProps> = ({
       </Typography>
       
       {/* Line Zone Editor view */}
-      <Box sx={{ height: '500px' }}>
-        {(!camera?.running && !pipelineHasRunOnce) ? (
+      <Box sx={{ mt: 3, width: '100%', position: 'relative' }}>
+        {hasUnsavedZoneChanges && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            You have unsaved zone changes. Click "Save Line Zones" to apply them.
+          </Alert>
+        )}
+        
+        {/* Show the image and zone editor */}
+        {(camera?.running || pipelineHasRunOnce) ? (
+          frameUrl || lastFrameUrl ? (
+            <LineZoneEditor 
+              imageUrl={camera?.running ? frameUrl : lastFrameUrl}
+              zones={lineZoneManagerForm.zones}
+              onZonesChange={(updatedZones) => {
+                handleLineZonesUpdate(updatedZones);
+                setHasUnsavedZoneChanges(true);
+              }}
+              disabled={isSavingZones}
+            />
+          ) : (
+            <LineZoneEditorSkeleton />
+          )
+        ) : (
           <Box sx={{ 
             textAlign: 'center', 
             p: 3, 
             border: '1px solid #ccc', 
             borderRadius: '4px', 
-            height: '100%', 
+            height: '400px', 
             display: 'flex', 
             flexDirection: 'column', 
             justifyContent: 'center', 
@@ -102,18 +117,19 @@ const LineZoneConfigTab: React.FC<LineZoneConfigTabProps> = ({
               Pipeline not started
             </Typography>
             <Typography variant="body1" color="text.secondary">
-              Start the pipeline at least once to see the camera feed and configure line zones
+              Start the pipeline to configure line zones
             </Typography>
+            <Button
+              variant="contained"
+              color="success"
+              startIcon={<PlayArrowIcon />}
+              onClick={handleStartStop}
+              disabled={isStartingPipeline || !sourceComponent}
+              sx={{ mt: 2 }}
+            >
+              {isStartingPipeline ? "Starting..." : "Start Pipeline"}
+            </Button>
           </Box>
-        ) : (camera?.running && !frameUrl) || (!camera?.running && !lastFrameUrl) ? (
-          <LineZoneEditorSkeleton />
-        ) : (
-          <LineZoneEditor 
-            zones={lineZoneManagerForm.zones} 
-            onZonesChange={handleLineZonesUpdate}
-            imageUrl={(camera?.running ? frameUrl : lastFrameUrl) || ""}
-            disabled={isSavingZones}
-          />
         )}
       </Box>
       
@@ -153,45 +169,18 @@ const LineZoneConfigTab: React.FC<LineZoneConfigTabProps> = ({
                   in_count: zone.in_count,
                   out_count: zone.out_count
                 }));
-
-                // Validate that all zones have at least one anchor point
-                const invalidZones = normalizedZones.filter(zone => !zone.triggering_anchors.length);
-                if (invalidZones.length > 0) {
-                  showSnackbar('Error: All zones must have at least one anchor point selected');
-                  return;
-                }
-
-                // Create a new config object without spreading the old config
-                // This ensures we don't accidentally keep old zones data
-                const config: Record<string, any> = {
-                  draw_zones: lineZoneManagerForm.draw_zones,
-                  line_color: lineZoneManagerForm.line_color,
-                  line_thickness: lineZoneManagerForm.line_thickness,
-                  draw_counts: lineZoneManagerForm.draw_counts,
-                  text_color: lineZoneManagerForm.text_color,
-                  text_scale: lineZoneManagerForm.text_scale,
-                  text_thickness: lineZoneManagerForm.text_thickness,
-                  zones: normalizedZones,
-                  remove_missing: true // Add this flag to tell the backend to remove zones not in this config
+                
+                // Update the component configuration
+                const updatedConfig = {
+                  ...lineZoneManagerComponent.config,
+                  zones: normalizedZones
                 };
                 
-                // Preserve any other config properties that aren't related to zones
-                if (lineZoneManagerComponent.config) {
-                  Object.entries(lineZoneManagerComponent.config as Record<string, any>).forEach(([key, value]) => {
-                    // Only copy over properties that aren't already set and aren't 'zones'
-                    if (key !== 'zones' && config[key] === undefined) {
-                      config[key] = value;
-                    }
-                  });
-                }
-                
-                showSnackbar('Saving line zones...');
-                
-                // Use apiService instead of direct fetch
+                // Send the update to the server
                 const result = await apiService.components.processors.update(
-                  cameraId,
-                  lineZoneManagerComponent.id,
-                  { config }
+                  cameraId, 
+                  lineZoneManagerComponent.id, 
+                  { config: updatedConfig }
                 );
                 
                 if (result) {

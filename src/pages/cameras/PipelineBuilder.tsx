@@ -343,9 +343,10 @@ const PipelineBuilder = () => {
     store_counting_events: true
   });
 
-  // After the existing state declarations, add frame refresh and interval state
+  // Modify/centralize frame refresh state and logic
   const [frameUrl, setFrameUrl] = useState<string>('');
-  const [refreshInterval, setRefreshInterval] = useState<number | null>(null);
+  const [lastFrameUrl, setLastFrameUrl] = useState<string>('');
+  const [frameRefreshInterval, setFrameRefreshInterval] = useState<number | null>(null);
 
   // Add state for component dependencies
   const [dependencies, setDependencies] = useState<ComponentDependencyMap>({});
@@ -373,7 +374,6 @@ const PipelineBuilder = () => {
 
   // Add state to track if pipeline has been started at least once
   const [pipelineHasRunOnce, setPipelineHasRunOnce] = useState(false);
-  const [lastFrameUrl, setLastFrameUrl] = useState<string>('');
 
   // Add template dialog state
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
@@ -1691,84 +1691,53 @@ const PipelineBuilder = () => {
     }
   };
 
-  // Modify the refreshFrame function to store the last frame URL
-  const refreshFrame = () => {
+  // Centralized frame refresh handler
+  const refreshFrame = useCallback(() => {
     if (camera?.running && cameraId) {
       const timestamp = new Date().getTime(); // Add timestamp to prevent caching
       const newFrameUrl = `${apiService.cameras.getFrame(cameraId, 90)}&t=${timestamp}`;
       setFrameUrl(newFrameUrl);
       setLastFrameUrl(newFrameUrl);
     }
-  };
+  }, [camera?.running, cameraId]);
 
-  // Set up frame refresh when camera is running
+  // Set up frame refresh when camera is running - centralized approach
   useEffect(() => {
-    let interval: number | null = null;
+    // Clear any existing interval
+    if (frameRefreshInterval) {
+      clearInterval(frameRefreshInterval);
+      setFrameRefreshInterval(null);
+    }
     
-    // Only load frames if the camera is running AND we're on the relevant tabs
-    // Tab indices: 1 = Live Playback, 2 = Line Zone Config (if source exists)
-    const isLivePlaybackTab = mainTabValue === 1;
-    const isLineZoneTab = sourceComponent 
-      ? mainTabValue === 2 && hasLineZoneManagerComponent
-      : mainTabValue === 1 && hasLineZoneManagerComponent;
-    
-    if (camera?.running && cameraId && (isLivePlaybackTab || isLineZoneTab)) {
+    // Only start interval if camera is running
+    if (camera?.running && cameraId) {
+      // Initial frame fetch
       refreshFrame();
+      
+      // Set up interval for refreshing every 500ms
+      const interval = window.setInterval(refreshFrame, 500);
+      setFrameRefreshInterval(interval);
     } else {
       setFrameUrl('');
     }
     
     // Clean up function
     return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
-      if (refreshInterval) {
-        clearInterval(refreshInterval);
-        setRefreshInterval(null);
+      if (frameRefreshInterval) {
+        clearInterval(frameRefreshInterval);
+        setFrameRefreshInterval(null);
       }
     };
-  }, [camera?.running, cameraId, mainTabValue, sourceComponent, hasLineZoneManagerComponent]); // Added tab dependencies
+  }, [camera?.running, cameraId, refreshFrame]); // Dependencies include refreshFrame
 
-  // Update the zone counts refresh interval to respect the unsaved changes flag
-  useEffect(() => {
-    let zoneCountsInterval: number | null = null;
-    
-    // No automatic refresh - commented out refresh logic
-    /*
-    // Only start the interval if the camera is running and we have a line zone manager
-    if (camera?.running && hasLineZoneManagerComponent && cameraId) {
-      // Set up interval for refreshing zone counts (every 3 seconds)
-      zoneCountsInterval = window.setInterval(() => {
-        // Get a reference to the LineZoneEditor's active dragging flag
-        const lineZoneEditorElement = document.querySelector('[data-line-zone-editor="true"]');
-        const isActivelyDragging = lineZoneEditorElement && 
-          (lineZoneEditorElement as any).__isActivelyDragging === true;
-        
-        // Only refresh if not actively dragging and no unsaved changes
-        if (!isActivelyDragging && !hasUnsavedZoneChanges) {
-          fetchComponents();
-        }
-      }, 3000);
-    }
-    */
-    
-    // Clean up function
-    return () => {
-      if (zoneCountsInterval) {
-        clearInterval(zoneCountsInterval);
-      }
-    };
-  }, [camera?.running, hasLineZoneManagerComponent, cameraId, fetchComponents, hasUnsavedZoneChanges]);
-
-  // Clean up interval on component unmount
+  // Clean up interval on component unmount (redundant with above, but keeping for safety)
   useEffect(() => {
     return () => {
-      if (refreshInterval) {
-        clearInterval(refreshInterval);
+      if (frameRefreshInterval) {
+        clearInterval(frameRefreshInterval);
       }
     };
-  }, [refreshInterval]);
+  }, [frameRefreshInterval]);
 
   // Add function to check if a component can be added based on dependencies
   const canAddComponent = (type: string, category: 'source' | 'processor' | 'sink'): boolean => {
@@ -2884,7 +2853,7 @@ const PipelineBuilder = () => {
               isDeletingRecords={isDeletingRecords}
               totalEvents={totalEvents}
               totalFrames={totalFrames}
-                        page={page}
+              page={page}
               rowsPerPage={rowsPerPage}
               handlePageChange={handlePageChange}
               handleChangeRowsPerPage={handleChangeRowsPerPage}
@@ -2892,8 +2861,8 @@ const PipelineBuilder = () => {
               handleDeleteAllRecords={handleDeleteAllRecords}
               getEventTypeName={getEventTypeName}
               formatTimestamp={formatTimestamp}
-              hasHeatmapData={hasHeatmapData}
               hasZoneLineData={hasZoneLineData}
+              hasHeatmapData={hasHeatmapData}
             />
           )}
         </TabPanel>

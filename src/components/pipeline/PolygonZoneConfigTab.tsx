@@ -19,6 +19,16 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import { Component } from '../../services/api';
 import apiService from '../../services/api';
 
+interface PolygonZone {
+  id: string;
+  polygon: { x: number; y: number }[];
+  min_crossing_threshold: number;
+  triggering_anchors: string[];
+  in_count?: number;
+  out_count?: number;
+  current_count?: number;
+}
+
 interface PolygonZoneManagerForm {
   draw_zones: boolean;
   fill_color: number[];
@@ -31,16 +41,6 @@ interface PolygonZoneManagerForm {
   text_thickness: number;
   zones: PolygonZone[];
   [key: string]: any; // Allow for additional properties
-}
-
-interface PolygonZone {
-  id: string;
-  polygon: { x: number, y: number }[];
-  min_crossing_threshold: number;
-  triggering_anchors: string[];
-  in_count?: number;
-  out_count?: number;
-  current_count?: number;
 }
 
 interface PolygonZoneConfigTabProps {
@@ -105,40 +105,18 @@ const PolygonZoneConfigTab: React.FC<PolygonZoneConfigTabProps> = ({
         out_count: zone.out_count,
         current_count: zone.current_count
       }));
-
-      // Create a new config object without spreading the old config
-      // This ensures we don't accidentally keep old zones data
-      const config: Record<string, any> = {
-        draw_zones: polygonZoneManagerForm.draw_zones,
-        fill_color: polygonZoneManagerForm.fill_color,
-        opacity: polygonZoneManagerForm.opacity,
-        outline_color: polygonZoneManagerForm.outline_color,
-        outline_thickness: polygonZoneManagerForm.outline_thickness,
-        draw_labels: polygonZoneManagerForm.draw_labels,
-        text_color: polygonZoneManagerForm.text_color,
-        text_scale: polygonZoneManagerForm.text_scale,
-        text_thickness: polygonZoneManagerForm.text_thickness,
-        zones: normalizedZones,
-        remove_missing: true // Add this flag to tell the backend to remove zones not in this config
+      
+      // Create a new config object combining existing config with the updated zones
+      const updatedConfig = {
+        ...polygonZoneManagerComponent.config,
+        zones: normalizedZones
       };
       
-      // Preserve any other config properties that aren't related to zones
-      if (polygonZoneManagerComponent.config) {
-        Object.entries(polygonZoneManagerComponent.config as Record<string, any>).forEach(([key, value]) => {
-          // Only copy over properties that aren't already set and aren't 'zones'
-          if (key !== 'zones' && config[key] === undefined) {
-            config[key] = value;
-          }
-        });
-      }
-      
-      showSnackbar('Saving polygon zones...');
-      
-      // Use apiService instead of direct fetch
+      // Update the component configuration
       const result = await apiService.components.processors.update(
-        cameraId, 
-        polygonZoneManagerComponent.id, 
-        { config }
+        cameraId,
+        polygonZoneManagerComponent.id,
+        { config: updatedConfig }
       );
       
       if (result) {
@@ -148,11 +126,6 @@ const PolygonZoneConfigTab: React.FC<PolygonZoneConfigTabProps> = ({
         
         // Force fetch the updated components from the server
         await fetchComponents(true);
-        
-        // Call refreshFrame to update the image immediately
-        if (refreshFrame && camera?.running) {
-          refreshFrame();
-        }
       } else {
         showSnackbar('Error saving polygon zones');
       }
@@ -182,43 +155,44 @@ const PolygonZoneConfigTab: React.FC<PolygonZoneConfigTabProps> = ({
         </Alert>
       )}
       
-      {camera?.running && !frameUrl && !lastFrameUrl && !pipelineHasRunOnce && (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          Waiting for video stream... This may take a few moments.
-        </Alert>
-      )}
-      
       {hasUnsavedZoneChanges && (
         <Alert severity="warning" sx={{ mb: 2 }}>
-          You have unsaved changes. Click "Save Changes" to apply them.
+          You have unsaved changes. Click "Save Polygon Zones" to apply them.
         </Alert>
       )}
       
-      <Typography variant="body2" color="text.secondary" paragraph>
-        Draw polygons on the image to define detection zones. Objects inside these polygons will be counted.
-        {camera?.running ? 
-          " You can edit these zones in real-time while the pipeline is running." : 
-          " The pipeline is currently stopped, but you can still edit the zones based on the last captured frame."}
-      </Typography>
-      
-      <Box sx={{ height: '500px' }}>
-        {(frameUrl || lastFrameUrl) ? (
-          <PolygonZoneEditor
-            zones={polygonZoneManagerForm.zones}
-            onZonesChange={(updatedZones) => {
-              handlePolygonZonesUpdate(updatedZones);
-              setHasUnsavedZoneChanges(true);
-            }}
-            imageUrl={frameUrl || lastFrameUrl}
-            disabled={!camera?.running || isSavingZones}
-          />
+      <Box sx={{ width: '100%', position: 'relative' }}>
+        {(camera?.running || pipelineHasRunOnce) ? (
+          frameUrl || lastFrameUrl ? (
+            <PolygonZoneEditor 
+              imageUrl={camera?.running ? frameUrl : lastFrameUrl} 
+              zones={polygonZoneManagerForm.zones}
+              onZonesChange={(updatedZones) => {
+                handlePolygonZonesUpdate(updatedZones);
+                setHasUnsavedZoneChanges(true);
+              }}
+              disabled={isSaving}
+            />
+          ) : (
+            <Box sx={{ 
+              height: '400px', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              backgroundColor: '#f5f5f5',
+              border: '1px solid #ddd',
+              borderRadius: '4px'
+            }}>
+              <CircularProgress />
+            </Box>
+          )
         ) : (
           <Box sx={{ 
             textAlign: 'center', 
             p: 3, 
             border: '1px solid #ccc', 
             borderRadius: '4px', 
-            height: '100%', 
+            height: '400px', 
             display: 'flex', 
             flexDirection: 'column', 
             justifyContent: 'center', 
@@ -229,8 +203,18 @@ const PolygonZoneConfigTab: React.FC<PolygonZoneConfigTabProps> = ({
               Pipeline not started
             </Typography>
             <Typography variant="body1" color="text.secondary">
-              Start the pipeline at least once to see the camera feed and configure polygon zones
+              Start the pipeline to configure polygon zones
             </Typography>
+            <Button
+              variant="contained"
+              color="success"
+              startIcon={<PlayArrowIcon />}
+              onClick={handleStartStop}
+              disabled={isStartingPipeline || !sourceComponent}
+              sx={{ mt: 2 }}
+            >
+              {isStartingPipeline ? "Starting..." : "Start Pipeline"}
+            </Button>
           </Box>
         )}
       </Box>
@@ -242,13 +226,7 @@ const PolygonZoneConfigTab: React.FC<PolygonZoneConfigTabProps> = ({
               <Button 
                 variant="contained"
                 startIcon={<RefreshIcon />}
-                onClick={() => {
-                  fetchComponents(true);
-                  // Call refreshFrame to update the image immediately
-                  if (refreshFrame) {
-                    refreshFrame();
-                  }
-                }}
+                onClick={() => fetchComponents(true)}
                 disabled={isRefreshingComponents}
               >
                 Refresh Counts

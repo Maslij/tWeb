@@ -56,8 +56,8 @@ interface TelemetryTabProps {
   zoneLineCounts: ZoneLineCount[];
   isLoadingZoneData: boolean;
   isLoadingHeatmapData: boolean;
-  fetchZoneLineCounts: () => void;
-  fetchClassHeatmapData: () => void;
+  fetchZoneLineCounts: () => Promise<void>;
+  fetchClassHeatmapData: () => Promise<void>;
   databaseRecords: EventRecord[];
   isLoadingRecords: boolean;
   isDeletingRecords: boolean;
@@ -65,12 +65,14 @@ interface TelemetryTabProps {
   totalFrames: number;
   page: number;
   rowsPerPage: number;
-  handlePageChange: (_event: unknown, newPage: number) => void;
+  handlePageChange: (event: unknown, newPage: number) => void;
   handleChangeRowsPerPage: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  fetchDatabaseRecords: () => void;
-  handleDeleteAllRecords: () => void;
+  fetchDatabaseRecords: () => Promise<void>;
+  handleDeleteAllRecords: () => Promise<void>;
   getEventTypeName: (type: number) => string;
   formatTimestamp: (timestamp: number) => string;
+  hasZoneLineData: boolean;
+  hasHeatmapData: boolean;
   
   // Feature flags: each flag indicates if a specific feature is available based on the pipeline configuration
   hasDatabaseSink?: boolean;           // Indicates if database sink is available for all telemetry records
