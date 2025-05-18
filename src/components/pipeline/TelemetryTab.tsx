@@ -647,8 +647,32 @@ const TelemetryTab: React.FC<TelemetryTabProps> = ({
   // Check if any telemetry features are available
   const hasAnyFeature = hasDatabaseSink && (hasLineZoneManager || hasTracking);
 
+  // Temporary notice component
+  const TemporaryNotice = () => (
+    <Paper 
+      elevation={3} 
+      sx={{ 
+        p: 3, 
+        mb: 3, 
+        background: 'rgba(211, 47, 47, 0.05)', 
+        border: '1px solid rgba(211, 47, 47, 0.3)',
+        borderRadius: '4px',
+        pointerEvents: 'none' // Make it unclickable
+      }}
+    >
+      <Typography variant="h5" sx={{ color: 'error.main', fontWeight: 'bold', mb: 1 }}>
+        Telemetry Features Temporarily Disabled
+      </Typography>
+      <Typography variant="body1" sx={{ color: 'text.secondary' }}>
+        We're currently performing maintenance on our telemetry systems. These features will be back online soon.
+      </Typography>
+    </Paper>
+  );
+
   return (
     <>
+      <TemporaryNotice />
+      
       {!hasAnyFeature ? (
         <NoFeaturesMessage />
       ) : (
