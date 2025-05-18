@@ -4,7 +4,8 @@ import {
   Paper,
   Typography,
   Button,
-  Tooltip
+  Tooltip,
+  useTheme
 } from '@mui/material';
 import { IconButton } from '../../components/ui/IconButton';
 import CreateIcon from '@mui/icons-material/Create';
@@ -22,6 +23,7 @@ interface PolygonZoneEditorProps {
 }
 
 const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesChange, imageUrl, disabled = false }) => {
+  const theme = useTheme();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [selectedZone, setSelectedZone] = useState<number | null>(null);
@@ -317,7 +319,7 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
           const textWidth = textMetrics.width;
           const textHeight = 20;
           
-          ctx.fillStyle = isSelected ? 'rgba(33, 150, 243, 0.8)' : 'rgba(0, 0, 0, 0.6)';
+          ctx.fillStyle = isSelected ? 'rgba(33, 150, 243, 0.8)' : theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)';
           ctx.fillRect(centroidX - textWidth / 2 - 5, centroidY - textHeight / 2, textWidth + 10, textHeight);
           
           // Draw the text
@@ -361,7 +363,7 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
             : "Click to add more points, click first point to close polygon";
         
         ctx.font = '14px Roboto';
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillStyle = theme.palette.mode === 'dark' ? 'rgba(0, 0, 0, 0.7)' : 'rgba(0, 0, 0, 0.7)';
         ctx.fillRect(10, canvas.height - 40, ctx.measureText(instructions).width + 20, 30);
         ctx.fillStyle = 'white';
         ctx.textAlign = 'left';
@@ -371,12 +373,12 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
     } else if (!nextImageRef.current) {
       // Display message if no image is available
       ctx.font = '16px Roboto';
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+      ctx.fillStyle = theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('No image available. Start the pipeline to see the camera feed.', canvas.width / 2, canvas.height / 2);
     }
-  }, [drawPolygon, normalizedToCanvasCoords, selectedZone, selectedVertex, hoveredElement, currentImageUrl, isDrawing, currentPolygon]);
+  }, [drawPolygon, normalizedToCanvasCoords, selectedZone, selectedVertex, hoveredElement, currentImageUrl, isDrawing, currentPolygon, theme.palette.mode]);
   
   // Optimized hover detection for better performance
   const checkHoverStatus = useCallback((x: number, y: number) => {
@@ -722,17 +724,19 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
         </Box>
       </Paper>
       
-      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, height: 'calc(100% - 50px)' }}>
+      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, flex: 1, minHeight: 0 }}>
         <Box 
           data-polygon-zone-editor="true"
           sx={{ 
             position: 'relative',
             flex: 1,
-            height: { xs: '300px', md: '100%' },
-            border: '1px solid #ccc',
+            width: '100%',
+            height: '100%',
+            border: '1px solid',
+            borderColor: 'divider',
             borderRadius: '4px',
             overflow: 'hidden',
-            backgroundColor: '#f5f5f5'
+            backgroundColor: 'background.paper'
           }}
           ref={(el: HTMLDivElement | null) => {
             containerRef.current = el;
@@ -743,7 +747,7 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
         >
           <canvas
             ref={canvasRef}
-            style={{ width: '100%', height: '100%' }}
+            style={{ width: '100%', height: '100%', display: 'block' }}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}

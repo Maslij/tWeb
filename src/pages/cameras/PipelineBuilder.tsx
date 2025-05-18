@@ -178,6 +178,30 @@ import LineZoneConfigTab from '../../components/pipeline/LineZoneConfigTab';
 import TelemetryTab from '../../components/pipeline/TelemetryTab';
 import PolygonZoneConfigTab from '../../components/pipeline/PolygonZoneConfigTab';
 
+// Add this constant for consistent frame container styling
+const frameContainerStyle = {
+  position: 'relative',
+  flex: 1,
+  height: { xs: '400px', sm: '500px', md: '600px' },
+  minHeight: { xs: '400px', sm: '500px', md: '600px' },
+  border: '1px solid',
+  borderColor: 'divider',
+  borderRadius: '4px',
+  overflow: 'hidden',
+  backgroundColor: 'background.paper',
+  display: 'flex',
+  justifyContent: 'center',
+  alignItems: 'center'
+};
+
+// Add this constant for consistent frame style
+const frameStyle = {
+  maxWidth: '100%',
+  maxHeight: '100%',
+  objectFit: 'contain',
+  display: 'block'
+};
+
 const PipelineBuilder = () => {
   // After user state declarations, add state for license information
   const { cameraId } = useParams<{ cameraId: string }>();
@@ -2771,6 +2795,8 @@ const PipelineBuilder = () => {
               handleStartStop={handleStartStop}
               isStartingPipeline={isStartingPipeline}
               sourceComponent={sourceComponent}
+              frameContainerStyle={frameContainerStyle}
+              frameStyle={frameStyle}
             />
           </TabPanel>
         )}
@@ -2796,6 +2822,8 @@ const PipelineBuilder = () => {
               setHasUnsavedZoneChanges={setHasUnsavedZoneChanges}
               showSnackbar={showSnackbar}
               cameraId={cameraId}
+              frameContainerStyle={frameContainerStyle}
+              frameStyle={frameStyle}
             />
           </TabPanel>
         )}
@@ -2828,6 +2856,8 @@ const PipelineBuilder = () => {
               showSnackbar={showSnackbar}
               cameraId={cameraId}
               refreshFrame={refreshFrame}
+              frameContainerStyle={frameContainerStyle}
+              frameStyle={frameStyle}
             />
           </TabPanel>
         )}

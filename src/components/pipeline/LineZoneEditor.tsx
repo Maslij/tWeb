@@ -4,7 +4,8 @@ import {
   Paper,
   Typography,
   Button,
-  Tooltip
+  Tooltip,
+  useTheme
 } from '@mui/material';
 import { IconButton } from '../../components/ui/IconButton';
 import CreateIcon from '@mui/icons-material/Create';
@@ -20,6 +21,7 @@ interface LineZoneEditorProps {
 }
 
 const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, imageUrl, disabled = false }) => {
+  const theme = useTheme();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [selectedZone, setSelectedZone] = useState<number | null>(null);
@@ -283,12 +285,12 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
     } else if (!nextImageRef.current) {
       // Display message if no image is available
       ctx.font = '16px Roboto';
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+      ctx.fillStyle = theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('No image available. Start the pipeline to see the camera feed.', canvas.width / 2, canvas.height / 2);
     }
-  }, [selectedZone, hoveredPoint, currentImageUrl]);
+  }, [selectedZone, hoveredPoint, currentImageUrl, theme.palette.mode]);
 
   // Convert canvas coordinates to normalized coordinates
   const canvasToNormalizedCoords = useCallback((x: number, y: number) => {
@@ -372,44 +374,19 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     
-    // If in drawing mode and currently drawing
+    // Handle drawing visualization
     if (drawMode && isDrawing && drawStartPos) {
-      // Redraw the canvas
-      drawCanvas();
-      
-      // Get the canvas context
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      
-      // Draw the new line
-      ctx.beginPath();
-      ctx.moveTo(drawStartPos.x, drawStartPos.y);
-      ctx.lineTo(x, y);
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = '#ff9800';
-      ctx.stroke();
-      
-      // Draw the start point
-      ctx.beginPath();
-      ctx.arc(drawStartPos.x, drawStartPos.y, 6, 0, Math.PI * 2);
-      ctx.fillStyle = '#4caf50';
-      ctx.fill();
-      
-      // Draw the end point
-      ctx.beginPath();
-      ctx.arc(x, y, 6, 0, Math.PI * 2);
-      ctx.fillStyle = '#f44336';
-      ctx.fill();
-      
+      requestAnimationFrame(() => drawCanvas());
       return;
     }
     
-    // If dragging a control point, prioritize performance for drag operations
-    if (selectedZone !== null && draggingPoint !== null) {
+    // Handle dragging of control points
+    if (draggingPoint !== null && selectedZone !== null) {
       const normalized = canvasToNormalizedCoords(x, y);
       
-      // Create a shallow copy of the zones array 
+      // Clone the zones to avoid direct mutation
       const updatedZones = [...localZonesRef.current];
+      
       if (draggingPoint === 'start') {
         updatedZones[selectedZone] = {
           ...updatedZones[selectedZone],
@@ -424,25 +401,30 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
         };
       }
       
-      // Use the throttled update function
-      throttledZoneUpdate(updatedZones);
-      return;
-    }
-
-    // For hover effects, use debouncing to avoid excessive checks
-    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-    
-    hoverTimeoutRef.current = setTimeout(() => {
-      const newHoverState = checkHoverStatus(x, y);
+      // Store updates for batched processing
+      pendingZonesUpdateRef.current = updatedZones;
       
-      // Only update state if the hover status has changed
-      if (JSON.stringify(newHoverState) !== JSON.stringify(hoveredPoint)) {
-        setHoveredPoint(newHoverState);
+      // Throttle updates to the parent component during active dragging
+      const now = Date.now();
+      if (now - lastUpdateTimeRef.current > 100) {
+        onZonesChange(updatedZones);
+        lastUpdateTimeRef.current = now;
       }
       
-      hoverTimeoutRef.current = null;
-    }, 50); // Debounce time of 50ms for hover detection
-  }, [disabled, drawMode, isDrawing, drawStartPos, selectedZone, draggingPoint, canvasToNormalizedCoords, throttledZoneUpdate, checkHoverStatus, drawCanvas, hoveredPoint]);
+      // Always redraw the canvas
+      requestAnimationFrame(() => drawCanvas());
+      return;
+    }
+    
+    // Track what's under the cursor using the helper function
+    const hoverStatus = checkHoverStatus(x, y);
+    
+    // Only update if there's a change in hover state to reduce rerenders
+    if (JSON.stringify(hoveredPoint) !== JSON.stringify(hoverStatus)) {
+      setHoveredPoint(hoverStatus);
+      requestAnimationFrame(() => drawCanvas());
+    }
+  }, [disabled, drawMode, isDrawing, drawStartPos, draggingPoint, selectedZone, canvasToNormalizedCoords, onZonesChange, checkHoverStatus, drawCanvas, hoveredPoint]);
 
   // Handle mouse down event
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -510,16 +492,25 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
       const lineLength = Math.sqrt(dx * dx + dy * dy);
       
       if (lineLength > 20) {
-        // Create a new zone
+        // Get existing zone IDs to find next available number
+        const existingIds = localZonesRef.current.map(zone => zone.id);
+        let nextIndex = 1;
+        
+        // Find the next available zone number
+        while (existingIds.includes(`zone${nextIndex}`)) {
+          nextIndex++;
+        }
+        
+        // Create a new zone with simple sequential ID
         const newZone: Zone = {
-          id: `zone${localZonesRef.current.length + 1}`,
+          id: `zone${nextIndex}`,
           start_x: startNormalized.x,
           start_y: startNormalized.y,
           end_x: endNormalized.x,
           end_y: endNormalized.y,
           min_crossing_threshold: 1,
           // Always ensure at least one anchor point is selected by default
-          triggering_anchors: ["BOTTOM_CENTER", "CENTER", "CENTER_LEFT", "CENTER_RIGHT"]
+          triggering_anchors: ["BOTTOM_CENTER", "CENTER"]
         };
         
         onZonesChange([...localZonesRef.current, newZone]);
@@ -546,8 +537,13 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
   const handleDeleteSelectedZone = useCallback(() => {
     if (selectedZone === null) return;
     
+    // Create a completely new array without the selected zone
     const updatedZones = localZonesRef.current.filter((_, i) => i !== selectedZone);
+    
+    // Immediately update the parent component with the new zones array
     onZonesChange(updatedZones);
+    
+    // Reset selection
     setSelectedZone(null);
   }, [selectedZone, onZonesChange]);
 
@@ -586,17 +582,19 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
         </Box>
       </Paper>
       
-      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, height: 'calc(100% - 50px)' }}>
+      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, flex: 1, minHeight: 0 }}>
         <Box 
           data-line-zone-editor="true"
           sx={{ 
             position: 'relative',
             flex: 1,
-            height: { xs: '300px', md: '100%' },
-            border: '1px solid #ccc',
+            width: '100%',
+            height: '100%',
+            border: '1px solid',
+            borderColor: 'divider',
             borderRadius: '4px',
             overflow: 'hidden',
-            backgroundColor: '#f5f5f5'
+            backgroundColor: 'background.paper'
           }}
           ref={(el: HTMLDivElement | null) => {
             containerRef.current = el;
@@ -607,7 +605,7 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
         >
           <canvas
             ref={canvasRef}
-            style={{ width: '100%', height: '100%' }}
+            style={{ width: '100%', height: '100%', display: 'block' }}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}

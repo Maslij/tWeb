@@ -62,6 +62,8 @@ interface PolygonZoneConfigTabProps {
   showSnackbar: (message: string) => void;
   cameraId: string | undefined;
   refreshFrame?: () => void;
+  frameContainerStyle?: any; // Added prop for consistent container styling
+  frameStyle?: any; // Added prop for consistent frame styling
 }
 
 const PolygonZoneConfigTab: React.FC<PolygonZoneConfigTabProps> = ({
@@ -82,7 +84,9 @@ const PolygonZoneConfigTab: React.FC<PolygonZoneConfigTabProps> = ({
   setHasUnsavedZoneChanges,
   showSnackbar,
   cameraId,
-  refreshFrame
+  refreshFrame,
+  frameContainerStyle,
+  frameStyle
 }) => {
   const [isSaving, setIsSaving] = useState(false);
 
@@ -149,6 +153,13 @@ const PolygonZoneConfigTab: React.FC<PolygonZoneConfigTabProps> = ({
       
       <Divider sx={{ mb: 2 }} />
       
+      <Typography variant="body2" color="text.secondary" paragraph>
+        Draw polygon zones on the image to define detection areas. Objects crossing into or out of these zones will be counted.
+        {camera?.running ? 
+          " You can edit these zones in real-time while the pipeline is running." : 
+          " The pipeline is currently stopped, but you can still edit the zones based on the last captured frame."}
+      </Typography>
+      
       {!camera?.running && (
         <Alert severity="info" sx={{ mb: 2 }}>
           Start the pipeline to configure polygon zones on a live video feed.
@@ -164,39 +175,44 @@ const PolygonZoneConfigTab: React.FC<PolygonZoneConfigTabProps> = ({
       <Box sx={{ width: '100%', position: 'relative' }}>
         {(camera?.running || pipelineHasRunOnce) ? (
           frameUrl || lastFrameUrl ? (
-            <PolygonZoneEditor 
-              imageUrl={camera?.running ? frameUrl : lastFrameUrl} 
-              zones={polygonZoneManagerForm.zones}
-              onZonesChange={(updatedZones) => {
-                handlePolygonZonesUpdate(updatedZones);
-                setHasUnsavedZoneChanges(true);
-              }}
-              disabled={isSaving}
-            />
+            <Box sx={frameContainerStyle || {}}>
+              <PolygonZoneEditor 
+                imageUrl={camera?.running ? frameUrl : lastFrameUrl} 
+                zones={polygonZoneManagerForm.zones}
+                onZonesChange={(updatedZones) => {
+                  handlePolygonZonesUpdate(updatedZones);
+                  setHasUnsavedZoneChanges(true);
+                }}
+                disabled={isSaving}
+              />
+            </Box>
           ) : (
-            <Box sx={{ 
+            <Box sx={frameContainerStyle || { 
               height: '400px', 
               display: 'flex', 
               alignItems: 'center', 
               justifyContent: 'center',
-              backgroundColor: '#f5f5f5',
-              border: '1px solid #ddd',
+              backgroundColor: 'background.paper',
+              border: '1px solid',
+              borderColor: 'divider',
               borderRadius: '4px'
             }}>
               <CircularProgress />
             </Box>
           )
         ) : (
-          <Box sx={{ 
+          <Box sx={frameContainerStyle || { 
             textAlign: 'center', 
             p: 3, 
-            border: '1px solid #ccc', 
+            border: '1px solid',
+            borderColor: 'divider',
             borderRadius: '4px', 
             height: '400px', 
             display: 'flex', 
             flexDirection: 'column', 
             justifyContent: 'center', 
-            alignItems: 'center' 
+            alignItems: 'center',
+            bgcolor: 'background.paper'
           }}>
             <VisibilityIcon sx={{ fontSize: 60, color: 'text.secondary', opacity: 0.5, mb: 2 }} />
             <Typography variant="h6" color="text.secondary" gutterBottom>

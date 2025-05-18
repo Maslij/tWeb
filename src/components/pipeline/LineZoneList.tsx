@@ -71,7 +71,7 @@ const LineZoneList: React.FC<LineZoneListProps> = ({
       ) : (
         zones.map((zone, index) => (
           <ListItem 
-            key={index}
+            key={zone.id || index}
             sx={{ 
               borderBottom: index < zones.length - 1 ? '1px solid' : 'none', 
               borderColor: 'divider',
@@ -119,7 +119,10 @@ const LineZoneList: React.FC<LineZoneListProps> = ({
               <IconButton 
                 edge="end" 
                 aria-label="delete" 
-                onClick={() => onDeleteZone(index)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteZone(index);
+                }}
                 disabled={disabled}
               >
                 <DeleteIcon />

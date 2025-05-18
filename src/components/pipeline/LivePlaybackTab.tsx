@@ -20,6 +20,8 @@ interface LivePlaybackTabProps {
   handleStartStop: () => void;
   isStartingPipeline: boolean;
   sourceComponent: any; // Using 'any' since we don't need the specific type here
+  frameContainerStyle?: any; // Added prop for consistent frame container style
+  frameStyle?: any; // Added prop for consistent frame style
 }
 
 const LivePlaybackTab: React.FC<LivePlaybackTabProps> = ({
@@ -30,7 +32,9 @@ const LivePlaybackTab: React.FC<LivePlaybackTabProps> = ({
   refreshFrame,
   handleStartStop,
   isStartingPipeline,
-  sourceComponent
+  sourceComponent,
+  frameContainerStyle,
+  frameStyle
 }) => {
   return (
     <Paper elevation={2} sx={{ p: 3 }}>
@@ -44,43 +48,49 @@ const LivePlaybackTab: React.FC<LivePlaybackTabProps> = ({
       
       <Divider sx={{ mb: 2 }} />
       
-      <Box sx={{ width: '100%', textAlign: 'center' }}>
+      <Box sx={{ width: '100%' }}>
         {(camera?.running && !frameUrl) && (
-          <ImageSkeleton />
+          <Box sx={frameContainerStyle || {}}>
+            <ImageSkeleton />
+          </Box>
         )}
         {(camera?.running && frameUrl) && (
-          <img 
-            src={frameUrl} 
-            alt="Camera feed" 
-            style={{ 
-              maxWidth: '100%', 
-              maxHeight: '600px', 
-              border: '1px solid #ccc',
-              borderRadius: '4px'
-            }} 
-          />
+          <Box sx={frameContainerStyle || {}}>
+            <img 
+              src={frameUrl} 
+              alt="Camera feed" 
+              style={{
+                ...frameStyle,
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain'
+              }}
+            />
+          </Box>
         )}
         {(!camera?.running && lastFrameUrl) && (
-          <img 
-            src={lastFrameUrl} 
-            alt="Camera feed (last frame)" 
-            style={{ 
-              maxWidth: '100%', 
-              maxHeight: '600px', 
-              border: '1px solid #ccc',
-              borderRadius: '4px'
-            }} 
-          />
+          <Box sx={frameContainerStyle || {}}>
+            <img 
+              src={lastFrameUrl} 
+              alt="Camera feed (last frame)" 
+              style={{
+                ...frameStyle,
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain'
+              }}
+            />
+          </Box>
         )}
         {(!camera?.running && !lastFrameUrl && pipelineHasRunOnce) && (
-          <Box 
-            sx={{ 
+          <Box sx={frameContainerStyle || { 
               width: '100%', 
               height: '600px', 
               display: 'flex', 
               alignItems: 'center', 
               justifyContent: 'center',
-              border: '1px solid #ccc',
+              border: '1px solid',
+              borderColor: 'divider',
               borderRadius: '4px',
               bgcolor: 'background.paper'
             }}
@@ -91,16 +101,18 @@ const LivePlaybackTab: React.FC<LivePlaybackTabProps> = ({
           </Box>
         )}
         {(!camera?.running && !lastFrameUrl && !pipelineHasRunOnce) && (
-          <Box sx={{ 
+          <Box sx={frameContainerStyle || { 
             textAlign: 'center', 
             p: 3, 
-            border: '1px solid #ccc', 
+            border: '1px solid',
+            borderColor: 'divider',
             borderRadius: '4px', 
             height: '600px', 
             display: 'flex', 
             flexDirection: 'column', 
             justifyContent: 'center', 
-            alignItems: 'center' 
+            alignItems: 'center',
+            bgcolor: 'background.paper'
           }}>
             <LiveTvIcon sx={{ fontSize: 60, color: 'text.secondary', opacity: 0.5, mb: 2 }} />
             <Typography variant="h6" color="text.secondary" gutterBottom>

@@ -37,6 +37,8 @@ interface LineZoneConfigTabProps {
   setHasUnsavedZoneChanges: (value: boolean) => void;
   showSnackbar: (message: string) => void;
   cameraId: string | undefined;
+  frameContainerStyle?: any;
+  frameStyle?: any;
 }
 
 const LineZoneConfigTab: React.FC<LineZoneConfigTabProps> = ({
@@ -56,7 +58,9 @@ const LineZoneConfigTab: React.FC<LineZoneConfigTabProps> = ({
   hasUnsavedZoneChanges,
   setHasUnsavedZoneChanges,
   showSnackbar,
-  cameraId
+  cameraId,
+  frameContainerStyle,
+  frameStyle
 }) => {
   return (
     <Paper elevation={2} sx={{ p: 3 }}>
@@ -88,29 +92,35 @@ const LineZoneConfigTab: React.FC<LineZoneConfigTabProps> = ({
         {/* Show the image and zone editor */}
         {(camera?.running || pipelineHasRunOnce) ? (
           frameUrl || lastFrameUrl ? (
-            <LineZoneEditor 
-              imageUrl={camera?.running ? frameUrl : lastFrameUrl}
-              zones={lineZoneManagerForm.zones}
-              onZonesChange={(updatedZones) => {
-                handleLineZonesUpdate(updatedZones);
-                setHasUnsavedZoneChanges(true);
-              }}
-              disabled={isSavingZones}
-            />
+            <Box sx={frameContainerStyle || {}}>
+              <LineZoneEditor 
+                imageUrl={camera?.running ? frameUrl : lastFrameUrl}
+                zones={lineZoneManagerForm.zones}
+                onZonesChange={(updatedZones) => {
+                  handleLineZonesUpdate(updatedZones);
+                  setHasUnsavedZoneChanges(true);
+                }}
+                disabled={isSavingZones}
+              />
+            </Box>
           ) : (
-            <LineZoneEditorSkeleton />
+            <Box sx={frameContainerStyle || {}}>
+              <LineZoneEditorSkeleton />
+            </Box>
           )
         ) : (
-          <Box sx={{ 
+          <Box sx={frameContainerStyle || { 
             textAlign: 'center', 
             p: 3, 
-            border: '1px solid #ccc', 
+            border: '1px solid',
+            borderColor: 'divider',
             borderRadius: '4px', 
             height: '400px', 
             display: 'flex', 
             flexDirection: 'column', 
             justifyContent: 'center', 
-            alignItems: 'center' 
+            alignItems: 'center',
+            bgcolor: 'background.paper'
           }}>
             <VisibilityIcon sx={{ fontSize: 60, color: 'text.secondary', opacity: 0.5, mb: 2 }} />
             <Typography variant="h6" color="text.secondary" gutterBottom>
@@ -157,7 +167,8 @@ const LineZoneConfigTab: React.FC<LineZoneConfigTabProps> = ({
                 
                 // Normalize all zones to ensure they have proper values
                 const normalizedZones = lineZoneManagerForm.zones.map(zone => ({
-                  id: zone.id || `zone${Math.random().toString(36).substr(2, 9)}`,
+                  // Preserve the existing ID or generate a new one if missing
+                  id: zone.id || `zone${Math.floor(Math.random() * 1000) + 1}`,
                   start_x: typeof zone.start_x === 'number' ? zone.start_x : parseFloat(String(zone.start_x)) || 0.2,
                   start_y: typeof zone.start_y === 'number' ? zone.start_y : parseFloat(String(zone.start_y)) || 0.5,
                   end_x: typeof zone.end_x === 'number' ? zone.end_x : parseFloat(String(zone.end_x)) || 0.8,
@@ -170,13 +181,52 @@ const LineZoneConfigTab: React.FC<LineZoneConfigTabProps> = ({
                   out_count: zone.out_count
                 }));
                 
-                // Update the component configuration
+                // Ensure zone IDs are unique and follow simple naming convention
+                const usedIds = new Set<string>();
+                normalizedZones.forEach((zone, index) => {
+                  if (usedIds.has(zone.id)) {
+                    // If ID is duplicated, generate a new simple ID
+                    let nextIndex = 1;
+                    while (usedIds.has(`zone${nextIndex}`)) {
+                      nextIndex++;
+                    }
+                    zone.id = `zone${nextIndex}`;
+                  }
+                  usedIds.add(zone.id);
+                });
+                
+                // Extract the non-zone settings from the current config
+                const {
+                  draw_zones = true,
+                  line_color = [0, 0, 255],
+                  line_thickness = 2,
+                  draw_counts = true,
+                  text_color = [255, 255, 255],
+                  text_scale = 0.5,
+                  text_thickness = 1,
+                  // Ensure we don't accidentally extract any other properties
+                  ...otherSettings
+                } = lineZoneManagerComponent.config || {};
+                
+                // Create a completely new config object that only has our current UI zones
+                // This is critical - we must NOT spread the existing config because that can
+                // bring in old zones that were deleted in the UI but still exist in the server config
                 const updatedConfig = {
-                  ...lineZoneManagerComponent.config,
+                  // Include only the essential non-zone settings
+                  draw_zones,
+                  line_color,
+                  line_thickness,
+                  draw_counts,
+                  text_color,
+                  text_scale,
+                  text_thickness,
+                  // Add a flag to ensure old zones are removed
+                  remove_missing: true,
+                  // Include ONLY the zones from the current UI state
                   zones: normalizedZones
                 };
                 
-                // Send the update to the server
+                // Send the update to the server as a completely new config
                 const result = await apiService.components.processors.update(
                   cameraId, 
                   lineZoneManagerComponent.id, 
