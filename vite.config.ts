@@ -17,6 +17,13 @@ const getGitCommitHash = () => {
   }
 };
 
+// Prioritize build-time env vars passed as build args to Docker 
+// This ensures the Docker build args take precedence
+const APP_VERSION = process.env.VITE_APP_VERSION || packageJson.version;
+const BUILD_ID = process.env.VITE_BUILD_ID || getGitCommitHash();
+
+console.log(`Building with version: v${APP_VERSION}-${BUILD_ID}`);
+
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
@@ -30,8 +37,9 @@ export default defineConfig({
     }
   },
   define: {
-    'import.meta.env.VITE_APP_VERSION': JSON.stringify(packageJson.version),
-    'import.meta.env.VITE_BUILD_ID': JSON.stringify(getGitCommitHash()),
+    // Bake these values directly into the build
+    'import.meta.env.VITE_APP_VERSION': JSON.stringify(APP_VERSION),
+    'import.meta.env.VITE_BUILD_ID': JSON.stringify(BUILD_ID),
     'import.meta.env.VITE_TAPI_SERVER': JSON.stringify(process.env.VITE_TAPI_SERVER || 'localhost:8090'),
   }
 })

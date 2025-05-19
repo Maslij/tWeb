@@ -7,22 +7,15 @@ ECR_REGISTRY="246261010633.dkr.ecr.ap-southeast-2.amazonaws.com"
 ECR_REPOSITORY="bbweb-jetson"
 IMAGE_TAG=$(date +%Y%m%d-%H%M%S)
 
-# Change directory to current script location
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-cd "$SCRIPT_DIR"
-
-# Extract version from package.json
-APP_VERSION=$(grep -o '"version": *"[^"]*"' package.json | sed 's/"version": *"\(.*\)"/\1/')
-echo "App version from package.json: ${APP_VERSION}"
-
-# Get git commit hash
+# Get version information from Git
+APP_VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "1.0.0")
 BUILD_ID=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-echo "Build ID (git commit): ${BUILD_ID}"
 
 echo "Building and deploying tWeb ARM64 image to ECR..."
 echo "Repository: ${ECR_REGISTRY}/${ECR_REPOSITORY}"
 echo "Tag: ${IMAGE_TAG}"
-echo "Version: v${APP_VERSION}-${BUILD_ID}"
+echo "App Version: ${APP_VERSION}"
+echo "Build ID: ${BUILD_ID}"
 
 # Authenticate Docker to ECR
 echo "Authenticating with AWS ECR..."
@@ -38,8 +31,8 @@ docker buildx inspect tweb-builder >/dev/null 2>&1 || docker buildx create --nam
 docker buildx use tweb-builder
 docker buildx inspect --bootstrap
 
-# Build and push the image
-echo "Building and pushing Docker image for ARM64..."
+# Build and push the image - passing the version information as build args
+echo "Building and pushing Docker image for ARM64 (NVIDIA Jetson)..."
 docker buildx build --platform linux/arm64 \
   --build-arg APP_VERSION="${APP_VERSION}" \
   --build-arg BUILD_ID="${BUILD_ID}" \
@@ -51,9 +44,11 @@ docker buildx build --platform linux/arm64 \
 echo "Deployment completed successfully!"
 echo "Image: ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
 echo "Image: ${ECR_REGISTRY}/${ECR_REPOSITORY}:latest"
-echo "Version: v${APP_VERSION}-${BUILD_ID}"
 echo ""
-echo "To pull this image on your ARM device:"
+echo "App version baked into image: ${APP_VERSION}"
+echo "Build ID baked into image: ${BUILD_ID}"
+echo ""
+echo "To pull this image on your Jetson device:"
 echo "1. Authenticate with ECR:"
 echo "   aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}"
 echo ""
