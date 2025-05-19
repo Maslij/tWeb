@@ -7,8 +7,9 @@ ECR_REGISTRY="246261010633.dkr.ecr.ap-southeast-2.amazonaws.com"
 ECR_REPOSITORY="bbweb-jetson"
 IMAGE_TAG=$(date +%Y%m%d-%H%M%S)
 
-# Get version information from Git
-APP_VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "1.0.0")
+# Extract version from package.json
+APP_VERSION=$(grep -o '"version": *"[^"]*"' package.json | sed 's/"version": *"\(.*\)"/\1/')
+# Get git commit hash for build ID
 BUILD_ID=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
 echo "Building and deploying tWeb ARM64 image to ECR..."
@@ -16,6 +17,7 @@ echo "Repository: ${ECR_REGISTRY}/${ECR_REPOSITORY}"
 echo "Tag: ${IMAGE_TAG}"
 echo "App Version: ${APP_VERSION}"
 echo "Build ID: ${BUILD_ID}"
+echo "Full Version: v${APP_VERSION}-${BUILD_ID}"
 
 # Authenticate Docker to ECR
 echo "Authenticating with AWS ECR..."
@@ -45,8 +47,7 @@ echo "Deployment completed successfully!"
 echo "Image: ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
 echo "Image: ${ECR_REGISTRY}/${ECR_REPOSITORY}:latest"
 echo ""
-echo "App version baked into image: ${APP_VERSION}"
-echo "Build ID baked into image: ${BUILD_ID}"
+echo "App version baked into image: v${APP_VERSION}-${BUILD_ID}"
 echo ""
 echo "To pull this image on your Jetson device:"
 echo "1. Authenticate with ECR:"

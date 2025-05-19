@@ -26,6 +26,7 @@ echo "App version from package.json: ${APP_VERSION}"
 # Get git commit hash
 BUILD_ID=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 echo "Build ID (git commit): ${BUILD_ID}"
+echo "Full version: v${APP_VERSION}-${BUILD_ID}"
 
 # Build the image for arm64 platform
 echo "Building Docker image for ARM64..."
