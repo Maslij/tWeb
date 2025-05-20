@@ -115,6 +115,7 @@ import WarningIcon from '@mui/icons-material/Warning';
 import EditIcon from '@mui/icons-material/Edit';
 import CheckIcon from '@mui/icons-material/Check';
 import CancelIcon from '@mui/icons-material/Cancel';
+import ConstructionIcon from '@mui/icons-material/Construction';
 
 import apiService, { 
   Camera, 
@@ -2868,32 +2869,56 @@ const PipelineBuilder = () => {
           (hasLineZoneManagerComponent && hasPolygonZoneManagerComponent ? 3 : 
            hasLineZoneManagerComponent || hasPolygonZoneManagerComponent ? 2 : 1)} 
           sx={{ p: 0, mt: 3 }}>
-          {/* Telemetry Tab */}
+          {/* Telemetry Tab - Currently shows "under construction" message */}
           {dbComponentExists && (
-            <TelemetryTab
-              camera={camera}
-              cameraId={cameraId || ''}
-              zoneLineCounts={zoneLineCounts}
-              isLoadingZoneData={isLoadingZoneData}
-              isLoadingHeatmapData={isLoadingHeatmapData}
-              fetchZoneLineCounts={fetchZoneLineCounts}
-              fetchClassHeatmapData={fetchClassHeatmapData}
-              databaseRecords={databaseRecords}
-              isLoadingRecords={isLoadingRecords}
-              isDeletingRecords={isDeletingRecords}
-              totalEvents={totalEvents}
-              totalFrames={totalFrames}
-              page={page}
-              rowsPerPage={rowsPerPage}
-              handlePageChange={handlePageChange}
-              handleChangeRowsPerPage={handleChangeRowsPerPage}
-              fetchDatabaseRecords={fetchDatabaseRecords}
-              handleDeleteAllRecords={handleDeleteAllRecords}
-              getEventTypeName={getEventTypeName}
-              formatTimestamp={formatTimestamp}
-              hasZoneLineData={hasZoneLineData}
-              hasHeatmapData={hasHeatmapData}
-            />
+            <Box sx={{ 
+              p: 4, 
+              display: 'flex', 
+              flexDirection: 'column', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              minHeight: '300px',
+              borderRadius: 2,
+              border: '1px dashed',
+              borderColor: 'divider'
+            }}>
+              <ConstructionIcon sx={{ fontSize: 60, color: 'warning.main', mb: 2 }} />
+              <Typography variant="h5" gutterBottom>Telemetry Dashboard</Typography>
+              <Typography variant="body1" color="text.secondary" align="center">
+                This feature is currently under construction and will be available soon.
+              </Typography>
+              
+              {/* 
+              COMMENTED OUT TELEMETRY TAB - UNCOMMENT WHEN READY:
+              
+              Replace the Box component with this TelemetryTab component when ready:
+              
+              <TelemetryTab
+                camera={camera}
+                cameraId={cameraId || ''}
+                zoneLineCounts={zoneLineCounts}
+                isLoadingZoneData={isLoadingZoneData}
+                isLoadingHeatmapData={isLoadingHeatmapData}
+                fetchZoneLineCounts={fetchZoneLineCounts}
+                fetchClassHeatmapData={fetchClassHeatmapData}
+                databaseRecords={databaseRecords}
+                isLoadingRecords={isLoadingRecords}
+                isDeletingRecords={isDeletingRecords}
+                totalEvents={totalEvents}
+                totalFrames={totalFrames}
+                page={page}
+                rowsPerPage={rowsPerPage}
+                handlePageChange={handlePageChange}
+                handleChangeRowsPerPage={handleChangeRowsPerPage}
+                fetchDatabaseRecords={fetchDatabaseRecords}
+                handleDeleteAllRecords={handleDeleteAllRecords}
+                getEventTypeName={getEventTypeName}
+                formatTimestamp={formatTimestamp}
+                hasZoneLineData={hasZoneLineData}
+                hasHeatmapData={hasHeatmapData}
+              />
+              */}
+            </Box>
           )}
         </TabPanel>
       </Box>
