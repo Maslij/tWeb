@@ -68,39 +68,7 @@ const LivePlaybackTab: React.FC<LivePlaybackTabProps> = ({
             />
           </Box>
         )}
-        {(!camera?.running && lastFrameUrl) && (
-          <Box sx={frameContainerStyle || {}}>
-            <img 
-              src={lastFrameUrl} 
-              alt="Camera feed (last frame)" 
-              style={{
-                ...frameStyle,
-                width: '100%',
-                height: '100%',
-                objectFit: 'fill'
-              }}
-            />
-          </Box>
-        )}
-        {(!camera?.running && !lastFrameUrl && pipelineHasRunOnce) && (
-          <Box sx={frameContainerStyle || { 
-              width: '100%', 
-              height: '600px', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center',
-              border: '1px solid',
-              borderColor: 'divider',
-              borderRadius: '4px',
-              bgcolor: 'background.paper'
-            }}
-          >
-            <Typography variant="body1" color="text.secondary">
-              No image available from the last session
-            </Typography>
-          </Box>
-        )}
-        {(!camera?.running && !lastFrameUrl && !pipelineHasRunOnce) && (
+        {(!camera?.running) && (
           <Box sx={frameContainerStyle || { 
             textAlign: 'center', 
             p: 3, 
@@ -114,23 +82,15 @@ const LivePlaybackTab: React.FC<LivePlaybackTabProps> = ({
             alignItems: 'center',
             bgcolor: 'background.paper'
           }}>
-            <LiveTvIcon sx={{ fontSize: 60, color: 'text.secondary', opacity: 0.5, mb: 2 }} />
-            <Typography variant="h6" color="text.secondary" gutterBottom>
-              Pipeline not started
-            </Typography>
-            <Typography variant="body1" color="text.secondary">
-              Start the pipeline to see the live video feed
-            </Typography>
-            <Button
-              variant="contained"
-              color="success"
-              startIcon={<PlayArrowIcon />}
-              onClick={handleStartStop}
-              disabled={isStartingPipeline || !sourceComponent}
-              sx={{ mt: 2 }}
-            >
-              {isStartingPipeline ? "Starting..." : "Start Pipeline"}
-            </Button>
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+              <LiveTvIcon sx={{ fontSize: 60, color: 'text.secondary', opacity: 0.5, mb: 2 }} />
+              <Typography variant="h6" color="text.secondary" gutterBottom>
+                Pipeline not started
+              </Typography>
+              <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+                Start the pipeline to see the live video feed
+              </Typography>
+            </Box>
           </Box>
         )}
       </Box>
