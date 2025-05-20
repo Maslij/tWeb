@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Container,
@@ -164,6 +164,9 @@ const Dashboard = () => {
   const [error, setError] = useState<string | null>(null);
   const [cameraComponents, setCameraComponents] = useState<Record<string, CameraComponents>>({});
   
+  // Add state for inference server availability
+  const [inferenceServerAvailable, setInferenceServerAvailable] = useState(true);
+  
   // Add state for license status
   const [licenseStatus, setLicenseStatus] = useState<LicenseStatus | null>(null);
   const [isLicenseChecked, setIsLicenseChecked] = useState(false);
@@ -221,6 +224,18 @@ const Dashboard = () => {
       fetchCameras();
     }
   }, [isLicenseChecked, licenseStatus]);
+
+  // Check if camera has AI-dependent components
+  const hasAIDependentComponents = useCallback((cameraId: string): boolean => {
+    const components = cameraComponents[cameraId];
+    if (!components || !components.processors) return false;
+    
+    // Check if any processor components require the AI server
+    return components.processors.some(component => {
+      const componentType = component.type;
+      return ['object_detection', 'object_classification', 'age_gender_detection'].includes(String(componentType));
+    });
+  }, [cameraComponents]);
 
   // Function to check if all components of a camera are covered by the license
   const checkCameraComponentLicenseCoverage = (cameraId: string, components: CameraComponents): boolean => {
@@ -287,6 +302,15 @@ const Dashboard = () => {
       const componentsMap: Record<string, CameraComponents> = {};
       const unlicensedMap: Record<string, boolean> = {};
       
+      // Check for inference server availability by getting available models
+      try {
+        const modelResponse = await apiService.models.getObjectDetectionModels();
+        setInferenceServerAvailable(modelResponse && modelResponse.models && modelResponse.models.length > 0);
+      } catch (error) {
+        console.error("Error checking inference server:", error);
+        setInferenceServerAvailable(false);
+      }
+      
       for (const camera of camerasData) {
         try {
           const components = await apiService.components.getAll(camera.id);
@@ -326,6 +350,12 @@ const Dashboard = () => {
 
   const handleStartCamera = async (cameraId: string) => {
     try {
+      // Check if camera has AI components but server is unavailable
+      if (hasAIDependentComponents(cameraId) && !inferenceServerAvailable) {
+        showSnackbar('Cannot start camera: AI server is unavailable');
+        return;
+      }
+      
       setActionInProgressId(cameraId);
       await apiService.cameras.start(cameraId);
       fetchCameras(); // Refresh camera list
@@ -454,6 +484,12 @@ const Dashboard = () => {
     }
   };
 
+  // Add a showSnackbar function
+  const showSnackbar = (message: string) => {
+    setError(message);
+    setTimeout(() => setError(null), 5000);
+  };
+
   // Don't render content until license is checked
   if (!isLicenseChecked) {
     return (
@@ -575,6 +611,8 @@ const Dashboard = () => {
           {cameras.map((camera) => {
             const isUnlicensed = unlicensedCameras[camera.id] || false;
             const isActionInProgress = actionInProgressId === camera.id;
+            const hasAIComponents = hasAIDependentComponents(camera.id);
+            const cannotStart = !camera.running && hasAIComponents && !inferenceServerAvailable;
             return (
             <Card 
               key={camera.id} 
@@ -704,19 +742,26 @@ const Dashboard = () => {
                       {isActionInProgress ? "Stopping..." : "Stop"}
                     </Button>
                   ) : (
-                    <Button
-                      size="medium"
-                      color="success"
-                      variant="contained"
-                      startIcon={isActionInProgress ? <CircularProgress size={20} color="inherit" /> : <PlayArrowIcon />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleStartCamera(camera.id);
-                      }}
-                      disabled={!!deletingCameraId || isActionInProgress}
+                    <Tooltip 
+                      title={cannotStart ? 
+                        "Cannot start: AI server is unavailable. This camera has AI components that require the server." : ""}
                     >
-                      {isActionInProgress ? "Starting..." : "Start"}
-                    </Button>
+                      <span>
+                        <Button
+                          size="medium"
+                          color="success"
+                          variant="contained"
+                          startIcon={isActionInProgress ? <CircularProgress size={20} color="inherit" /> : <PlayArrowIcon />}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleStartCamera(camera.id);
+                          }}
+                          disabled={!!deletingCameraId || isActionInProgress || cannotStart}
+                        >
+                          {isActionInProgress ? "Starting..." : "Start"}
+                        </Button>
+                      </span>
+                    </Tooltip>
                   )}
                 </Box>
                 
