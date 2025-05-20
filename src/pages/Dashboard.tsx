@@ -20,7 +20,13 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  LinearProgress
+  LinearProgress,
+  IconButton,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
+  Divider
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -39,6 +45,8 @@ import SaveIcon from '@mui/icons-material/Save';
 import StorageIcon from '@mui/icons-material/Storage';
 import LockIcon from '@mui/icons-material/Lock';
 import InfoIcon from '@mui/icons-material/Info';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 
 import apiService, { Camera, Component, Task, LicenseStatus } from '../services/api';
 
@@ -166,8 +174,15 @@ const Dashboard = () => {
   const [deleteStatus, setDeleteStatus] = useState('');
   const [showDeletionDialog, setShowDeletionDialog] = useState(false);
 
+  // Add state for tracking camera start/stop operations
+  const [actionInProgressId, setActionInProgressId] = useState<string | null>(null);
+  
   // Track cameras with unlicensed components
   const [unlicensedCameras, setUnlicensedCameras] = useState<Record<string, boolean>>({});
+  
+  // Add state for camera action menu
+  const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
+  const [activeCamera, setActiveCamera] = useState<string | null>(null);
   
   // Check license first
   useEffect(() => {
@@ -311,6 +326,7 @@ const Dashboard = () => {
 
   const handleStartCamera = async (cameraId: string) => {
     try {
+      setActionInProgressId(cameraId);
       await apiService.cameras.start(cameraId);
       fetchCameras(); // Refresh camera list
     } catch (err: any) {
@@ -322,11 +338,14 @@ const Dashboard = () => {
       } else {
         setError('Failed to start camera. Please try again.');
       }
+    } finally {
+      setActionInProgressId(null);
     }
   };
 
   const handleStopCamera = async (cameraId: string) => {
     try {
+      setActionInProgressId(cameraId);
       await apiService.cameras.stop(cameraId);
       fetchCameras(); // Refresh camera list
     } catch (err: any) {
@@ -338,6 +357,8 @@ const Dashboard = () => {
       } else {
         setError('Failed to stop camera. Please try again.');
       }
+    } finally {
+      setActionInProgressId(null);
     }
   };
 
@@ -402,6 +423,34 @@ const Dashboard = () => {
           setDeletingCameraId(null);
         }
       }
+    }
+  };
+
+  // Handle opening the menu
+  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, cameraId: string) => {
+    event.stopPropagation(); // Prevent card click when clicking menu
+    setMenuAnchorEl(event.currentTarget);
+    setActiveCamera(cameraId);
+  };
+  
+  // Handle closing the menu
+  const handleMenuClose = () => {
+    setMenuAnchorEl(null);
+    setActiveCamera(null);
+  };
+  
+  // Modified delete camera handler to work with menu
+  const handleDeleteFromMenu = () => {
+    if (activeCamera) {
+      handleMenuClose();
+      handleDeleteCamera(activeCamera);
+    }
+  };
+  
+  // Handle card click to navigate to camera details
+  const handleCardClick = (cameraId: string, isUnlicensed: boolean) => {
+    if (!isUnlicensed) {
+      navigate(`/cameras/${cameraId}/pipeline`);
     }
   };
 
@@ -525,18 +574,31 @@ const Dashboard = () => {
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' }, gap: 3 }}>
           {cameras.map((camera) => {
             const isUnlicensed = unlicensedCameras[camera.id] || false;
+            const isActionInProgress = actionInProgressId === camera.id;
             return (
-            <Card key={camera.id} sx={{ 
-              height: '100%', 
-              display: 'flex', 
-              flexDirection: 'column',
-              position: 'relative',
-              ...(isUnlicensed && { 
-                border: '1px solid', 
-                borderColor: 'warning.light',
-                boxShadow: theme => `0 0 8px ${theme.palette.warning.light}`
-              })
-            }}>
+            <Card 
+              key={camera.id} 
+              sx={{ 
+                height: '100%', 
+                display: 'flex', 
+                flexDirection: 'column',
+                position: 'relative',
+                cursor: isUnlicensed ? 'default' : 'pointer',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+                '&:hover': {
+                  transform: isUnlicensed ? 'none' : 'translateY(-4px)',
+                  boxShadow: isUnlicensed ? undefined : (theme) => theme.shadows[6],
+                },
+                ...(isUnlicensed && { 
+                  border: '1px solid', 
+                  borderColor: 'warning.light',
+                  boxShadow: theme => `0 0 8px ${theme.palette.warning.light}`
+                })
+              }}
+              onClick={() => handleCardClick(camera.id, isUnlicensed)}
+              role="button"
+              aria-disabled={isUnlicensed}
+            >
               {isUnlicensed && (
                 <Box position="absolute" top={8} right={8} zIndex={2}>
                   <Tooltip title="This camera uses features not included in your current license tier. Please upgrade your license to use this camera.">
@@ -613,67 +675,100 @@ const Dashboard = () => {
                   </Alert>
                 )}
               </CardContent>
-              <CardActions sx={{ padding: 2, pt: 0 }}>
-                {camera.running ? (
-                  <Button
-                    size="small"
-                    color="error"
-                    startIcon={<StopIcon />}
-                    onClick={() => handleStopCamera(camera.id)}
-                    disabled={!!deletingCameraId || isUnlicensed}
-                  >
-                    Stop
-                  </Button>
-                ) : (
-                  <Button
-                    size="small"
-                    color="success"
-                    startIcon={<PlayArrowIcon />}
-                    onClick={() => handleStartCamera(camera.id)}
-                    disabled={!!deletingCameraId || isUnlicensed}
-                  >
-                    Start
-                  </Button>
-                )}
-                {isUnlicensed ? (
-                  <Button
-                    component={Link}
-                    to="/license"
-                    size="small"
-                    color="warning"
-                    startIcon={<VpnKeyIcon />}
-                  >
-                    Upgrade
-                  </Button>
-                ) : (
-                  <Button
-                    component={Link}
-                    to={`/cameras/${camera.id}/pipeline`}
-                    size="small"
-                    startIcon={<SettingsIcon />}
-                    disabled={!!deletingCameraId}
-                  >
-                    Configure
-                  </Button>
-                )}
-                <Box flexGrow={1} />
-                <Button
-                  size="small"
-                  color="error"
-                  onClick={() => handleDeleteCamera(camera.id)}
-                  disabled={!!deletingCameraId}
-                >
-                  {deletingCameraId === camera.id ? (
-                    <CircularProgress size={16} color="inherit" />
+              <CardActions sx={{ padding: 2, pt: 0, display: 'flex', justifyContent: 'space-between' }}>
+                <Box>
+                  {isUnlicensed ? (
+                    <Button
+                      component={Link}
+                      to="/license"
+                      size="medium"
+                      color="warning"
+                      startIcon={<VpnKeyIcon />}
+                      variant="contained"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Upgrade License
+                    </Button>
+                  ) : camera.running ? (
+                    <Button
+                      size="medium"
+                      color="error"
+                      variant="contained"
+                      startIcon={isActionInProgress ? <CircularProgress size={20} color="inherit" /> : <StopIcon />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleStopCamera(camera.id);
+                      }}
+                      disabled={!!deletingCameraId || isActionInProgress}
+                    >
+                      {isActionInProgress ? "Stopping..." : "Stop"}
+                    </Button>
                   ) : (
-                    <DeleteIcon fontSize="small" />
+                    <Button
+                      size="medium"
+                      color="success"
+                      variant="contained"
+                      startIcon={isActionInProgress ? <CircularProgress size={20} color="inherit" /> : <PlayArrowIcon />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleStartCamera(camera.id);
+                      }}
+                      disabled={!!deletingCameraId || isActionInProgress}
+                    >
+                      {isActionInProgress ? "Starting..." : "Start"}
+                    </Button>
                   )}
-                </Button>
+                </Box>
+                
+                {!isUnlicensed && (
+                  <IconButton
+                    size="small"
+                    onClick={(e) => handleMenuOpen(e, camera.id)}
+                    disabled={!!deletingCameraId || isActionInProgress}
+                    color="inherit"
+                    aria-label="More camera options"
+                  >
+                    <MoreVertIcon />
+                  </IconButton>
+                )}
               </CardActions>
             </Card>
           )})}
         </Box>
       )}
+
+      {/* Action Menu for Camera Options */}
+      <Menu
+        anchorEl={menuAnchorEl}
+        open={Boolean(menuAnchorEl)}
+        onClose={handleMenuClose}
+        PaperProps={{
+          elevation: 3,
+          sx: { minWidth: 200 }
+        }}
+      >
+        <MenuItem 
+          onClick={() => {
+            handleMenuClose();
+            if (activeCamera) navigate(`/cameras/${activeCamera}/pipeline`);
+          }}
+        >
+          <ListItemIcon>
+            <SettingsIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Configure Pipeline</ListItemText>
+        </MenuItem>
+        <Divider />
+        <MenuItem 
+          onClick={handleDeleteFromMenu} 
+          sx={{ color: 'error.main' }}
+        >
+          <ListItemIcon sx={{ color: 'error.main' }}>
+            <DeleteIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Delete Camera</ListItemText>
+        </MenuItem>
+      </Menu>
 
       {/* Camera deletion dialog */}
       <Dialog open={showDeletionDialog} onClose={() => {}} maxWidth="sm" fullWidth>
