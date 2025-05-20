@@ -394,30 +394,29 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
         };
       }
       
-      // Store updates for batched processing
-      pendingZonesUpdateRef.current = updatedZones;
-      
-      // Throttle updates to the parent component during active dragging
-      const now = Date.now();
-      if (now - lastUpdateTimeRef.current > 100) {
-        onZonesChange(updatedZones);
-        lastUpdateTimeRef.current = now;
-      }
-      
-      // Always redraw the canvas
-      requestAnimationFrame(() => drawCanvas());
+      // Use the throttled update mechanism for better performance
+      throttledZoneUpdate(updatedZones);
       return;
     }
     
-    // Track what's under the cursor using the helper function
-    const hoverStatus = checkHoverStatus(x, y);
-    
-    // Only update if there's a change in hover state to reduce rerenders
-    if (JSON.stringify(hoveredPoint) !== JSON.stringify(hoverStatus)) {
-      setHoveredPoint(hoverStatus);
-      requestAnimationFrame(() => drawCanvas());
+    // For hover effects, use debouncing to avoid excessive checks
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
     }
-  }, [disabled, drawMode, isDrawing, drawStartPos, draggingPoint, selectedZone, canvasToNormalizedCoords, onZonesChange, checkHoverStatus, drawCanvas, hoveredPoint]);
+    
+    hoverTimeoutRef.current = setTimeout(() => {
+      // Track what's under the cursor using the helper function
+      const hoverStatus = checkHoverStatus(x, y);
+      
+      // Only update if there's a change in hover state to reduce rerenders
+      if (JSON.stringify(hoveredPoint) !== JSON.stringify(hoverStatus)) {
+        setHoveredPoint(hoverStatus);
+        requestAnimationFrame(() => drawCanvas());
+      }
+      
+      hoverTimeoutRef.current = null;
+    }, 50); // Debounce time of 50ms for hover detection
+  }, [disabled, drawMode, isDrawing, drawStartPos, draggingPoint, selectedZone, canvasToNormalizedCoords, throttledZoneUpdate, checkHoverStatus, drawCanvas, hoveredPoint]);
 
   // Handle mouse down event
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -606,6 +605,14 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
               setDraggingPoint(null);
               isActivelyDraggingRef.current = false;
               setHoveredPoint(null);
+              
+              // Clear any pending hover debouncing
+              if (hoverTimeoutRef.current) {
+                clearTimeout(hoverTimeoutRef.current);
+                hoverTimeoutRef.current = null;
+              }
+              
+              // Make sure any pending updates are applied
               if (pendingZonesUpdateRef.current) {
                 onZonesChange(pendingZonesUpdateRef.current);
                 pendingZonesUpdateRef.current = null;
