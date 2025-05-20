@@ -101,9 +101,9 @@ const TelemetryTab: React.FC<TelemetryTabProps> = ({
   handleDeleteAllRecords,
   getEventTypeName,
   formatTimestamp,
-  hasDatabaseSink = false,          // Default to false for all features
-  hasLineZoneManager = false,
-  hasTracking = false
+  hasDatabaseSink = true,          // Set to true to enable all features
+  hasLineZoneManager = true,
+  hasTracking = true
 }) => {
   // State declaration updates
   const [directionFilter, setDirectionFilter] = React.useState<'all' | 'in' | 'out'>('all');
@@ -647,31 +647,8 @@ const TelemetryTab: React.FC<TelemetryTabProps> = ({
   // Check if any telemetry features are available
   const hasAnyFeature = hasDatabaseSink && (hasLineZoneManager || hasTracking);
 
-  // Temporary notice component
-  const TemporaryNotice = () => (
-    <Paper 
-      elevation={3} 
-      sx={{ 
-        p: 3, 
-        mb: 3, 
-        background: 'rgba(211, 47, 47, 0.05)', 
-        border: '1px solid rgba(211, 47, 47, 0.3)',
-        borderRadius: '4px',
-        pointerEvents: 'none' // Make it unclickable
-      }}
-    >
-      <Typography variant="h5" sx={{ color: 'error.main', fontWeight: 'bold', mb: 1 }}>
-        Telemetry Features Temporarily Disabled
-      </Typography>
-      <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-        We're currently performing maintenance on our telemetry systems. These features will be back online soon.
-      </Typography>
-    </Paper>
-  );
-
   return (
     <>
-      <TemporaryNotice />
       
       {!hasAnyFeature ? (
         <NoFeaturesMessage />
@@ -688,12 +665,6 @@ const TelemetryTab: React.FC<TelemetryTabProps> = ({
             </Box>
             
             <Divider sx={{ mb: 2 }} />
-            
-            {camera?.running && (
-              <Alert severity="info" sx={{ mb: 2 }}>
-                Automatic refreshing has been disabled. Use the refresh buttons to manually update the data.
-              </Alert>
-            )}
             
             <Typography variant="body2" color="text.secondary" paragraph>
               View analytics and metrics generated from your pipeline. Line crossing counts and object heatmaps help visualize traffic patterns.

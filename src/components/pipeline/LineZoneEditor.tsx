@@ -282,13 +282,6 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
         ctx.fillStyle = 'white';
         ctx.fillText(zone.id, midX, midY - 15);
       });
-    } else if (!nextImageRef.current) {
-      // Display message if no image is available
-      ctx.font = '16px Roboto';
-      ctx.fillStyle = theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('No image available. Start the pipeline to see the camera feed.', canvas.width / 2, canvas.height / 2);
     }
   }, [selectedZone, hoveredPoint, currentImageUrl, theme.palette.mode]);
 
