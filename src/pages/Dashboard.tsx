@@ -548,15 +548,6 @@ const Dashboard = () => {
         <Box display="flex" gap={2}>
           <Button
             component={Link}
-            to="/license"
-            variant="outlined"
-            color="primary"
-            startIcon={<VpnKeyIcon />}
-          >
-            License
-          </Button>
-          <Button
-            component={Link}
             to="/cameras/new"
             variant="contained"
             color="primary"

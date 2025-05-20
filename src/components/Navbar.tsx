@@ -25,6 +25,7 @@ import StarIcon from '@mui/icons-material/Star';
 import DiamondIcon from '@mui/icons-material/Diamond';
 import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium';
 import LockIcon from '@mui/icons-material/Lock';
+import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import apiService, { LicenseStatus } from '../services/api';
 import { getVersionString } from '../utils/version';
 import { LICENSE_CHANGED_EVENT } from '../pages/LicenseSetup';
@@ -285,18 +286,19 @@ const Navbar = () => {
               style={{ marginRight: '16px' }}
             />
             
-            <Tooltip title="Add new camera">
+            <Tooltip title="Manage License">
               <Button
                 component={RouterLink}
-                to="/cameras/new"
+                to="/license"
                 variant="outlined"
                 color="inherit"
-                startIcon={<AddIcon />}
+                startIcon={<VpnKeyIcon />}
                 sx={{ mr: 2 }}
               >
-                New Camera
+                License
               </Button>
             </Tooltip>
+            
             <Tooltip title={`Current theme: ${theme}. Click to cycle themes.`}>
               <IconButton onClick={toggleTheme} color="inherit">
                 <ThemeToggleIcon />
