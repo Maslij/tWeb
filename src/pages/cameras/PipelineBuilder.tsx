@@ -320,6 +320,7 @@ const PipelineBuilder = () => {
     confidence_threshold: 0.5,
     draw_bounding_boxes: true,
     use_shared_memory: true,
+    protocol: "http",
     label_font_scale: 0.5,
     classes: ["person"],
     newClass: ""
@@ -926,6 +927,7 @@ const PipelineBuilder = () => {
                              configData.draw_bounding_boxes !== undefined ? configData.draw_bounding_boxes : true,
           use_shared_memory: component.use_shared_memory !== undefined ? component.use_shared_memory : 
                            configData.use_shared_memory !== undefined ? configData.use_shared_memory : true,
+          protocol: (component as any).protocol || configData.protocol || "http",
           label_font_scale: component.label_font_scale !== undefined ? component.label_font_scale : 
                           configData.label_font_scale !== undefined ? configData.label_font_scale : 0.5,
           classes: Array.isArray(component.classes) ? component.classes : 
@@ -1251,6 +1253,15 @@ const PipelineBuilder = () => {
         }));
       }
     }
+
+    // If use_shared_memory changes, automatically update protocol for backward compatibility
+    if (field === 'use_shared_memory') {
+      setObjectDetectionForm(prev => ({
+        ...prev,
+        use_shared_memory: value,
+        protocol: value ? 'http_shm' : 'http'
+      }));
+    }
   };
 
   const handleObjectClassificationFormChange = (field: keyof ObjectClassificationForm, value: any) => {
@@ -1366,6 +1377,7 @@ const PipelineBuilder = () => {
             confidence_threshold: objectDetectionForm.confidence_threshold,
             draw_bounding_boxes: objectDetectionForm.draw_bounding_boxes,
             use_shared_memory: objectDetectionForm.use_shared_memory,
+            protocol: objectDetectionForm.protocol,
             label_font_scale: objectDetectionForm.label_font_scale,
             classes: objectDetectionForm.classes
           };
@@ -2111,6 +2123,7 @@ const PipelineBuilder = () => {
           confidence_threshold: 0.5,
           draw_bounding_boxes: true,
           use_shared_memory: true,
+          protocol: "http",
           label_font_scale: 0.5,
           classes: [],
           newClass: ""
@@ -3459,6 +3472,21 @@ const PipelineBuilder = () => {
                           helperText="URL of the AI server, e.g., http://localhost:8080"
                         />
                         
+                        <FormControl fullWidth sx={{ mt: 2 }}>
+                          <InputLabel id="protocol-label">Protocol</InputLabel>
+                          <Select
+                            labelId="protocol-label"
+                            value={objectDetectionForm.protocol}
+                            onChange={(e) => handleObjectDetectionFormChange('protocol', e.target.value)}
+                            label="Protocol"
+                          >
+                            <MenuItem value="http">HTTP</MenuItem>
+                            <MenuItem value="http_shm">HTTP with Shared Memory</MenuItem>
+                            <MenuItem value="grpc">gRPC</MenuItem>
+                            <MenuItem value="grpc_shm">gRPC with Shared Memory</MenuItem>
+                          </Select>
+                        </FormControl>
+                        
                         <Box sx={{ width: '100%', px: 2, mt: 2 }}>
                           <Typography variant="body2" gutterBottom>
                             Label Font Scale: {objectDetectionForm.label_font_scale.toFixed(1)}
@@ -3496,6 +3524,7 @@ const PipelineBuilder = () => {
                             confidence_threshold: objectDetectionForm.confidence_threshold,
                             draw_bounding_boxes: objectDetectionForm.draw_bounding_boxes,
                             use_shared_memory: objectDetectionForm.use_shared_memory,
+                            protocol: objectDetectionForm.protocol,
                             label_font_scale: objectDetectionForm.label_font_scale,
                             classes: objectDetectionForm.classes
                           }, null, 2)}

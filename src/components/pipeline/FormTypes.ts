@@ -28,6 +28,7 @@ export interface ObjectDetectionForm {
   confidence_threshold: number;
   draw_bounding_boxes: boolean;
   use_shared_memory: boolean;
+  protocol: string;
   label_font_scale: number;
   classes: string[];
   newClass: string;
