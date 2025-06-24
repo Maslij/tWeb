@@ -323,8 +323,8 @@ const TelemetryAnalytics: React.FC<TelemetryAnalyticsProps> = ({ cameraId }) => 
           <Box sx={{ mb: 2 }}>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
               <Box sx={{ flex: '1 1 250px', minWidth: '250px' }}>
-                <Card>
-                  <CardContent>
+                <Card sx={{ height: 140 }}>
+                  <CardContent sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}>
                     <Typography color="text.secondary" gutterBottom>
                       Total Events
                     </Typography>
@@ -335,12 +335,12 @@ const TelemetryAnalytics: React.FC<TelemetryAnalyticsProps> = ({ cameraId }) => 
                 </Card>
               </Box>
               <Box sx={{ flex: '1 1 250px', minWidth: '250px' }}>
-                <Card>
-                  <CardContent>
+                <Card sx={{ height: 140 }}>
+                  <CardContent sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}>
                     <Typography color="text.secondary" gutterBottom>
                       Event Types
                     </Typography>
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, overflow: 'auto', maxHeight: 80 }}>
                       {Object.entries(analytics.event_counts || {}).map(([type, count]) => (
                         <Chip
                           key={type}
@@ -357,8 +357,8 @@ const TelemetryAnalytics: React.FC<TelemetryAnalyticsProps> = ({ cameraId }) => 
                 </Card>
               </Box>
               <Box sx={{ flex: '1 1 250px', minWidth: '250px' }}>
-                <Card>
-                  <CardContent>
+                <Card sx={{ height: 140 }}>
+                  <CardContent sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}>
                     <Typography color="text.secondary" gutterBottom>
                       Unique Classes
                     </Typography>
@@ -369,12 +369,12 @@ const TelemetryAnalytics: React.FC<TelemetryAnalyticsProps> = ({ cameraId }) => 
                 </Card>
               </Box>
               <Box sx={{ flex: '1 1 250px', minWidth: '250px' }}>
-                <Card>
-                  <CardContent>
+                <Card sx={{ height: 140 }}>
+                  <CardContent sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%' }}>
                     <Typography color="text.secondary" gutterBottom>
                       Time Range
                     </Typography>
-                    <Typography variant="body2">
+                    <Typography variant="body2" sx={{ overflow: 'auto', maxHeight: 80 }}>
                       {analytics.min_timestamp ? new Date(analytics.min_timestamp).toLocaleString() : 'N/A'}
                       <br />
                       to
