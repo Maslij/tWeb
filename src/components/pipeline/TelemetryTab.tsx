@@ -18,6 +18,7 @@ import {
 import Typography from '../../components/ui/Typography';
 import Button from '../../components/ui/Button';
 import { DatabaseTableSkeleton } from './SkeletonComponents';
+import TelemetryAnalytics from './TelemetryAnalytics';
 import RedoIcon from '@mui/icons-material/Redo';
 import DatabaseIcon from '@mui/icons-material/Storage';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -59,14 +60,19 @@ const TelemetryTab: React.FC<TelemetryTabProps> = ({
   formatTimestamp
 }) => {
   return (
-    <Paper elevation={2} sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-        <DatabaseIcon sx={{ mr: 1, color: 'primary.main' }} />
-        <Typography variant="h6">
-          Raw Telemetry Events
-          {totalEvents > 0 && !camera?.running && " (Last Session)"}
-        </Typography>
-      </Box>
+    <Box>
+      {/* Analytics Section */}
+      <TelemetryAnalytics cameraId={cameraId} />
+      
+      {/* Raw Telemetry Events Section */}
+      <Paper elevation={2} sx={{ p: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+          <DatabaseIcon sx={{ mr: 1, color: 'primary.main' }} />
+          <Typography variant="h6">
+            Raw Telemetry Events
+            {totalEvents > 0 && !camera?.running && " (Last Session)"}
+          </Typography>
+        </Box>
       
       <Typography variant="body2" color="text.secondary" paragraph>
         View detailed telemetry events captured from your pipeline. These records show all events generated during processing.
@@ -187,6 +193,7 @@ const TelemetryTab: React.FC<TelemetryTabProps> = ({
         </>
       )}
     </Paper>
+    </Box>
   );
 };
 

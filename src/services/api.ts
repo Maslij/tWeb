@@ -627,6 +627,53 @@ const apiService = {
     },
 
     /**
+     * Get analytics summary for a camera
+     */
+    async getAnalytics(cameraId: string): Promise<any> {
+      try {
+        const response = await axios.get(getFullUrl(`/api/v1/cameras/${cameraId}/database/analytics`));
+        return response.data;
+      } catch (error) {
+        console.error(`Error fetching analytics for camera ${cameraId}:`, error);
+        return null;
+      }
+    },
+
+    /**
+     * Get time series data for a camera
+     */
+    async getTimeSeriesData(cameraId: string, timeRange?: {start: number, end: number}): Promise<any[]> {
+      try {
+        let url = `/api/v1/cameras/${cameraId}/database/time-series`;
+        if (timeRange) {
+          url += `?start_time=${timeRange.start}&end_time=${timeRange.end}`;
+        }
+        const response = await axios.get(getFullUrl(url));
+        return response.data || [];
+      } catch (error) {
+        console.error(`Error fetching time series data for camera ${cameraId}:`, error);
+        return [];
+      }
+    },
+
+    /**
+     * Get dwell time analytics for a camera
+     */
+    async getDwellTimeAnalytics(cameraId: string, timeRange?: {start: number, end: number}): Promise<any[]> {
+      try {
+        let url = `/api/v1/cameras/${cameraId}/database/dwell-time`;
+        if (timeRange) {
+          url += `?start_time=${timeRange.start}&end_time=${timeRange.end}`;
+        }
+        const response = await axios.get(getFullUrl(url));
+        return response.data || [];
+      } catch (error) {
+        console.error(`Error fetching dwell time analytics for camera ${cameraId}:`, error);
+        return [];
+      }
+    },
+
+    /**
      * Get zone line counts for a specific camera with optional time range
      */
     async getZoneLineCounts(cameraId: string, timeRange?: {start: number, end: number}): Promise<ZoneLineCountsResponse | null> {
