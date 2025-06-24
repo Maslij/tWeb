@@ -2393,6 +2393,8 @@ const PipelineBuilder = () => {
       case 0: return 'Detection';
       case 1: return 'Tracking';
       case 2: return 'Crossing';
+      case 3: return 'Classification';
+      case 4: return 'Polygon Zone';
       default: return `Unknown (${type})`;
     }
   };
@@ -2882,56 +2884,25 @@ const PipelineBuilder = () => {
           (hasLineZoneManagerComponent && hasPolygonZoneManagerComponent ? 3 : 
            hasLineZoneManagerComponent || hasPolygonZoneManagerComponent ? 2 : 1)} 
           sx={{ p: 0, mt: 3 }}>
-          {/* Telemetry Tab - Currently shows "under construction" message */}
+          {/* Telemetry Tab */}
           {dbComponentExists && (
-            <Box sx={{ 
-              p: 4, 
-              display: 'flex', 
-              flexDirection: 'column', 
-              alignItems: 'center', 
-              justifyContent: 'center',
-              minHeight: '300px',
-              borderRadius: 2,
-              border: '1px dashed',
-              borderColor: 'divider'
-            }}>
-              <ConstructionIcon sx={{ fontSize: 60, color: 'warning.main', mb: 2 }} />
-              <Typography variant="h5" gutterBottom>Telemetry Dashboard</Typography>
-              <Typography variant="body1" color="text.secondary" align="center">
-                This feature is currently under construction and will be available soon.
-              </Typography>
-              
-              {/* 
-              COMMENTED OUT TELEMETRY TAB - UNCOMMENT WHEN READY:
-              
-              Replace the Box component with this TelemetryTab component when ready:
-              
-              <TelemetryTab
-                camera={camera}
-                cameraId={cameraId || ''}
-                zoneLineCounts={zoneLineCounts}
-                isLoadingZoneData={isLoadingZoneData}
-                isLoadingHeatmapData={isLoadingHeatmapData}
-                fetchZoneLineCounts={fetchZoneLineCounts}
-                fetchClassHeatmapData={fetchClassHeatmapData}
-                databaseRecords={databaseRecords}
-                isLoadingRecords={isLoadingRecords}
-                isDeletingRecords={isDeletingRecords}
-                totalEvents={totalEvents}
-                totalFrames={totalFrames}
-                page={page}
-                rowsPerPage={rowsPerPage}
-                handlePageChange={handlePageChange}
-                handleChangeRowsPerPage={handleChangeRowsPerPage}
-                fetchDatabaseRecords={fetchDatabaseRecords}
-                handleDeleteAllRecords={handleDeleteAllRecords}
-                getEventTypeName={getEventTypeName}
-                formatTimestamp={formatTimestamp}
-                hasZoneLineData={hasZoneLineData}
-                hasHeatmapData={hasHeatmapData}
-              />
-              */}
-            </Box>
+            <TelemetryTab
+              camera={camera}
+              cameraId={cameraId || ''}
+              databaseRecords={databaseRecords}
+              isLoadingRecords={isLoadingRecords}
+              isDeletingRecords={isDeletingRecords}
+              totalEvents={totalEvents}
+              totalFrames={totalFrames}
+              page={page}
+              rowsPerPage={rowsPerPage}
+              handlePageChange={handlePageChange}
+              handleChangeRowsPerPage={handleChangeRowsPerPage}
+              fetchDatabaseRecords={fetchDatabaseRecords}
+              handleDeleteAllRecords={handleDeleteAllRecords}
+              getEventTypeName={getEventTypeName}
+              formatTimestamp={formatTimestamp}
+            />
           )}
         </TabPanel>
       </Box>

@@ -230,7 +230,7 @@ export interface EventRecord {
   source_id: string;
   camera_id: string;
   timestamp: number;
-  properties: string;
+  properties: any; // Changed from string to any to support JSON objects
   created_at: number;
 }
 
