@@ -83,58 +83,65 @@ const PolygonZoneList: React.FC<PolygonZoneListProps> = ({
           >
             <ListItemText
               primary={
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <TextField
-                    value={zone.id}
-                    size="small"
-                    variant="standard"
-                    onChange={(e) => onUpdateZone(index, 'id', e.target.value)}
-                    onClick={(e) => e.stopPropagation()}
-                    disabled={disabled}
-                    sx={{ width: '130px' }}
-                  />
-                  {/* Display vertex count */}
-                  <Badge 
-                    badgeContent={zone.polygon.length} 
-                    color="primary"
-                    sx={{ ml: 1 }}
-                  >
-                    <Chip 
-                      size="small" 
-                      label="Vertices" 
-                      variant="outlined"
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  {/* Zone name input - always visible and accessible */}
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <TextField
+                      value={zone.id}
+                      size="small"
+                      variant="standard"
+                      onChange={(e) => onUpdateZone(index, 'id', e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                      disabled={disabled}
+                      sx={{ width: '150px', flexShrink: 0 }}
+                      placeholder="Zone name"
                     />
-                  </Badge>
+                  </Box>
                   
-                  {/* Display in/out/current counts if available */}
-                  {(zone.in_count !== undefined || zone.out_count !== undefined || zone.current_count !== undefined) && (
-                    <Box sx={{ ml: 2, display: 'flex', gap: 1 }}>
-                      {zone.in_count !== undefined && zone.in_count > 0 && (
-                        <Chip
-                          size="small"
-                          label={`In: ${zone.in_count}`}
-                          color="success"
-                          variant="outlined"
-                        />
-                      )}
-                      {zone.out_count !== undefined && zone.out_count > 0 && (
-                        <Chip
-                          size="small"
-                          label={`Out: ${zone.out_count}`}
-                          color="primary"
-                          variant="outlined"
-                        />
-                      )}
-                      {zone.current_count !== undefined && zone.current_count > 0 && (
-                        <Chip
-                          size="small"
-                          label={`Current: ${zone.current_count}`}
-                          color="secondary"
-                          variant="outlined"
-                        />
-                      )}
-                    </Box>
-                  )}
+                  {/* Vertex count and detection counts */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+                    {/* Display vertex count */}
+                    <Badge 
+                      badgeContent={zone.polygon.length} 
+                      color="primary"
+                    >
+                      <Chip 
+                        size="small" 
+                        label="Vertices" 
+                        variant="outlined"
+                      />
+                    </Badge>
+                    
+                    {/* Display in/out/current counts if available */}
+                    {(zone.in_count !== undefined || zone.out_count !== undefined || zone.current_count !== undefined) && (
+                      <>
+                        {zone.in_count !== undefined && zone.in_count > 0 && (
+                          <Chip
+                            size="small"
+                            label={`In: ${zone.in_count}`}
+                            color="success"
+                            variant="outlined"
+                          />
+                        )}
+                        {zone.out_count !== undefined && zone.out_count > 0 && (
+                          <Chip
+                            size="small"
+                            label={`Out: ${zone.out_count}`}
+                            color="primary"
+                            variant="outlined"
+                          />
+                        )}
+                        {zone.current_count !== undefined && zone.current_count > 0 && (
+                          <Chip
+                            size="small"
+                            label={`Current: ${zone.current_count}`}
+                            color="secondary"
+                            variant="outlined"
+                          />
+                        )}
+                      </>
+                    )}
+                  </Box>
                 </Box>
               }
               secondary={
