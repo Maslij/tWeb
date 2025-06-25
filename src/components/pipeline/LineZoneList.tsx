@@ -34,6 +34,13 @@ export {
   ANCHOR_PRESETS 
 } from './AnchorPointsSelector';
 
+// Utility function to sanitize zone data for backend updates
+// Removes runtime properties that should be maintained by the backend
+const sanitizeZoneForUpdate = (zone: Zone): Omit<Zone, 'in_count' | 'out_count'> => {
+  const { in_count, out_count, ...sanitizedZone } = zone;
+  return sanitizedZone;
+};
+
 interface LineZoneListProps {
   zones: Zone[];
   selectedZoneIndex: number | null;
