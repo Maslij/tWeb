@@ -71,7 +71,7 @@ const LineZoneList: React.FC<LineZoneListProps> = ({
       ) : (
         zones.map((zone, index) => (
           <ListItem 
-            key={zone.id || index}
+            key={index}
             sx={{ 
               borderBottom: index < zones.length - 1 ? '1px solid' : 'none', 
               borderColor: 'divider',
