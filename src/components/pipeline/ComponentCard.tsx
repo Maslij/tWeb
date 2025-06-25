@@ -7,7 +7,8 @@ import {
   Divider,
   Box,
   Chip,
-  CircularProgress
+  CircularProgress,
+  Tooltip
 } from '@mui/material';
 import { Button } from '../../components/ui/Button';
 import EditIcon from '@mui/icons-material/Edit';
@@ -48,6 +49,24 @@ const ComponentCard: React.FC<ComponentCardProps> = ({
       : sinkTypeMapping;
   const icon = mapping[componentType]?.icon;
   
+  // Helper function to get tooltip text for disabled buttons
+  const getEditTooltipText = (): string => {
+    if (pipelineRunning) {
+      return "Stop the pipeline to edit this component";
+    }
+    return "";
+  };
+
+  const getDeleteTooltipText = (): string => {
+    if (pipelineRunning) {
+      return "Stop the pipeline to delete this component";
+    }
+    if (isDeletingComponent !== null) {
+      return "Another component is being deleted";
+    }
+    return "";
+  };
+  
   return (
     <Card sx={{ mb: 2 }}>
       <CardContent>
@@ -78,23 +97,31 @@ const ComponentCard: React.FC<ComponentCardProps> = ({
         </Typography>
       </CardContent>
       <CardActions>
-        <Button 
-          size="small" 
-          startIcon={<EditIcon />}
-          onClick={() => onEdit(component, type)}
-          disabled={pipelineRunning}
-        >
-          Edit
-        </Button>
-        <Button 
-          size="small" 
-          color="error" 
-          startIcon={isDeletingComponent === component.id ? <CircularProgress size={16} color="error" /> : <DeleteIcon />}
-          onClick={() => onDelete(component, type)}
-          disabled={pipelineRunning || isDeletingComponent !== null}
-        >
-          {isDeletingComponent === component.id ? 'Deleting...' : 'Delete'}
-        </Button>
+        <Tooltip title={getEditTooltipText()} arrow>
+          <span>
+            <Button 
+              size="small" 
+              startIcon={<EditIcon />}
+              onClick={() => onEdit(component, type)}
+              disabled={pipelineRunning}
+            >
+              Edit
+            </Button>
+          </span>
+        </Tooltip>
+        <Tooltip title={getDeleteTooltipText()} arrow>
+          <span>
+            <Button 
+              size="small" 
+              color="error" 
+              startIcon={isDeletingComponent === component.id ? <CircularProgress size={16} color="error" /> : <DeleteIcon />}
+              onClick={() => onDelete(component, type)}
+              disabled={pipelineRunning || isDeletingComponent !== null}
+            >
+              {isDeletingComponent === component.id ? 'Deleting...' : 'Delete'}
+            </Button>
+          </span>
+        </Tooltip>
       </CardActions>
     </Card>
   );

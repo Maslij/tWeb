@@ -4342,25 +4342,45 @@ const PipelineBuilder = () => {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleDialogClose} disabled={isCreatingComponent || isUpdatingComponent}>Cancel</Button>
-          <Button 
-            onClick={handleSubmit} 
-            variant="contained" 
-            color="primary"
-            disabled={
-              isCreatingComponent || isUpdatingComponent ||
-              selectedComponentType === '' || 
-              (selectedComponentType !== '' && !canAddComponent(selectedComponentType, dialogType) && dialogMode === 'create') ||
-              (dialogType === 'source' && selectedComponentType === 'file' && !fileSourceForm.url) ||
-              (dialogType === 'source' && selectedComponentType === 'rtsp' && !rtspSourceForm.url) ||
-              (dialogType === 'sink' && selectedComponentType === 'file' && !fileSinkForm.path)
-            }
-            startIcon={isCreatingComponent || isUpdatingComponent ? <CircularProgress size={20} /> : null}
+          <Tooltip title={isCreatingComponent || isUpdatingComponent ? "Please wait while the operation completes" : ""} arrow>
+            <span>
+              <Button onClick={handleDialogClose} disabled={isCreatingComponent || isUpdatingComponent}>Cancel</Button>
+            </span>
+          </Tooltip>
+          <Tooltip 
+            title={
+              isCreatingComponent || isUpdatingComponent ? "Please wait while the operation completes" :
+              selectedComponentType === '' ? "Please select a component type" :
+              (selectedComponentType !== '' && !canAddComponent(selectedComponentType, dialogType) && dialogMode === 'create') ? 
+                getDisabledReason(selectedComponentType, dialogType) :
+              (dialogType === 'source' && selectedComponentType === 'file' && !fileSourceForm.url) ? "Please enter a file URL" :
+              (dialogType === 'source' && selectedComponentType === 'rtsp' && !rtspSourceForm.url) ? "Please enter an RTSP URL" :
+              (dialogType === 'sink' && selectedComponentType === 'file' && !fileSinkForm.path) ? "Please enter a file path" :
+              ""
+            } 
+            arrow
           >
-            {isCreatingComponent ? 'Creating...' : 
-             isUpdatingComponent ? 'Saving...' :
-             dialogMode === 'create' ? 'Create' : 'Save'}
-          </Button>
+            <span>
+              <Button 
+                onClick={handleSubmit} 
+                variant="contained" 
+                color="primary"
+                disabled={
+                  isCreatingComponent || isUpdatingComponent ||
+                  selectedComponentType === '' || 
+                  (selectedComponentType !== '' && !canAddComponent(selectedComponentType, dialogType) && dialogMode === 'create') ||
+                  (dialogType === 'source' && selectedComponentType === 'file' && !fileSourceForm.url) ||
+                  (dialogType === 'source' && selectedComponentType === 'rtsp' && !rtspSourceForm.url) ||
+                  (dialogType === 'sink' && selectedComponentType === 'file' && !fileSinkForm.path)
+                }
+                startIcon={isCreatingComponent || isUpdatingComponent ? <CircularProgress size={20} /> : null}
+              >
+                {isCreatingComponent ? 'Creating...' : 
+                 isUpdatingComponent ? 'Saving...' :
+                 dialogMode === 'create' ? 'Create' : 'Save'}
+              </Button>
+            </span>
+          </Tooltip>
         </DialogActions>
       </Dialog>
 

@@ -5,7 +5,8 @@ import {
   Alert,
   Stack,
   Box,
-  AlertTitle
+  AlertTitle,
+  Tooltip
 } from '@mui/material';
 import Typography from '../../components/ui/Typography';
 import Button from '../../components/ui/Button';
@@ -44,6 +45,31 @@ const PipelineConfigTab: React.FC<PipelineConfigTabProps> = ({
   openTemplateDialog,
   inferenceServerAvailable
 }) => {
+  // Helper function to get tooltip text for disabled buttons
+  const getTooltipText = (type: 'source' | 'processor' | 'sink', isTemplate: boolean = false): string => {
+    if (camera.running) {
+      return "Stop the pipeline to access configuration";
+    }
+    
+    if (type === 'source' && sourceComponent) {
+      return "Source component already exists";
+    }
+    
+    if (!sourceComponent && (type === 'processor' || type === 'sink')) {
+      return "Add a source component first";
+    }
+    
+    if (isTemplate && !inferenceServerAvailable) {
+      return "AI server unavailable - templates require AI models";
+    }
+    
+    if (areAllComponentTypesUsed(type as 'processor' | 'sink')) {
+      return `All available ${type} types have been added`;
+    }
+    
+    return "";
+  };
+
   // Render component card
   const renderComponentCard = (component: Component, type: 'source' | 'processor' | 'sink') => {
     return (
@@ -78,15 +104,19 @@ const PipelineConfigTab: React.FC<PipelineConfigTabProps> = ({
             <VideoSettingsIcon sx={{ mr: 1, color: 'primary.main' }} />
             <Typography variant="h6">Source</Typography>
           </Box>
-          <Button 
-            variant="contained" 
-            startIcon={<AddIcon />} 
-            onClick={() => openCreateDialog('source')}
-            disabled={!!sourceComponent || camera.running}
-            size="small"
-          >
-            Add Source
-          </Button>
+          <Tooltip title={getTooltipText('source')} arrow>
+            <span>
+              <Button 
+                variant="contained" 
+                startIcon={<AddIcon />} 
+                onClick={() => openCreateDialog('source')}
+                disabled={!!sourceComponent || camera.running}
+                size="small"
+              >
+                Add Source
+              </Button>
+            </span>
+          </Tooltip>
         </Box>
         
         <Divider sx={{ mb: 2 }} />
@@ -113,25 +143,33 @@ const PipelineConfigTab: React.FC<PipelineConfigTabProps> = ({
             <Typography variant="h6">Processors</Typography>
           </Box>
           <Box sx={{ display: 'flex', gap: 1 }}>
-            <Button
-              variant="outlined"
-              color="secondary"
-              icon={<AutoFixHighIcon />}
-              onClick={openTemplateDialog}
-              disabled={!sourceComponent || camera.running || !inferenceServerAvailable}
-              size="small"
-            >
-              Use Template
-            </Button>
-            <Button 
-              variant="contained" 
-              startIcon={<AddIcon />} 
-              onClick={() => openCreateDialog('processor')}
-              disabled={!sourceComponent || camera.running || areAllComponentTypesUsed('processor')}
-              size="small"
-            >
-              Add Processor
-            </Button>
+            <Tooltip title={getTooltipText('processor', true)} arrow>
+              <span>
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  icon={<AutoFixHighIcon />}
+                  onClick={openTemplateDialog}
+                  disabled={!sourceComponent || camera.running || !inferenceServerAvailable}
+                  size="small"
+                >
+                  Use Template
+                </Button>
+              </span>
+            </Tooltip>
+            <Tooltip title={getTooltipText('processor')} arrow>
+              <span>
+                <Button 
+                  variant="contained" 
+                  startIcon={<AddIcon />} 
+                  onClick={() => openCreateDialog('processor')}
+                  disabled={!sourceComponent || camera.running || areAllComponentTypesUsed('processor')}
+                  size="small"
+                >
+                  Add Processor
+                </Button>
+              </span>
+            </Tooltip>
           </Box>
         </Box>
         
@@ -173,15 +211,19 @@ const PipelineConfigTab: React.FC<PipelineConfigTabProps> = ({
             <SaveIcon sx={{ mr: 1, color: 'primary.main' }} />
             <Typography variant="h6">Sinks</Typography>
           </Box>
-          <Button 
-            variant="contained" 
-            startIcon={<AddIcon />} 
-            onClick={() => openCreateDialog('sink')}
-            disabled={!sourceComponent || camera.running || areAllComponentTypesUsed('sink')}
-            size="small"
-          >
-            Add Sink
-          </Button>
+          <Tooltip title={getTooltipText('sink')} arrow>
+            <span>
+              <Button 
+                variant="contained" 
+                startIcon={<AddIcon />} 
+                onClick={() => openCreateDialog('sink')}
+                disabled={!sourceComponent || camera.running || areAllComponentTypesUsed('sink')}
+                size="small"
+              >
+                Add Sink
+              </Button>
+            </span>
+          </Tooltip>
         </Box>
         
         <Divider sx={{ mb: 2 }} />
