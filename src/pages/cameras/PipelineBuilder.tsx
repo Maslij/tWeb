@@ -2921,7 +2921,7 @@ const PipelineBuilder = () => {
         </DialogTitle>
         <DialogContent>
           {dialogMode === 'create' && dependencyRules.length > 0 && (
-            <Box sx={{ mt: 1, mb: 2, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
+            <Alert severity="info" sx={{ mt: 1, mb: 2 }}>
               <Typography variant="subtitle2" gutterBottom>
                 Component Dependencies:
               </Typography>
@@ -2942,11 +2942,11 @@ const PipelineBuilder = () => {
                   </li>
                 )}
               </ul>
-            </Box>
+            </Alert>
           )}
           
           {/* Add license information box */}
-          <Box sx={{ mt: 1, mb: 2, p: 2, bgcolor: licenseInfo.valid ? 'success.light' : 'warning.light', borderRadius: 1 }}>
+          <Alert severity={licenseInfo.valid ? "success" : "warning"} sx={{ mt: 1, mb: 2 }}>
             <Typography variant="subtitle2" gutterBottom>
               License Information:
             </Typography>
@@ -2972,7 +2972,7 @@ const PipelineBuilder = () => {
                 </>
               )}
             </Typography>
-          </Box>
+          </Alert>
           
           {/* Show a message when no components are available */}
           {(!selectedComponentType || !componentTypes?.[dialogType === 'source' ? 'sources' : 
