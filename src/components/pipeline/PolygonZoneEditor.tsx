@@ -762,7 +762,20 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
               </Button>
             </>
           )}
-          <Tooltip title="Draw polygons by clicking on the image. Click vertices to select and drag them. At least 3 points are required to create a valid polygon zone.">
+          <Tooltip title={
+            <div>
+              <div><strong>Polygon Zone Detection:</strong></div>
+              <br />
+              <div>• Draw polygons by clicking points on the image</div>
+              <div>• Click first point again or use "Complete Polygon" to finish</div>
+              <div>• Objects entering the polygon area trigger "in" events</div>
+              <div>• Objects leaving the polygon area trigger "out" events</div>
+              <br />
+              <div>• Green dots = polygon vertices (drag to move)</div>
+              <div>• At least 3 points required for a valid polygon</div>
+              <div>• Use "Add Vertex" to add points between existing ones</div>
+            </div>
+          }>
             <IconButton size="small">
               <HelpOutlineIcon />
             </IconButton>

@@ -11,6 +11,7 @@ import { IconButton } from '../../components/ui/IconButton';
 import CreateIcon from '@mui/icons-material/Create';
 import DeleteIcon from '@mui/icons-material/Delete';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import LineZoneList, { Zone } from './LineZoneList';
 
 interface LineZoneEditorProps {
@@ -195,28 +196,52 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
           ctx.stroke();
         }
         
-        // Draw direction arrow
+        // Draw crossing direction indicators
         const angle = Math.atan2(endY - startY, endX - startX);
-        const arrowLength = 15;
-        const arrowWidth = 8;
         
-        // Draw the arrow at 75% along the line
-        const arrowX = startX + (endX - startX) * 0.75;
-        const arrowY = startY + (endY - startY) * 0.75;
+        // Calculate perpendicular direction (90 degrees counter-clockwise from line direction)
+        // This represents the "IN" direction for crossing detection
+        const perpAngle = angle + Math.PI / 2;
+        const perpX = Math.cos(perpAngle);
+        const perpY = Math.sin(perpAngle);
         
-        ctx.beginPath();
-        ctx.moveTo(arrowX, arrowY);
-        ctx.lineTo(
-          arrowX - arrowLength * Math.cos(angle) + arrowWidth * Math.sin(angle),
-          arrowY - arrowLength * Math.sin(angle) - arrowWidth * Math.cos(angle)
-        );
-        ctx.lineTo(
-          arrowX - arrowLength * Math.cos(angle) - arrowWidth * Math.sin(angle),
-          arrowY - arrowLength * Math.sin(angle) + arrowWidth * Math.cos(angle)
-        );
-        ctx.closePath();
-        ctx.fillStyle = isSelected ? '#2196f3' : '#64b5f6';
-        ctx.fill();
+        // Draw direction arrows at multiple points along the line
+        const arrowPositions = [0.3, 0.7];
+        const directionArrowLength = 18;
+        const directionArrowWidth = 5;
+        
+        arrowPositions.forEach(position => {
+          const posX = startX + (endX - startX) * position;
+          const posY = startY + (endY - startY) * position;
+          
+          // Draw "IN" arrow (perpendicular to line, pointing to right side)
+          const inArrowEndX = posX - perpX * directionArrowLength;
+          const inArrowEndY = posY - perpY * directionArrowLength;
+          
+          // Arrow shaft
+          ctx.beginPath();
+          ctx.moveTo(posX, posY);
+          ctx.lineTo(inArrowEndX, inArrowEndY);
+          ctx.strokeStyle = isSelected ? '#4caf50' : 'rgba(76, 175, 80, 0.8)';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          
+          // Arrow head (pointing in the corrected direction)
+          const correctedPerpAngle = perpAngle + Math.PI; // Reverse the angle since we flipped the direction
+          ctx.beginPath();
+          ctx.moveTo(inArrowEndX, inArrowEndY);
+          ctx.lineTo(
+            inArrowEndX - directionArrowWidth * Math.cos(correctedPerpAngle) + directionArrowWidth * Math.sin(correctedPerpAngle),
+            inArrowEndY - directionArrowWidth * Math.sin(correctedPerpAngle) - directionArrowWidth * Math.cos(correctedPerpAngle)
+          );
+          ctx.lineTo(
+            inArrowEndX - directionArrowWidth * Math.cos(correctedPerpAngle) - directionArrowWidth * Math.sin(correctedPerpAngle),
+            inArrowEndY - directionArrowWidth * Math.sin(correctedPerpAngle) + directionArrowWidth * Math.cos(correctedPerpAngle)
+          );
+          ctx.closePath();
+          ctx.fillStyle = isSelected ? '#4caf50' : 'rgba(76, 175, 80, 0.8)';
+          ctx.fill();
+        });
         
         // Draw points with different colors and sizes based on state
         const startPointIsHovered = isHovered && hoveredPoint?.point === 'start';
@@ -281,6 +306,38 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
         // Draw the text
         ctx.fillStyle = 'white';
         ctx.fillText(zone.id, midX, midY - 15);
+        
+        // Draw side labels to show IN/OUT directions
+        const labelDistance = 25;
+        const labelPositionAlongLine = 0.5; // Middle of the line
+        const labelX = startX + (endX - startX) * labelPositionAlongLine;
+        const labelY = startY + (endY - startY) * labelPositionAlongLine;
+        
+        // "IN" label (right side of line - matches C++ crossProductLine < 0 logic)
+        const inLabelX = labelX - perpX * labelDistance;
+        const inLabelY = labelY - perpY * labelDistance;
+        
+        ctx.font = 'bold 11px Roboto';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        // Background for IN label
+        const inLabelWidth = ctx.measureText('IN').width;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.fillRect(inLabelX - inLabelWidth/2 - 3, inLabelY - 7, inLabelWidth + 6, 14);
+        ctx.fillStyle = isSelected ? '#4caf50' : 'rgba(76, 175, 80, 0.9)';
+        ctx.fillText('IN', inLabelX, inLabelY);
+        
+        // "OUT" label (left side of line)
+        const outLabelX = labelX + perpX * labelDistance;
+        const outLabelY = labelY + perpY * labelDistance;
+        
+        // Background for OUT label
+        const outLabelWidth = ctx.measureText('OUT').width;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.fillRect(outLabelX - outLabelWidth/2 - 3, outLabelY - 7, outLabelWidth + 6, 14);
+        ctx.fillStyle = isSelected ? '#f44336' : 'rgba(244, 67, 54, 0.8)';
+        ctx.fillText('OUT', outLabelX, outLabelY);
       });
     }
   }, [selectedZone, hoveredPoint, currentImageUrl, theme.palette.mode]);
@@ -539,6 +596,24 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
     setSelectedZone(null);
   }, [selectedZone, onZonesChange]);
 
+  const handleFlipLineDirection = useCallback(() => {
+    if (selectedZone === null) return;
+    
+    const updatedZones = [...localZonesRef.current];
+    const zone = updatedZones[selectedZone];
+    
+    // Swap start and end points to flip the line direction
+    updatedZones[selectedZone] = {
+      ...zone,
+      start_x: zone.end_x,
+      start_y: zone.end_y,
+      end_x: zone.start_x,
+      end_y: zone.start_y
+    };
+    
+    onZonesChange(updatedZones);
+  }, [selectedZone, onZonesChange]);
+
   return (
     <Box sx={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
       <Paper sx={{ p: 1, mb: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -566,7 +641,30 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
           >
             Delete Selected
           </Button>
-          <Tooltip title="Draw lines by clicking and dragging. Click on lines or endpoints to select and edit them.">
+          <Button
+            variant="outlined"
+            color="secondary"
+            startIcon={<SwapHorizIcon />}
+            onClick={handleFlipLineDirection}
+            disabled={selectedZone === null || disabled}
+            size="small"
+          >
+            Flip Direction
+          </Button>
+          <Tooltip title={
+            <div>
+              <div><strong>Line Zone Crossing Detection:</strong></div>
+              <br />
+              <div>• Draw lines by clicking and dragging</div>
+              <div>• Green arrows point toward the "IN" side of the line</div>
+              <div>• Objects crossing from OUT → IN side are counted as "in"</div>
+              <div>• Objects crossing from IN → OUT side are counted as "out"</div>
+              <br />
+              <div>• Green dot = line start, Red dot = line end</div>
+              <div>• Use "Flip Direction" to reverse IN/OUT sides</div>
+              <div>• Click lines or endpoints to select and edit</div>
+            </div>
+          }>
             <IconButton size="small">
               <HelpOutlineIcon />
             </IconButton>
