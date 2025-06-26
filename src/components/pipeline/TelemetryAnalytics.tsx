@@ -42,6 +42,7 @@ import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import BarChartIcon from '@mui/icons-material/BarChart';
 import PieChartIcon from '@mui/icons-material/PieChart';
 import apiService from '../../services/api';
+import { useTheme } from '../../contexts/ThemeContext';
 
 ChartJS.register(
   CategoryScale,
@@ -88,6 +89,7 @@ function TabPanel(props: TabPanelProps) {
 }
 
 const TelemetryAnalytics: React.FC<TelemetryAnalyticsProps> = ({ cameraId }) => {
+  const { effectiveTheme } = useTheme();
   const [tabValue, setTabValue] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -411,10 +413,14 @@ const TelemetryAnalytics: React.FC<TelemetryAnalyticsProps> = ({ cameraId }) => 
                   plugins: {
                     legend: {
                       position: 'top' as const,
+                      labels: {
+                        color: effectiveTheme === 'dark' ? '#F7F9FC' : undefined,
+                      },
                     },
                     title: {
                       display: true,
                       text: 'Event Activity Over Time',
+                      color: effectiveTheme === 'dark' ? '#F7F9FC' : undefined,
                     },
                   },
                   scales: {
@@ -429,6 +435,13 @@ const TelemetryAnalytics: React.FC<TelemetryAnalyticsProps> = ({ cameraId }) => 
                       title: {
                         display: true,
                         text: 'Time',
+                        color: effectiveTheme === 'dark' ? '#F7F9FC' : undefined,
+                      },
+                      ticks: {
+                        color: effectiveTheme === 'dark' ? '#F7F9FC' : undefined,
+                      },
+                      grid: {
+                        color: effectiveTheme === 'dark' ? 'rgba(247, 249, 252, 0.1)' : undefined,
                       },
                     },
                     y: {
@@ -436,6 +449,13 @@ const TelemetryAnalytics: React.FC<TelemetryAnalyticsProps> = ({ cameraId }) => 
                       title: {
                         display: true,
                         text: 'Event Count',
+                        color: effectiveTheme === 'dark' ? '#F7F9FC' : undefined,
+                      },
+                      ticks: {
+                        color: effectiveTheme === 'dark' ? '#F7F9FC' : undefined,
+                      },
+                      grid: {
+                        color: effectiveTheme === 'dark' ? 'rgba(247, 249, 252, 0.1)' : undefined,
                       },
                     },
                   },
@@ -462,10 +482,14 @@ const TelemetryAnalytics: React.FC<TelemetryAnalyticsProps> = ({ cameraId }) => 
                   plugins: {
                     legend: {
                       position: 'right' as const,
+                      labels: {
+                        color: effectiveTheme === 'dark' ? '#F7F9FC' : undefined,
+                      },
                     },
                     title: {
                       display: true,
                       text: 'Detection Classes Distribution',
+                      color: effectiveTheme === 'dark' ? '#F7F9FC' : undefined,
                     },
                   },
                 }}
@@ -495,6 +519,7 @@ const TelemetryAnalytics: React.FC<TelemetryAnalyticsProps> = ({ cameraId }) => 
                     title: {
                       display: true,
                       text: 'Average Dwell Time by Object Class',
+                      color: effectiveTheme === 'dark' ? '#F7F9FC' : undefined,
                     },
                   },
                   scales: {
@@ -503,12 +528,26 @@ const TelemetryAnalytics: React.FC<TelemetryAnalyticsProps> = ({ cameraId }) => 
                       title: {
                         display: true,
                         text: 'Dwell Time (seconds)',
+                        color: effectiveTheme === 'dark' ? '#F7F9FC' : undefined,
+                      },
+                      ticks: {
+                        color: effectiveTheme === 'dark' ? '#F7F9FC' : undefined,
+                      },
+                      grid: {
+                        color: effectiveTheme === 'dark' ? 'rgba(247, 249, 252, 0.1)' : undefined,
                       },
                     },
                     x: {
                       title: {
                         display: true,
                         text: 'Object Class',
+                        color: effectiveTheme === 'dark' ? '#F7F9FC' : undefined,
+                      },
+                      ticks: {
+                        color: effectiveTheme === 'dark' ? '#F7F9FC' : undefined,
+                      },
+                      grid: {
+                        color: effectiveTheme === 'dark' ? 'rgba(247, 249, 252, 0.1)' : undefined,
                       },
                     },
                   },
