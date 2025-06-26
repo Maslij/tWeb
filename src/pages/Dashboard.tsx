@@ -187,6 +187,9 @@ const Dashboard = () => {
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
   const [activeCamera, setActiveCamera] = useState<string | null>(null);
   
+  // Add state for image refresh timestamps
+  const [imageTimestamps, setImageTimestamps] = useState<Record<string, number>>({});
+  
   // Check license first
   useEffect(() => {
     const checkLicense = async () => {
@@ -224,6 +227,57 @@ const Dashboard = () => {
       fetchCameras();
     }
   }, [isLicenseChecked, licenseStatus]);
+
+  // Set up interval to refresh images for running cameras every second
+  useEffect(() => {
+    const updateImageTimestamps = () => {
+      const runningCameraIds = cameras
+        .filter(camera => camera.running && !unlicensedCameras[camera.id])
+        .map(camera => camera.id);
+      
+      if (runningCameraIds.length > 0) {
+        const currentTime = Date.now();
+        setImageTimestamps(prev => {
+          const newTimestamps = { ...prev };
+          runningCameraIds.forEach(cameraId => {
+            newTimestamps[cameraId] = currentTime;
+          });
+          return newTimestamps;
+        });
+      }
+    };
+
+    // Update immediately if we have running cameras
+    if (cameras.some(camera => camera.running && !unlicensedCameras[camera.id])) {
+      updateImageTimestamps();
+    }
+
+    // Set up interval for continuous updates
+    const intervalId = setInterval(updateImageTimestamps, 1000);
+
+    // Cleanup interval on unmount or when dependencies change
+    return () => clearInterval(intervalId);
+  }, [cameras, unlicensedCameras]);
+
+  // Initialize timestamps when cameras change
+  useEffect(() => {
+    const initialTimestamps: Record<string, number> = {};
+    const currentTime = Date.now();
+    
+    cameras.forEach(camera => {
+      if (camera.running && !unlicensedCameras[camera.id]) {
+        initialTimestamps[camera.id] = currentTime;
+      }
+    });
+    
+    setImageTimestamps(initialTimestamps);
+  }, [cameras, unlicensedCameras]);
+
+  // Memoized function to get current image URL for a camera
+  const getCameraImageUrl = useCallback((cameraId: string): string => {
+    const timestamp = imageTimestamps[cameraId] || Date.now();
+    return `${apiService.cameras.getFrame(cameraId, 75)}?t=${timestamp}`;
+  }, [imageTimestamps]);
 
   // Check if camera has AI-dependent components
   const hasAIDependentComponents = useCallback((cameraId: string): boolean => {
@@ -644,10 +698,14 @@ const Dashboard = () => {
                 <CardMedia
                   component="img"
                   height="200"
-                  // We use a timestamp to prevent caching
-                  image={`${apiService.cameras.getFrame(camera.id, 75)}?t=${new Date().getTime()}`}
+                  // Use memoized function for efficient image URL generation
+                  image={getCameraImageUrl(camera.id)}
                   alt={camera.name}
                   sx={{ objectFit: 'cover' }}
+                  onError={(e) => {
+                    // Handle image load errors gracefully
+                    console.warn(`Failed to load image for camera ${camera.id}`);
+                  }}
                 />
               ) : (
                 <Box
