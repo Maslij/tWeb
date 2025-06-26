@@ -49,13 +49,18 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
   const selectedVertexRadius = 8;
   const polygonStrokeWidth = 2;
   const selectedPolygonStrokeWidth = 4;
+  const frontPolygonStrokeWidth = 3; // Intermediate width for front polygon
   const vertexFillColor = '#4caf50'; // Green
   const vertexStrokeColor = '#ffffff';
   const selectedVertexFillColor = '#ff9800'; // Orange
+  const frontVertexFillColor = '#2196f3'; // Blue for front polygon vertices
   const polygonStrokeColor = '#64b5f6'; // Light blue
   const selectedPolygonStrokeColor = '#2196f3'; // Darker blue
+  const frontPolygonStrokeColor = '#1976d2'; // Even darker blue for front polygon
   const polygonFillColor = 'rgba(33, 150, 243, 0.2)'; // Semi-transparent blue
-  const selectedPolygonFillColor = 'rgba(33, 150, 243, 0.3)'; // Slightly more opaque blue
+  const selectedPolygonFillColor = 'rgba(33, 150, 243, 0.4)'; // More opaque blue
+  const frontPolygonFillColor = 'rgba(33, 150, 243, 0.3)'; // Front polygon fill
+  const backgroundPolygonFillColor = 'rgba(33, 150, 243, 0.1)'; // Very transparent for background polygons
   const drawingPolygonStrokeColor = '#ff9800'; // Orange
   const drawingPolygonFillColor = 'rgba(255, 152, 0, 0.2)'; // Semi-transparent orange
   
@@ -188,11 +193,13 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
   
   // Helper function to draw a polygon
   const drawPolygon = useCallback((
-    ctx: CanvasRenderingContext2D, 
-    points: {x: number, y: number}[], 
+    ctx: CanvasRenderingContext2D,
+    points: {x: number, y: number}[],
     isSelected: boolean = false,
     isHovered: boolean = false,
-    isDrawing: boolean = false
+    isDrawing: boolean = false,
+    isFront: boolean = false,
+    isBackground: boolean = false
   ) => {
     if (points.length < 2) return;
     
@@ -211,59 +218,122 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
       ctx.closePath();
     }
     
-    // Fill with semi-transparent color
-    ctx.fillStyle = isDrawing 
-      ? drawingPolygonFillColor 
-      : isSelected 
-        ? selectedPolygonFillColor 
-        : polygonFillColor;
+    // Fill with semi-transparent color - different opacity based on state
+    ctx.fillStyle = isDrawing
+      ? drawingPolygonFillColor
+      : isSelected
+        ? selectedPolygonFillColor
+        : isFront
+          ? frontPolygonFillColor
+          : isBackground
+            ? backgroundPolygonFillColor
+            : polygonFillColor;
     ctx.fill();
     
-    // Draw outline
-    ctx.strokeStyle = isDrawing 
-      ? drawingPolygonStrokeColor 
-      : isSelected 
-        ? selectedPolygonStrokeColor 
-        : polygonStrokeColor;
-    ctx.lineWidth = isSelected ? selectedPolygonStrokeWidth : polygonStrokeWidth;
+    // Draw outline with different styles based on state
+    ctx.strokeStyle = isDrawing
+      ? drawingPolygonStrokeColor
+      : isSelected
+        ? selectedPolygonStrokeColor
+        : isFront
+          ? frontPolygonStrokeColor
+          : polygonStrokeColor;
+    ctx.lineWidth = isSelected
+      ? selectedPolygonStrokeWidth
+      : isFront
+        ? frontPolygonStrokeWidth
+        : polygonStrokeWidth;
     ctx.stroke();
     
-    // Draw vertices
-    canvasPoints.forEach((point, idx) => {
-      const isVertexSelected = isSelected && selectedVertex === idx;
-      const isVertexHovered = isHovered && hoveredElement?.vertexIndex === idx;
-      
-      // Draw a glow effect for selected/hovered vertices
-      if (isVertexSelected || isVertexHovered) {
+    // Draw vertices - only show vertices for selected, front, or hovered polygons
+    if (isSelected || isFront || isHovered || isDrawing) {
+      canvasPoints.forEach((point, idx) => {
+        const isVertexSelected = isSelected && selectedVertex === idx;
+        const isVertexHovered = isHovered && hoveredElement?.vertexIndex === idx;
+        
+        // Draw a glow effect for selected/hovered vertices
+        if (isVertexSelected || isVertexHovered) {
+          ctx.beginPath();
+          ctx.arc(
+            point.x,
+            point.y,
+            (isVertexSelected ? selectedVertexRadius : vertexRadius) + 4,
+            0,
+            Math.PI * 2
+          );
+          ctx.fillStyle = 'rgba(255, 152, 0, 0.3)'; // Semi-transparent orange glow
+          ctx.fill();
+        }
+        
+        // Draw the vertex with different colors based on state
         ctx.beginPath();
         ctx.arc(
-          point.x, 
-          point.y, 
-          (isVertexSelected ? selectedVertexRadius : vertexRadius) + 4, 
-          0, 
+          point.x,
+          point.y,
+          isVertexSelected || isVertexHovered ? selectedVertexRadius : vertexRadius,
+          0,
           Math.PI * 2
         );
-        ctx.fillStyle = 'rgba(255, 152, 0, 0.3)'; // Semi-transparent orange glow
+        
+        // Choose vertex color based on polygon state
+        ctx.fillStyle = isVertexSelected
+          ? selectedVertexFillColor
+          : isFront
+            ? frontVertexFillColor
+            : vertexFillColor;
         ctx.fill();
-      }
-      
-      // Draw the vertex
-      ctx.beginPath();
-      ctx.arc(
-        point.x, 
-        point.y, 
-        isVertexSelected || isVertexHovered ? selectedVertexRadius : vertexRadius, 
-        0, 
-        Math.PI * 2
-      );
-      ctx.fillStyle = isVertexSelected ? selectedVertexFillColor : vertexFillColor;
-      ctx.fill();
-      ctx.strokeStyle = vertexStrokeColor;
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    });
+        ctx.strokeStyle = vertexStrokeColor;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      });
+    }
     
   }, [normalizedToCanvasCoords, selectedVertex, hoveredElement]);
+  
+  
+  // Helper function to draw zone labels
+  const drawZoneLabel = useCallback((
+    ctx: CanvasRenderingContext2D,
+    zone: PolygonZone,
+    index: number,
+    isSelected: boolean,
+    isFront: boolean
+  ) => {
+    // Calculate centroid of the polygon
+    let centroidX = 0;
+    let centroidY = 0;
+    
+    zone.polygon.forEach(point => {
+      const canvasPoint = normalizedToCanvasCoords(point.x, point.y);
+      centroidX += canvasPoint.x;
+      centroidY += canvasPoint.y;
+    });
+    
+    centroidX /= zone.polygon.length;
+    centroidY /= zone.polygon.length;
+    
+    // Draw a background for the text
+    ctx.font = isSelected ? 'bold 14px Roboto' : isFront ? 'bold 12px Roboto' : '12px Roboto';
+    const textMetrics = ctx.measureText(zone.id);
+    const textWidth = textMetrics.width;
+    const textHeight = isSelected ? 20 : 18;
+    
+    // Different background colors based on state
+    ctx.fillStyle = isSelected
+      ? 'rgba(33, 150, 243, 0.9)'
+      : isFront
+        ? 'rgba(25, 118, 210, 0.8)'
+        : theme.palette.mode === 'dark'
+          ? 'rgba(255, 255, 255, 0.6)'
+          : 'rgba(0, 0, 0, 0.5)';
+    ctx.fillRect(centroidX - textWidth / 2 - 5, centroidY - textHeight / 2, textWidth + 10, textHeight);
+    
+    // Draw the text
+    ctx.fillStyle = 'white';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(zone.id, centroidX, centroidY);
+  }, [normalizedToCanvasCoords, theme.palette.mode]);
   
   // Optimized drawCanvas function that uses the local zones reference for faster drawing
   const drawCanvas = useCallback(() => {
@@ -287,49 +357,58 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
       // Stretch image to fill entire canvas (since we're using normalized coordinates)
       ctx.drawImage(nextImageRef.current, 0, 0, canvas.width, canvas.height);
       
-      // Draw all zones
-      currentZones.forEach((zone, index) => {
-        const isSelected = index === selectedZone;
+      // Draw zones in layers: background polygons first, then selected polygon
+      const backgroundZones: number[] = [];
+      const frontZone: number | null = selectedZone;
+      
+      // Collect background zones (all except selected)
+      currentZones.forEach((_, index) => {
+        if (index !== selectedZone) {
+          backgroundZones.push(index);
+        }
+      });
+      
+      // Draw background polygons first (with reduced opacity)
+      backgroundZones.forEach((index) => {
+        const zone = currentZones[index];
         const isHovered = hoveredElement?.zoneIndex === index && hoveredElement?.isPolygon;
         
         drawPolygon(
-          ctx, 
-          zone.polygon, 
-          isSelected,
-          isHovered
+          ctx,
+          zone.polygon,
+          false, // not selected
+          isHovered,
+          false, // not drawing
+          false, // not front
+          true   // is background
         );
         
-        // Draw zone ID
+        // Draw zone ID for background polygons
         if (zone.polygon.length > 0) {
-          // Calculate centroid of the polygon
-          let centroidX = 0;
-          let centroidY = 0;
-          
-          zone.polygon.forEach(point => {
-            const canvasPoint = normalizedToCanvasCoords(point.x, point.y);
-            centroidX += canvasPoint.x;
-            centroidY += canvasPoint.y;
-          });
-          
-          centroidX /= zone.polygon.length;
-          centroidY /= zone.polygon.length;
-          
-          // Draw a background for the text
-          ctx.font = isSelected ? 'bold 14px Roboto' : '14px Roboto';
-          const textMetrics = ctx.measureText(zone.id);
-          const textWidth = textMetrics.width;
-          const textHeight = 20;
-          
-          ctx.fillStyle = isSelected ? 'rgba(33, 150, 243, 0.8)' : theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.6)';
-          ctx.fillRect(centroidX - textWidth / 2 - 5, centroidY - textHeight / 2, textWidth + 10, textHeight);
-          
-          // Draw the text
-          ctx.fillStyle = 'white';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(zone.id, centroidX, centroidY);
+          drawZoneLabel(ctx, zone, index, false, false);
         }
       });
+      
+      // Draw the selected polygon on top (if exists)
+      if (frontZone !== null && currentZones[frontZone]) {
+        const zone = currentZones[frontZone];
+        const isHovered = hoveredElement?.zoneIndex === frontZone && hoveredElement?.isPolygon;
+        
+        drawPolygon(
+          ctx,
+          zone.polygon,
+          true,  // is selected
+          isHovered,
+          false, // not drawing
+          true,  // is front
+          false  // not background
+        );
+        
+        // Draw zone ID for selected polygon
+        if (zone.polygon.length > 0) {
+          drawZoneLabel(ctx, zone, frontZone, true, true);
+        }
+      }
       
       // Draw the polygon currently being created
       if (isDrawing && currentPolygon.length > 0) {
@@ -379,7 +458,7 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
       ctx.textBaseline = 'middle';
       ctx.fillText('No image available. Start the pipeline to see the camera feed.', canvas.width / 2, canvas.height / 2);
     }
-  }, [drawPolygon, normalizedToCanvasCoords, selectedZone, selectedVertex, hoveredElement, currentImageUrl, isDrawing, currentPolygon, theme.palette.mode]);
+  }, [drawPolygon, drawZoneLabel, normalizedToCanvasCoords, selectedZone, selectedVertex, hoveredElement, currentImageUrl, isDrawing, currentPolygon, theme.palette.mode]);
   
   // Helper function to check if a point is near a line segment
   const isPointNearLineSegment = useCallback((
@@ -419,7 +498,7 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
     return Math.sqrt(dx * dx + dy * dy) <= threshold;
   }, []);
 
-  // Optimized hover detection for better performance
+  // Optimized hover detection with priority for selected polygon
   const checkHoverStatus = useCallback((x: number, y: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
@@ -436,8 +515,19 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
       return { zoneIndex: x, vertexIndex: y };
     }
     
-    // Check if hovering over any vertices first (higher priority)
-    for (let zIdx = 0; zIdx < currentZones.length; zIdx++) {
+    // Create priority order: selected zone first, then others
+    const zoneIndices = [];
+    if (selectedZone !== null && selectedZone < currentZones.length) {
+      zoneIndices.push(selectedZone);
+    }
+    for (let i = 0; i < currentZones.length; i++) {
+      if (i !== selectedZone) {
+        zoneIndices.push(i);
+      }
+    }
+    
+    // Check vertices first (highest priority) - prioritize selected zone
+    for (const zIdx of zoneIndices) {
       const zone = currentZones[zIdx];
       
       for (let vIdx = 0; vIdx < zone.polygon.length; vIdx++) {
@@ -448,13 +538,20 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
         
         const distance = Math.sqrt(Math.pow(x - canvasX, 2) + Math.pow(y - canvasY, 2));
         
-        if (distance <= 10) { // 10px hit radius for vertices
+        // Larger hit radius for selected zone vertices
+        const hitRadius = zIdx === selectedZone ? 12 : 10;
+        
+        if (distance <= hitRadius) {
           canvas.style.cursor = 'pointer';
           return { zoneIndex: zIdx, vertexIndex: vIdx };
         }
       }
+    }
+    
+    // Check edges second (for adding vertices) - prioritize selected zone
+    for (const zIdx of zoneIndices) {
+      const zone = currentZones[zIdx];
       
-      // Check if hovering over any edges (for adding vertices)
       for (let eIdx = 0; eIdx < zone.polygon.length; eIdx++) {
         const currentVertex = zone.polygon[eIdx];
         const nextVertex = zone.polygon[(eIdx + 1) % zone.polygon.length];
@@ -462,13 +559,20 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
         const { x: x1, y: y1 } = normalizedToCanvasCoords(currentVertex.x, currentVertex.y);
         const { x: x2, y: y2 } = normalizedToCanvasCoords(nextVertex.x, nextVertex.y);
         
-        if (isPointNearLineSegment(x, y, x1, y1, x2, y2, 8)) {
-          canvas.style.cursor = 'copy'; // Different cursor for edge hover
+        // Larger hit radius for selected zone edges
+        const hitRadius = zIdx === selectedZone ? 10 : 8;
+        
+        if (isPointNearLineSegment(x, y, x1, y1, x2, y2, hitRadius)) {
+          canvas.style.cursor = 'copy';
           return { zoneIndex: zIdx, edgeIndex: eIdx };
         }
       }
+    }
+    
+    // Check polygon areas last - prioritize selected zone
+    for (const zIdx of zoneIndices) {
+      const zone = currentZones[zIdx];
       
-      // Then check if hovering over the polygon itself
       if (isPointInPolygon(x, y, zone.polygon.map(p => normalizedToCanvasCoords(p.x, p.y)))) {
         canvas.style.cursor = 'move';
         return { zoneIndex: zIdx, isPolygon: true };
@@ -478,7 +582,7 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
     // Not hovering over anything
     canvas.style.cursor = drawMode ? 'crosshair' : 'default';
     return null;
-  }, [drawMode, hoveredElement, isDrawing, normalizedToCanvasCoords, isPointNearLineSegment]);
+  }, [drawMode, hoveredElement, isDrawing, normalizedToCanvasCoords, isPointNearLineSegment, selectedZone]);
   
   // Helper function to check if a point is inside a polygon
   const isPointInPolygon = useCallback((x: number, y: number, polygon: {x: number, y: number}[]) => {
@@ -782,6 +886,60 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
     // Select the new vertex
     setSelectedVertex(insertIndex);
   }, [selectedZone, selectedVertex, onZonesChange]);
+  
+  // Handle keyboard shortcuts for better UX
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (disabled || isDrawing) return;
+      
+      // Don't handle shortcuts if user is typing in an input field
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+      
+      switch (e.key) {
+        case 'Delete':
+        case 'Backspace':
+          if (selectedZone !== null) {
+            if (selectedVertex !== null) {
+              handleDeleteVertex();
+            } else {
+              handleDeleteSelectedZone();
+            }
+            e.preventDefault();
+          }
+          break;
+        case 'Escape':
+          if (isDrawing) {
+            handleCancelDraw();
+          } else {
+            setSelectedZone(null);
+            setSelectedVertex(null);
+          }
+          e.preventDefault();
+          break;
+        case 'Tab':
+          // Cycle through zones
+          if (localZonesRef.current.length > 0) {
+            const currentIndex = selectedZone ?? -1;
+            const nextIndex = (currentIndex + 1) % localZonesRef.current.length;
+            setSelectedZone(nextIndex);
+            setSelectedVertex(null);
+            e.preventDefault();
+          }
+          break;
+        case 'Enter':
+          if (isDrawing && currentPolygon.length >= 3) {
+            handleCompleteDraw();
+            e.preventDefault();
+          }
+          break;
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [disabled, isDrawing, selectedZone, selectedVertex, currentPolygon.length, handleDeleteVertex, handleDeleteSelectedZone, handleCancelDraw, handleCompleteDraw]);
 
   return (
     <Box sx={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -868,10 +1026,17 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
               <div>• Objects entering the polygon area trigger "in" events</div>
               <div>• Objects leaving the polygon area trigger "out" events</div>
               <br />
-              <div>• Green dots = polygon vertices (drag to move)</div>
-              <div>• Click on polygon edges to add vertices at that point</div>
-              <div>• Use "Add Vertex" button to add next to selected vertex</div>
-              <div>• At least 3 points required for a valid polygon</div>
+              <div><strong>Interaction:</strong></div>
+              <div>• Click zone in list to select and bring to front</div>
+              <div>• Selected polygon shows vertices and has priority for clicks</div>
+              <div>• Green/Blue dots = vertices (drag to move)</div>
+              <div>• Click on polygon edges to add vertices</div>
+              <br />
+              <div><strong>Keyboard Shortcuts:</strong></div>
+              <div>• Delete/Backspace: Delete selected zone or vertex</div>
+              <div>• Tab: Cycle through zones</div>
+              <div>• Escape: Cancel drawing or deselect</div>
+              <div>• Enter: Complete polygon when drawing</div>
             </div>
           }>
             <IconButton size="small">

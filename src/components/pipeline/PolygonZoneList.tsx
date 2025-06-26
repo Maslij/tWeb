@@ -9,8 +9,6 @@ import {
   Typography,
   Badge
 } from '@mui/material';
-import { IconButton } from '../../components/ui/IconButton';
-import DeleteIcon from '@mui/icons-material/Delete';
 import AnchorPointsSelector from './AnchorPointsSelector';
 
 // Interface for PolygonZone
@@ -63,39 +61,85 @@ const PolygonZoneList: React.FC<PolygonZoneListProps> = ({
         </ListItem>
       ) : (
         zones.map((zone, index) => (
-          <ListItem 
+          <ListItem
             key={index}
-            sx={{ 
-              borderBottom: index < zones.length - 1 ? '1px solid' : 'none', 
+            sx={{
+              borderBottom: index < zones.length - 1 ? '1px solid' : 'none',
               borderColor: 'divider',
-              bgcolor: selectedZoneIndex === index ? 'action.selected' : 'transparent'
+              bgcolor: selectedZoneIndex === index ? 'action.selected' : 'transparent',
+              borderLeft: selectedZoneIndex === index ? '4px solid' : '4px solid transparent',
+              borderLeftColor: selectedZoneIndex === index ? 'primary.main' : 'transparent',
+              transition: 'all 0.2s ease-in-out',
+              '&:hover': {
+                bgcolor: selectedZoneIndex === index ? 'action.selected' : 'action.hover',
+                borderLeftColor: selectedZoneIndex === index ? 'primary.main' : 'primary.light'
+              },
+              cursor: 'pointer',
+              position: 'relative'
             }}
-            secondaryAction={
-              <IconButton 
-                edge="end" 
-                aria-label="delete" 
-                onClick={() => onDeleteZone(index)}
-                disabled={disabled}
-              >
-                <DeleteIcon />
-              </IconButton>
-            }
+            onClick={() => onSelectZone(index)}
           >
+            {/* Invisible overlay to capture clicks anywhere in the item */}
+            <Box
+              sx={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 1,
+                cursor: 'pointer'
+              }}
+              onClick={() => onSelectZone(index)}
+            />
+            
             <ListItemText
               primary={
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  {/* Zone name input - always visible and accessible */}
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, position: 'relative', zIndex: 2 }}>
+                  {/* Zone name input with selection indicator */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    {selectedZoneIndex === index && (
+                      <Box
+                        sx={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          bgcolor: 'primary.main',
+                          flexShrink: 0
+                        }}
+                      />
+                    )}
                     <TextField
                       value={zone.id}
                       size="small"
                       variant="standard"
                       onChange={(e) => onUpdateZone(index, 'id', e.target.value)}
-                      onClick={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectZone(index); // Also select the zone when clicking the text field
+                      }}
+                      onFocus={() => onSelectZone(index)} // Select zone when focusing the text field
                       disabled={disabled}
-                      sx={{ width: '150px', flexShrink: 0 }}
+                      sx={{
+                        width: '150px',
+                        flexShrink: 0,
+                        position: 'relative',
+                        zIndex: 3,
+                        '& .MuiInput-underline:before': {
+                          borderBottomColor: selectedZoneIndex === index ? 'primary.main' : 'divider'
+                        }
+                      }}
                       placeholder="Zone name"
                     />
+                    {selectedZoneIndex === index && (
+                      <Chip
+                        size="small"
+                        label="ACTIVE"
+                        color="primary"
+                        variant="filled"
+                        sx={{ fontSize: '0.7rem', height: '20px' }}
+                      />
+                    )}
                   </Box>
                   
                   {/* Vertex count and detection counts */}
@@ -145,33 +189,49 @@ const PolygonZoneList: React.FC<PolygonZoneListProps> = ({
                 </Box>
               }
               secondary={
-                <Box component="div" sx={{ mt: 1 }}>
+                <Box component="div" sx={{ mt: 1, position: 'relative', zIndex: 2 }}>
                   <Box component="span" sx={{ display: 'flex', alignItems: 'center', color: 'text.secondary' }}>
-                    Threshold: 
+                    Threshold:
                     <TextField
                       type="number"
                       size="small"
                       variant="standard"
                       value={zone.min_crossing_threshold}
                       onChange={(e) => onUpdateZone(index, 'min_crossing_threshold', parseInt(e.target.value) || 1)}
-                      onClick={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectZone(index); // Also select the zone when clicking the threshold field
+                      }}
+                      onFocus={() => onSelectZone(index)} // Select zone when focusing the threshold field
                       disabled={disabled}
-                      sx={{ width: '60px', mx: 1 }}
+                      sx={{ width: '60px', mx: 1, position: 'relative', zIndex: 3 }}
                       inputProps={{ min: 1 }}
                     />
                   </Box>
                   
-                  {/* Use shared AnchorPointsSelector component */}
-                  <AnchorPointsSelector
-                    triggering_anchors={zone.triggering_anchors || []}
-                    onUpdateAnchors={(newAnchors) => onUpdateZone(index, 'triggering_anchors', newAnchors)}
-                    disabled={disabled}
-                    index={index}
-                  />
+                  {/* Use shared AnchorPointsSelector component with zone selection */}
+                  <Box
+                    sx={{ position: 'relative', zIndex: 3 }}
+                    onClick={(e) => {
+                      // If clicking on the anchor points area but not on interactive elements, select the zone
+                      if (e.target === e.currentTarget) {
+                        onSelectZone(index);
+                      }
+                    }}
+                  >
+                    <AnchorPointsSelector
+                      triggering_anchors={zone.triggering_anchors || []}
+                      onUpdateAnchors={(newAnchors) => {
+                        onSelectZone(index); // Select zone when updating anchors
+                        onUpdateZone(index, 'triggering_anchors', newAnchors);
+                      }}
+                      disabled={disabled}
+                      index={index}
+                    />
+                  </Box>
                 </Box>
               }
-              onClick={() => onSelectZone(index)}
-              sx={{ cursor: 'pointer' }}
+              sx={{ cursor: 'pointer', userSelect: 'none', position: 'relative', zIndex: 2 }}
               primaryTypographyProps={{ component: 'div' }}
               secondaryTypographyProps={{ component: 'div' }}
             />
