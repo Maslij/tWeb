@@ -34,7 +34,7 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
   const [currentPolygon, setCurrentPolygon] = useState<{x: number, y: number}[]>([]);
   const [imageSize, setImageSize] = useState<{ width: number, height: number } | null>(null);
   const [drawMode, setDrawMode] = useState<boolean>(false);
-  const [hoveredElement, setHoveredElement] = useState<{ zoneIndex: number, vertexIndex?: number, isPolygon?: boolean } | null>(null);
+  const [hoveredElement, setHoveredElement] = useState<{ zoneIndex: number, vertexIndex?: number, isPolygon?: boolean, edgeIndex?: number } | null>(null);
   const [currentImageUrl, setCurrentImageUrl] = useState<string>("");
   const nextImageRef = useRef<HTMLImageElement | null>(null);
   const lastUpdateTimeRef = useRef<number>(0);
@@ -381,6 +381,44 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
     }
   }, [drawPolygon, normalizedToCanvasCoords, selectedZone, selectedVertex, hoveredElement, currentImageUrl, isDrawing, currentPolygon, theme.palette.mode]);
   
+  // Helper function to check if a point is near a line segment
+  const isPointNearLineSegment = useCallback((
+    px: number, py: number,
+    x1: number, y1: number,
+    x2: number, y2: number,
+    threshold: number = 8
+  ) => {
+    // Calculate the distance from point to line segment
+    const A = px - x1;
+    const B = py - y1;
+    const C = x2 - x1;
+    const D = y2 - y1;
+    
+    const dot = A * C + B * D;
+    const lenSq = C * C + D * D;
+    
+    if (lenSq === 0) return Math.sqrt(A * A + B * B) <= threshold;
+    
+    let param = dot / lenSq;
+    
+    let xx, yy;
+    
+    if (param < 0) {
+      xx = x1;
+      yy = y1;
+    } else if (param > 1) {
+      xx = x2;
+      yy = y2;
+    } else {
+      xx = x1 + param * C;
+      yy = y1 + param * D;
+    }
+    
+    const dx = px - xx;
+    const dy = py - yy;
+    return Math.sqrt(dx * dx + dy * dy) <= threshold;
+  }, []);
+
   // Optimized hover detection for better performance
   const checkHoverStatus = useCallback((x: number, y: number) => {
     const canvas = canvasRef.current;
@@ -416,6 +454,20 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
         }
       }
       
+      // Check if hovering over any edges (for adding vertices)
+      for (let eIdx = 0; eIdx < zone.polygon.length; eIdx++) {
+        const currentVertex = zone.polygon[eIdx];
+        const nextVertex = zone.polygon[(eIdx + 1) % zone.polygon.length];
+        
+        const { x: x1, y: y1 } = normalizedToCanvasCoords(currentVertex.x, currentVertex.y);
+        const { x: x2, y: y2 } = normalizedToCanvasCoords(nextVertex.x, nextVertex.y);
+        
+        if (isPointNearLineSegment(x, y, x1, y1, x2, y2, 8)) {
+          canvas.style.cursor = 'copy'; // Different cursor for edge hover
+          return { zoneIndex: zIdx, edgeIndex: eIdx };
+        }
+      }
+      
       // Then check if hovering over the polygon itself
       if (isPointInPolygon(x, y, zone.polygon.map(p => normalizedToCanvasCoords(p.x, p.y)))) {
         canvas.style.cursor = 'move';
@@ -426,7 +478,7 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
     // Not hovering over anything
     canvas.style.cursor = drawMode ? 'crosshair' : 'default';
     return null;
-  }, [drawMode, hoveredElement, isDrawing, normalizedToCanvasCoords]);
+  }, [drawMode, hoveredElement, isDrawing, normalizedToCanvasCoords, isPointNearLineSegment]);
   
   // Helper function to check if a point is inside a polygon
   const isPointInPolygon = useCallback((x: number, y: number, polygon: {x: number, y: number}[]) => {
@@ -563,6 +615,30 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
         setSelectedVertex(hoverState.vertexIndex);
         setDraggingVertex(true);
         isActivelyDraggingRef.current = true;
+      } else if (hoverState.edgeIndex !== undefined) {
+        // Handle clicking on an edge to add a vertex
+        const normalized = canvasToNormalizedCoords(x, y);
+        const zone = localZonesRef.current[hoverState.zoneIndex];
+        
+        // Create updated polygon with the new vertex inserted after the edge start vertex
+        const updatedPolygon = [
+          ...zone.polygon.slice(0, hoverState.edgeIndex + 1),
+          { x: normalized.x, y: normalized.y },
+          ...zone.polygon.slice(hoverState.edgeIndex + 1)
+        ];
+        
+        // Update the zone with the new polygon
+        const updatedZones = [...localZonesRef.current];
+        updatedZones[hoverState.zoneIndex] = {
+          ...updatedZones[hoverState.zoneIndex],
+          polygon: updatedPolygon
+        };
+        
+        onZonesChange(updatedZones);
+        
+        // Select the new vertex
+        setSelectedVertex(hoverState.edgeIndex + 1);
+        return;
       } else {
         setSelectedVertex(null);
       }
@@ -651,7 +727,7 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
     }
   }, [selectedZone, selectedVertex, onZonesChange]);
   
-  // Handle adding a new vertex between the last and first vertices
+  // Handle adding a new vertex - context-aware based on selected vertex
   const handleAddVertex = useCallback(() => {
     if (selectedZone === null) return;
     
@@ -660,18 +736,39 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
     
     if (polygon.length < 3) return; // Need at least 3 vertices to have a valid polygon
     
-    // Get the first and last vertices
-    const firstVertex = polygon[0];
-    const lastVertex = polygon[polygon.length - 1];
+    let insertIndex: number;
+    let newVertex: { x: number, y: number };
     
-    // Calculate the midpoint between the last and first vertices
-    const newVertex = {
-      x: (lastVertex.x + firstVertex.x) / 2,
-      y: (lastVertex.y + firstVertex.y) / 2
-    };
+    if (selectedVertex !== null) {
+      // If a vertex is selected, add the new vertex between it and the next vertex
+      insertIndex = selectedVertex + 1;
+      const currentVertex = polygon[selectedVertex];
+      const nextVertex = polygon[(selectedVertex + 1) % polygon.length];
+      
+      // Calculate the midpoint between the selected vertex and the next vertex
+      newVertex = {
+        x: (currentVertex.x + nextVertex.x) / 2,
+        y: (currentVertex.y + nextVertex.y) / 2
+      };
+    } else {
+      // If no vertex is selected, add between the last and first vertices (original behavior)
+      insertIndex = polygon.length;
+      const firstVertex = polygon[0];
+      const lastVertex = polygon[polygon.length - 1];
+      
+      // Calculate the midpoint between the last and first vertices
+      newVertex = {
+        x: (lastVertex.x + firstVertex.x) / 2,
+        y: (lastVertex.y + firstVertex.y) / 2
+      };
+    }
     
-    // Create updated polygon with the new vertex added at the end
-    const updatedPolygon = [...polygon, newVertex];
+    // Create updated polygon with the new vertex inserted at the appropriate position
+    const updatedPolygon = [
+      ...polygon.slice(0, insertIndex),
+      newVertex,
+      ...polygon.slice(insertIndex)
+    ];
     
     // Update the zone with the new polygon
     const updatedZones = [...localZonesRef.current];
@@ -683,8 +780,8 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
     onZonesChange(updatedZones);
     
     // Select the new vertex
-    setSelectedVertex(updatedPolygon.length - 1);
-  }, [selectedZone, onZonesChange]);
+    setSelectedVertex(insertIndex);
+  }, [selectedZone, selectedVertex, onZonesChange]);
 
   return (
     <Box sx={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -772,8 +869,9 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
               <div>• Objects leaving the polygon area trigger "out" events</div>
               <br />
               <div>• Green dots = polygon vertices (drag to move)</div>
+              <div>• Click on polygon edges to add vertices at that point</div>
+              <div>• Use "Add Vertex" button to add next to selected vertex</div>
               <div>• At least 3 points required for a valid polygon</div>
-              <div>• Use "Add Vertex" to add points between existing ones</div>
             </div>
           }>
             <IconButton size="small">
