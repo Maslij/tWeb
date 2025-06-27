@@ -19,11 +19,12 @@ import CancelIcon from '@mui/icons-material/Cancel';
 interface PolygonZoneEditorProps {
   zones: PolygonZone[];
   onZonesChange: (zones: PolygonZone[]) => void;
+  onUnsavedChange?: () => void; // New prop to immediately trigger unsaved changes
   imageUrl: string;
   disabled?: boolean;
 }
 
-const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesChange, imageUrl, disabled = false }) => {
+const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesChange, onUnsavedChange, imageUrl, disabled = false }) => {
   const theme = useTheme();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1131,6 +1132,7 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
                 };
                 onZonesChange(updatedZones);
               }}
+              onUnsavedChange={onUnsavedChange}
               disabled={disabled}
             />
           </Box>

@@ -183,6 +183,7 @@ const PolygonZoneConfigTab: React.FC<PolygonZoneConfigTabProps> = ({
                   handlePolygonZonesUpdate(updatedZones);
                   setHasUnsavedZoneChanges(true);
                 }}
+                onUnsavedChange={() => setHasUnsavedZoneChanges(true)}
                 disabled={isSaving}
               />
             </Box>

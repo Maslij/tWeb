@@ -47,6 +47,7 @@ interface LineZoneListProps {
   onSelectZone: (index: number) => void;
   onDeleteZone: (index: number) => void;
   onUpdateZone: (index: number, field: keyof Zone, value: any) => void;
+  onUnsavedChange?: () => void; // New prop to immediately trigger unsaved changes
   disabled?: boolean;
 }
 
@@ -56,11 +57,15 @@ const LineZoneList: React.FC<LineZoneListProps> = ({
   onSelectZone, 
   onDeleteZone, 
   onUpdateZone,
+  onUnsavedChange,
   disabled = false
 }) => {
   // Local state to manage the editing of zone names
   const [editingZoneId, setEditingZoneId] = React.useState<number | null>(null);
   const [editingValue, setEditingValue] = React.useState<string>('');
+  // Add debounced update refs
+  const updateTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const pendingUpdatesRef = React.useRef<Map<number, string>>(new Map());
 
   const handleZoneNameClick = (index: number, currentValue: string) => {
     setEditingZoneId(index);
@@ -69,17 +74,44 @@ const LineZoneList: React.FC<LineZoneListProps> = ({
 
   const handleZoneNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setEditingValue(e.target.value);
+    // Immediately trigger unsaved changes when user starts typing
+    if (onUnsavedChange) {
+      onUnsavedChange();
+    }
   };
+
+  // Debounced update function to batch API calls
+  const debouncedZoneUpdate = React.useCallback((index: number, value: string) => {
+    // Store the pending update
+    pendingUpdatesRef.current.set(index, value);
+    
+    // Clear existing timeout
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current);
+    }
+    
+    // Set new timeout to batch updates
+    updateTimeoutRef.current = setTimeout(() => {
+      // Process all pending updates
+      const updates = new Map(pendingUpdatesRef.current);
+      pendingUpdatesRef.current.clear();
+      
+      // Apply updates in batch
+      updates.forEach((updateValue, updateIndex) => {
+        onUpdateZone(updateIndex, 'id', updateValue);
+      });
+      
+      updateTimeoutRef.current = null;
+    }, 500); // 500ms debounce delay
+  }, [onUpdateZone]);
 
   const handleZoneNameBlur = (index: number) => {
     const trimmedValue = editingValue.trim();
-    if (trimmedValue === '') {
-      // Generate a default name based on the zone index
-      const defaultName = `zone${index + 1}`;
-      onUpdateZone(index, 'id', defaultName);
-    } else {
-      onUpdateZone(index, 'id', trimmedValue);
-    }
+    const finalValue = trimmedValue === '' ? `zone${index + 1}` : trimmedValue;
+    
+    // Use debounced update instead of immediate update
+    debouncedZoneUpdate(index, finalValue);
+    
     setEditingZoneId(null);
     setEditingValue('');
   };
@@ -92,6 +124,15 @@ const LineZoneList: React.FC<LineZoneListProps> = ({
       setEditingValue('');
     }
   };
+
+  // Cleanup timeout on unmount
+  React.useEffect(() => {
+    return () => {
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current);
+      }
+    };
+  }, []);
 
   return (
     <List sx={{ 

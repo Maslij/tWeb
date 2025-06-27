@@ -100,6 +100,7 @@ const LineZoneConfigTab: React.FC<LineZoneConfigTabProps> = ({
                   handleLineZonesUpdate(updatedZones);
                   setHasUnsavedZoneChanges(true);
                 }}
+                onUnsavedChange={() => setHasUnsavedZoneChanges(true)}
                 disabled={isSavingZones}
               />
             </Box>

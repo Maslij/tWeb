@@ -17,11 +17,12 @@ import LineZoneList, { Zone } from './LineZoneList';
 interface LineZoneEditorProps {
   zones: Zone[];
   onZonesChange: (zones: Zone[]) => void;
+  onUnsavedChange?: () => void; // New prop to immediately trigger unsaved changes
   imageUrl: string;
   disabled?: boolean;
 }
 
-const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, imageUrl, disabled = false }) => {
+const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, onUnsavedChange, imageUrl, disabled = false }) => {
   const theme = useTheme();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -765,6 +766,7 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, i
                 };
                 onZonesChange(updatedZones);
               }}
+              onUnsavedChange={onUnsavedChange}
               disabled={disabled}
             />
           </Box>
