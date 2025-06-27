@@ -42,6 +42,41 @@ const PolygonZoneList: React.FC<PolygonZoneListProps> = ({
   onUpdateZone,
   disabled = false
 }) => {
+  // Local state to manage the editing of zone names
+  const [editingZoneId, setEditingZoneId] = React.useState<number | null>(null);
+  const [editingValue, setEditingValue] = React.useState<string>('');
+
+  const handleZoneNameClick = (index: number, currentValue: string) => {
+    setEditingZoneId(index);
+    setEditingValue(currentValue);
+  };
+
+  const handleZoneNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setEditingValue(e.target.value);
+  };
+
+  const handleZoneNameBlur = (index: number) => {
+    const trimmedValue = editingValue.trim();
+    if (trimmedValue === '') {
+      // Generate a default name based on the zone index
+      const defaultName = `zone${index + 1}`;
+      onUpdateZone(index, 'id', defaultName);
+    } else {
+      onUpdateZone(index, 'id', trimmedValue);
+    }
+    setEditingZoneId(null);
+    setEditingValue('');
+  };
+
+  const handleZoneNameKeyPress = (e: React.KeyboardEvent, index: number) => {
+    if (e.key === 'Enter') {
+      handleZoneNameBlur(index);
+    } else if (e.key === 'Escape') {
+      setEditingZoneId(null);
+      setEditingValue('');
+    }
+  };
+
   return (
     <List sx={{ 
       width: '100%', 
@@ -110,13 +145,18 @@ const PolygonZoneList: React.FC<PolygonZoneListProps> = ({
                       />
                     )}
                     <TextField
-                      value={zone.id}
+                      value={editingZoneId === index ? editingValue : zone.id}
                       size="small"
                       variant="standard"
-                      onChange={(e) => onUpdateZone(index, 'id', e.target.value)}
+                      onChange={handleZoneNameChange}
+                      onBlur={() => handleZoneNameBlur(index)}
+                      onKeyDown={(e) => handleZoneNameKeyPress(e, index)}
                       onClick={(e) => {
                         e.stopPropagation();
                         onSelectZone(index); // Also select the zone when clicking the text field
+                        if (editingZoneId !== index) {
+                          handleZoneNameClick(index, zone.id);
+                        }
                       }}
                       onFocus={() => onSelectZone(index)} // Select zone when focusing the text field
                       disabled={disabled}

@@ -58,6 +58,41 @@ const LineZoneList: React.FC<LineZoneListProps> = ({
   onUpdateZone,
   disabled = false
 }) => {
+  // Local state to manage the editing of zone names
+  const [editingZoneId, setEditingZoneId] = React.useState<number | null>(null);
+  const [editingValue, setEditingValue] = React.useState<string>('');
+
+  const handleZoneNameClick = (index: number, currentValue: string) => {
+    setEditingZoneId(index);
+    setEditingValue(currentValue);
+  };
+
+  const handleZoneNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setEditingValue(e.target.value);
+  };
+
+  const handleZoneNameBlur = (index: number) => {
+    const trimmedValue = editingValue.trim();
+    if (trimmedValue === '') {
+      // Generate a default name based on the zone index
+      const defaultName = `zone${index + 1}`;
+      onUpdateZone(index, 'id', defaultName);
+    } else {
+      onUpdateZone(index, 'id', trimmedValue);
+    }
+    setEditingZoneId(null);
+    setEditingValue('');
+  };
+
+  const handleZoneNameKeyPress = (e: React.KeyboardEvent, index: number) => {
+    if (e.key === 'Enter') {
+      handleZoneNameBlur(index);
+    } else if (e.key === 'Escape') {
+      setEditingZoneId(null);
+      setEditingValue('');
+    }
+  };
+
   return (
     <List sx={{ 
       width: '100%', 
@@ -92,23 +127,18 @@ const LineZoneList: React.FC<LineZoneListProps> = ({
               primary={
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
                   <TextField
-                    value={zone.id}
+                    value={editingZoneId === index ? editingValue : zone.id}
                     size="small"
                     variant="standard"
-                    onChange={(e) => {
-                      const newValue = e.target.value;
-                      // Only update if the value is not empty, or if it's being cleared but we want to allow temporary empty state
-                      onUpdateZone(index, 'id', newValue);
-                    }}
-                    onBlur={(e) => {
-                      // If the field is empty on blur, restore the original zone ID or generate a default one
-                      if (e.target.value.trim() === '') {
-                        // Generate a default name based on the zone index
-                        const defaultName = `zone${index + 1}`;
-                        onUpdateZone(index, 'id', defaultName);
+                    onChange={handleZoneNameChange}
+                    onBlur={() => handleZoneNameBlur(index)}
+                    onKeyDown={(e) => handleZoneNameKeyPress(e, index)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (editingZoneId !== index) {
+                        handleZoneNameClick(index, zone.id);
                       }
                     }}
-                    onClick={(e) => e.stopPropagation()}
                     disabled={disabled}
                     sx={{ width: '130px' }}
                   />
