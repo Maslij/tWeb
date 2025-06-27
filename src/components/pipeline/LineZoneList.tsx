@@ -95,7 +95,19 @@ const LineZoneList: React.FC<LineZoneListProps> = ({
                     value={zone.id}
                     size="small"
                     variant="standard"
-                    onChange={(e) => onUpdateZone(index, 'id', e.target.value)}
+                    onChange={(e) => {
+                      const newValue = e.target.value;
+                      // Only update if the value is not empty, or if it's being cleared but we want to allow temporary empty state
+                      onUpdateZone(index, 'id', newValue);
+                    }}
+                    onBlur={(e) => {
+                      // If the field is empty on blur, restore the original zone ID or generate a default one
+                      if (e.target.value.trim() === '') {
+                        // Generate a default name based on the zone index
+                        const defaultName = `zone${index + 1}`;
+                        onUpdateZone(index, 'id', defaultName);
+                      }
+                    }}
                     onClick={(e) => e.stopPropagation()}
                     disabled={disabled}
                     sx={{ width: '130px' }}
