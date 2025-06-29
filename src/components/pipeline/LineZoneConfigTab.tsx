@@ -158,13 +158,12 @@ const LineZoneConfigTab: React.FC<LineZoneConfigTabProps> = ({
           <Button 
             variant="contained" 
             color="primary"
-            disabled={isSavingZones || (!camera?.running && !pipelineHasRunOnce)}
+            disabled={isSavingZones || !hasUnsavedZoneChanges || (!camera?.running && !pipelineHasRunOnce)}
             startIcon={isSavingZones ? <CircularProgress size={20} /> : null}
             onClick={async () => {
               if (!lineZoneManagerComponent || !cameraId) return;
               
               try {
-                setHasUnsavedZoneChanges(false);
                 
                 // Normalize all zones to ensure they have proper values
                 const normalizedZones = lineZoneManagerForm.zones.map(zone => ({
