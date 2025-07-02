@@ -1,8 +1,214 @@
 import axios from 'axios';
 
+// Extend Axios config to include our custom metadata
+declare module 'axios' {
+  interface InternalAxiosRequestConfig {
+    metadata?: {
+      startTime: number;
+      startTimestamp: number;
+    };
+  }
+}
+
 // DEPRECATED: Use getFullUrl() instead of API_URL directly
 // This remains empty for backwards compatibility
 const API_URL = '';
+
+// Performance monitoring configuration
+interface ApiPerformanceConfig {
+  enabled: boolean;
+  logToConsole: boolean;
+  logSlowRequests: boolean;
+  slowRequestThreshold: number; // milliseconds
+  trackMetrics: boolean;
+}
+
+interface ApiCallMetrics {
+  url: string;
+  method: string;
+  duration: number;
+  status: number;
+  timestamp: number;
+  size?: number;
+  error?: string;
+}
+
+// Global performance configuration
+const performanceConfig: ApiPerformanceConfig = {
+  enabled: true,
+  logToConsole: true,
+  logSlowRequests: true,
+  slowRequestThreshold: 1000, // 1 second
+  trackMetrics: true
+};
+
+// Metrics storage for analysis
+const apiMetrics: ApiCallMetrics[] = [];
+const MAX_METRICS_STORAGE = 1000; // Keep last 1000 requests
+
+// Performance monitoring utilities
+const ApiPerformanceMonitor = {
+  // Configure monitoring settings
+  configure: (config: Partial<ApiPerformanceConfig>) => {
+    Object.assign(performanceConfig, config);
+  },
+
+  // Get current configuration
+  getConfig: () => ({ ...performanceConfig }),
+
+  // Get collected metrics
+  getMetrics: () => [...apiMetrics],
+
+  // Get performance summary
+  getSummary: () => {
+    if (apiMetrics.length === 0) return null;
+
+    const durations = apiMetrics.map(m => m.duration);
+    const errors = apiMetrics.filter(m => m.error || m.status >= 400);
+    
+    return {
+      totalRequests: apiMetrics.length,
+      averageDuration: durations.reduce((a, b) => a + b, 0) / durations.length,
+      minDuration: Math.min(...durations),
+      maxDuration: Math.max(...durations),
+      p95Duration: durations.sort((a, b) => a - b)[Math.floor(durations.length * 0.95)],
+      errorRate: (errors.length / apiMetrics.length) * 100,
+      slowRequests: apiMetrics.filter(m => m.duration > performanceConfig.slowRequestThreshold).length,
+      endpointBreakdown: apiMetrics.reduce((acc, metric) => {
+        const endpoint = metric.url.replace(/\/\d+/g, '/:id'); // Normalize IDs
+        if (!acc[endpoint]) {
+          acc[endpoint] = { count: 0, totalDuration: 0, errors: 0 };
+        }
+        acc[endpoint].count++;
+        acc[endpoint].totalDuration += metric.duration;
+        if (metric.error || metric.status >= 400) acc[endpoint].errors++;
+        return acc;
+      }, {} as Record<string, { count: number; totalDuration: number; errors: number }>)
+    };
+  },
+
+  // Clear collected metrics
+  clearMetrics: () => {
+    apiMetrics.length = 0;
+  },
+
+  // Export metrics as CSV for external analysis
+  exportToCsv: () => {
+    if (apiMetrics.length === 0) return '';
+    
+    const headers = ['timestamp', 'method', 'url', 'duration', 'status', 'size', 'error'];
+    const rows = apiMetrics.map(m => [
+      new Date(m.timestamp).toISOString(),
+      m.method,
+      m.url,
+      m.duration,
+      m.status,
+      m.size || '',
+      m.error || ''
+    ]);
+    
+    return [headers, ...rows].map(row => row.join(',')).join('\n');
+  }
+};
+
+// Add performance monitoring to axios instance
+axios.interceptors.request.use(
+  (config) => {
+    if (performanceConfig.enabled) {
+      // Add timing start to request config
+      config.metadata = {
+        startTime: performance.now(),
+        startTimestamp: Date.now()
+      };
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+axios.interceptors.response.use(
+  (response) => {
+    if (performanceConfig.enabled && response.config.metadata) {
+      const duration = performance.now() - response.config.metadata.startTime;
+      const size = response.data ? JSON.stringify(response.data).length : 0;
+      
+      const metrics: ApiCallMetrics = {
+        url: response.config.url || '',
+        method: (response.config.method || 'GET').toUpperCase(),
+        duration: Math.round(duration * 100) / 100, // Round to 2 decimal places
+        status: response.status,
+        timestamp: response.config.metadata.startTimestamp,
+        size
+      };
+
+      // Store metrics
+      if (performanceConfig.trackMetrics) {
+        apiMetrics.push(metrics);
+        // Keep only the last MAX_METRICS_STORAGE entries
+        if (apiMetrics.length > MAX_METRICS_STORAGE) {
+          apiMetrics.shift();
+        }
+      }
+
+      // Console logging
+      if (performanceConfig.logToConsole) {
+        const isSlowRequest = duration > performanceConfig.slowRequestThreshold;
+        
+        if (performanceConfig.logSlowRequests && isSlowRequest) {
+          console.warn(
+            `🐌 SLOW API CALL: ${metrics.method} ${metrics.url}`,
+            `\n⏱️  Duration: ${duration.toFixed(2)}ms`,
+            `\n📊 Status: ${metrics.status}`,
+            `\n📦 Size: ${(size / 1024).toFixed(2)}KB`,
+            `\n🕐 Time: ${new Date(metrics.timestamp).toISOString()}`
+          );
+        } else {
+          console.log(
+            `🌐 API: ${metrics.method} ${metrics.url} - ${duration.toFixed(2)}ms - ${metrics.status}`
+          );
+        }
+      }
+    }
+    return response;
+  },
+  (error) => {
+    if (performanceConfig.enabled && error.config?.metadata) {
+      const duration = performance.now() - error.config.metadata.startTime;
+      const status = error.response?.status || 0;
+      
+      const metrics: ApiCallMetrics = {
+        url: error.config.url || '',
+        method: (error.config.method || 'GET').toUpperCase(),
+        duration: Math.round(duration * 100) / 100,
+        status,
+        timestamp: error.config.metadata.startTimestamp,
+        error: error.message
+      };
+
+      // Store metrics
+      if (performanceConfig.trackMetrics) {
+        apiMetrics.push(metrics);
+        if (apiMetrics.length > MAX_METRICS_STORAGE) {
+          apiMetrics.shift();
+        }
+      }
+
+      // Console logging for errors
+      if (performanceConfig.logToConsole) {
+        console.error(
+          `❌ API ERROR: ${metrics.method} ${metrics.url}`,
+          `\n⏱️  Duration: ${duration.toFixed(2)}ms`,
+          `\n📊 Status: ${status}`,
+          `\n💥 Error: ${error.message}`,
+          `\n🕐 Time: ${new Date(metrics.timestamp).toISOString()}`
+        );
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 // Helper function to ensure response is an array
 const ensureArray = (data: any): any[] => {
@@ -234,11 +440,7 @@ export interface EventRecord {
   created_at: number;
 }
 
-export interface DatabaseRecordsResponse {
-  events: EventRecord[];
-  total_events: number;
-  total_frames: number;
-}
+
 
 // Update interfaces for telemetry data
 export interface ZoneLineCount {
@@ -600,51 +802,8 @@ const apiService = {
     },
   },
 
-  // Add database service
+  // Database and analytics service
   database: {
-    /**
-     * Get database records for a specific camera
-     */
-    async getRecords(cameraId: string, page: number = 0, limit: number = 10): Promise<DatabaseRecordsResponse | null> {
-      try {
-        const url = getFullUrl(`/api/v1/cameras/${cameraId}/database/events?page=${page}&limit=${limit}`);
-
-        const response = await fetch(url);
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error("Database API error response:", response.status, errorText);
-          throw new Error(`Failed to fetch database records: ${response.statusText}`);
-        }
-        return await response.json();
-      } catch (error) {
-        console.error('Error fetching database records:', error);
-        return null;
-      }
-    },
-
-    /**
-     * Delete all database records for a specific camera
-     */
-    async deleteRecords(cameraId: string): Promise<boolean> {
-      try {
-        const url = getFullUrl(`/api/v1/cameras/${cameraId}/database/events`);
-
-        const response = await fetch(url, {
-          method: 'DELETE',
-        });
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error("Database delete API error response:", response.status, errorText);
-        }
-        
-        return response.ok;
-      } catch (error) {
-        console.error('Error deleting database records:', error);
-        return false;
-      }
-    },
-
     /**
      * Get analytics summary for a camera
      */
@@ -1017,5 +1176,8 @@ export const isPipelineProcessing = apiService.isPipelineProcessing;
 export const waitForPipelineProcessing = apiService.waitForPipelineProcessing;
 export const getActivePipeline = apiService.getActivePipeline;
 export const getVisionModels = apiService.getVisionModels;
+
+// Export performance monitoring utilities
+export { ApiPerformanceMonitor };
 
 export default apiService;

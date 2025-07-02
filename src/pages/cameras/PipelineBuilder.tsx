@@ -511,17 +511,7 @@ const PipelineBuilder = () => {
     setSnackbarOpen(false);
   }, []);
 
-  // Add Database tab state
-  const [databaseRecords, setDatabaseRecords] = useState<EventRecord[]>([]);
-  const [totalEvents, setTotalEvents] = useState<number>(0);
-  const [totalFrames, setTotalFrames] = useState<number>(0);
-  const [page, setPage] = useState<number>(0);
-  const [rowsPerPage, setRowsPerPage] = useState<number>(10);
-  const [isLoadingRecords, setIsLoadingRecords] = useState<boolean>(false);
-  const [isDeletingRecords, setIsDeletingRecords] = useState<boolean>(false);
   const [dbComponentExists, setDbComponentExists] = useState<boolean>(false);
-  // Add a ref to track if telemetry data has been loaded for the current tab session
-  const telemetryTabFirstLoadRef = useRef<boolean>(false);
 
   // Add new state for telemetry visualization data
   const [zoneLineCounts, setZoneLineCounts] = useState<ZoneLineCount[]>([]);
@@ -2355,107 +2345,7 @@ const PipelineBuilder = () => {
     }
   };
 
-  // New function to fetch database records
-  const fetchDatabaseRecords = useCallback(async () => {
-    if (!cameraId || !dbComponentExists) return;
-    
-    try {
-      setIsLoadingRecords(true);
-      const response = await apiService.database.getRecords(cameraId, page, rowsPerPage);
-      if (response) {
-        setDatabaseRecords(response.events);
-        setTotalEvents(response.total_events);
-        setTotalFrames(response.total_frames);
-      }
-    } catch (err) {
-      console.error('Error fetching database records:', err);
-      showSnackbar('Failed to load database records');
-    } finally {
-      setIsLoadingRecords(false);
-    }
-  }, [cameraId, dbComponentExists, page, rowsPerPage, showSnackbar]);
 
-  // Load database records when tab changes to Database or pagination changes
-  useEffect(() => {
-    // Calculate the telemetry tab index dynamically based on available tabs
-    const telemetryTabIndex = sourceComponent ? 
-      (hasLineZoneManagerComponent ? 3 : 2) : 
-      (hasLineZoneManagerComponent ? 2 : 1);
-    
-    if (mainTabValue === telemetryTabIndex && dbComponentExists) {
-      // Only fetch data when the tab is first selected
-      if (!telemetryTabFirstLoadRef.current) {
-        fetchDatabaseRecords();
-        telemetryTabFirstLoadRef.current = true;
-      }
-    } else {
-      // Reset the ref when navigating away from the tab
-      telemetryTabFirstLoadRef.current = false;
-    }
-  }, [mainTabValue, sourceComponent, hasLineZoneManagerComponent, dbComponentExists, fetchDatabaseRecords]);
-
-  // Function to delete all records for this camera
-  const handleDeleteAllRecords = async () => {
-    if (!cameraId || !dbComponentExists) return;
-    
-    // Show confirmation dialog
-    const confirmed = window.confirm(
-      `Are you sure you want to delete all database records for camera ${camera?.name || cameraId}? This action cannot be undone.`
-    );
-    
-    if (!confirmed) return;
-    
-    try {
-      setIsDeletingRecords(true);
-      const success = await apiService.database.deleteRecords(cameraId);
-      if (success) {
-        showSnackbar('All database records deleted successfully');
-        // Reset pagination and refetch
-        setPage(0);
-        fetchDatabaseRecords();
-      } else {
-        showSnackbar('Failed to delete database records');
-      }
-    } catch (err) {
-      console.error('Error deleting database records:', err);
-      showSnackbar('Failed to delete database records');
-    } finally {
-      setIsDeletingRecords(false);
-    }
-  };
-
-  // Handler for page change
-  const handlePageChange = (_event: unknown, newPage: number) => {
-    setPage(newPage);
-    // Force a refresh when changing pages
-    fetchDatabaseRecords();
-  };
-
-  // Handler for rows per page change
-  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
-    // Force a refresh when changing rows per page
-    fetchDatabaseRecords();
-  };
-
-  // Get event type name
-  const getEventTypeName = (type: number): string => {
-    switch(type) {
-      case 0: return 'Detection';
-      case 1: return 'Tracking';
-      case 2: return 'Crossing';
-      case 3: return 'Classification';
-      case 4: return 'Polygon Zone';
-      default: return `Unknown (${type})`;
-    }
-  };
-
-  // Format timestamp
-  const formatTimestamp = (timestamp: number): string => {
-    const date = new Date(timestamp);
-    return date.toLocaleString();
-  };
 
   // Add function to fetch zone line counts
   const fetchZoneLineCounts = useCallback(async () => {
@@ -2527,18 +2417,11 @@ const PipelineBuilder = () => {
     
     if (mainTabValue === telemetryTabIndex && dbComponentExists) {
       // Only fetch data when the tab is first selected
-      if (!telemetryTabFirstLoadRef.current) {
-        fetchDatabaseRecords();
-        fetchZoneLineCounts();
-        fetchClassHeatmapData();
-        telemetryTabFirstLoadRef.current = true;
-      }
-    } else {
-      // Reset the ref when navigating away from the tab
-      telemetryTabFirstLoadRef.current = false;
+      fetchZoneLineCounts();
+      fetchClassHeatmapData();
     }
   }, [mainTabValue, sourceComponent, hasLineZoneManagerComponent, dbComponentExists, 
-      fetchDatabaseRecords, fetchZoneLineCounts, fetchClassHeatmapData]);
+      fetchZoneLineCounts, fetchClassHeatmapData]);
 
   // Add useEffect to initialize editedName when camera data is loaded
   useEffect(() => {
@@ -2944,19 +2827,6 @@ const PipelineBuilder = () => {
             <TelemetryTab
               camera={camera}
               cameraId={cameraId || ''}
-              databaseRecords={databaseRecords}
-              isLoadingRecords={isLoadingRecords}
-              isDeletingRecords={isDeletingRecords}
-              totalEvents={totalEvents}
-              totalFrames={totalFrames}
-              page={page}
-              rowsPerPage={rowsPerPage}
-              handlePageChange={handlePageChange}
-              handleChangeRowsPerPage={handleChangeRowsPerPage}
-              fetchDatabaseRecords={fetchDatabaseRecords}
-              handleDeleteAllRecords={handleDeleteAllRecords}
-              getEventTypeName={getEventTypeName}
-              formatTimestamp={formatTimestamp}
             />
           )}
         </TabPanel>

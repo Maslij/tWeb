@@ -6,13 +6,7 @@ import {
   CardActions,
   Divider,
   Skeleton,
-  Paper,
-  TableContainer,
-  Table,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody
+  Paper
 } from '@mui/material';
 
 export const ComponentCardSkeleton = () => (
@@ -80,38 +74,4 @@ export const TelemetryChartSkeleton = () => (
   </Box>
 );
 
-export const DatabaseTableSkeleton = () => (
-  <>
-    <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3, gap: 2 }}>
-      <Skeleton variant="rounded" width={100} height={36} />
-      <Skeleton variant="rounded" width={150} height={36} />
-    </Box>
-    <TableContainer component={Paper} sx={{ maxHeight: 440 }}>
-      <Table stickyHeader>
-        <TableHead>
-          <TableRow>
-            {[...Array(5)].map((_, i) => (
-              <TableCell key={i}>
-                <Skeleton variant="text" />
-              </TableCell>
-            ))}
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {[...Array(5)].map((_, rowIndex) => (
-            <TableRow key={rowIndex}>
-              {[...Array(5)].map((_, cellIndex) => (
-                <TableCell key={cellIndex}>
-                  <Skeleton variant="text" />
-                </TableCell>
-              ))}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </TableContainer>
-    <Box sx={{ display: 'flex', justifyContent: 'flex-end', pt: 2 }}>
-      <Skeleton variant="rectangular" width={300} height={40} />
-    </Box>
-  </>
-); 
+ 
