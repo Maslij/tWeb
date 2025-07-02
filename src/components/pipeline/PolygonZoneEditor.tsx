@@ -22,9 +22,10 @@ interface PolygonZoneEditorProps {
   onUnsavedChange?: () => void; // New prop to immediately trigger unsaved changes
   imageUrl: string;
   disabled?: boolean;
+  availableClasses?: string[]; // Available classes from object detector
 }
 
-const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesChange, onUnsavedChange, imageUrl, disabled = false }) => {
+const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesChange, onUnsavedChange, imageUrl, disabled = false, availableClasses = [] }) => {
   const theme = useTheme();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -690,7 +691,8 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
               id: `zone${localZonesRef.current.length + 1}`,
               polygon: currentPolygon,
               min_crossing_threshold: 1,
-              triggering_anchors: ["BOTTOM_CENTER", "CENTER"]
+              triggering_anchors: ["BOTTOM_CENTER", "CENTER"],
+              triggering_classes: []
             };
             
             onZonesChange([...localZonesRef.current, newZone]);
@@ -787,7 +789,8 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
         id: `zone${localZonesRef.current.length + 1}`,
         polygon: currentPolygon,
         min_crossing_threshold: 1,
-        triggering_anchors: ["BOTTOM_CENTER", "CENTER"]
+        triggering_anchors: ["BOTTOM_CENTER", "CENTER"],
+        triggering_classes: []
       };
       
       onZonesChange([...localZonesRef.current, newZone]);
@@ -1134,6 +1137,7 @@ const PolygonZoneEditor: React.FC<PolygonZoneEditorProps> = ({ zones, onZonesCha
               }}
               onUnsavedChange={onUnsavedChange}
               disabled={disabled}
+              availableClasses={availableClasses}
             />
           </Box>
         </Box>

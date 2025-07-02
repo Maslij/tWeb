@@ -39,6 +39,7 @@ interface LineZoneConfigTabProps {
   cameraId: string | undefined;
   frameContainerStyle?: any;
   frameStyle?: any;
+  availableClasses?: string[];
 }
 
 const LineZoneConfigTab: React.FC<LineZoneConfigTabProps> = ({
@@ -60,7 +61,8 @@ const LineZoneConfigTab: React.FC<LineZoneConfigTabProps> = ({
   showSnackbar,
   cameraId,
   frameContainerStyle,
-  frameStyle
+  frameStyle,
+  availableClasses
 }) => {
   return (
     <Paper elevation={2} sx={{ p: 3 }}>
@@ -102,6 +104,7 @@ const LineZoneConfigTab: React.FC<LineZoneConfigTabProps> = ({
                 }}
                 onUnsavedChange={() => setHasUnsavedZoneChanges(true)}
                 disabled={isSavingZones}
+                availableClasses={availableClasses}
               />
             </Box>
           ) : (
@@ -176,6 +179,8 @@ const LineZoneConfigTab: React.FC<LineZoneConfigTabProps> = ({
                   min_crossing_threshold: Math.min(Math.max(parseInt(String(zone.min_crossing_threshold)) || 1, 1), 10),
                   triggering_anchors: Array.isArray(zone.triggering_anchors) ? 
                     zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"],
+                  triggering_classes: Array.isArray(zone.triggering_classes) ?
+                    zone.triggering_classes : [],
                   // Preserve the counts if they exist
                   in_count: zone.in_count,
                   out_count: zone.out_count

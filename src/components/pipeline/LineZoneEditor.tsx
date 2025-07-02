@@ -20,9 +20,10 @@ interface LineZoneEditorProps {
   onUnsavedChange?: () => void; // New prop to immediately trigger unsaved changes
   imageUrl: string;
   disabled?: boolean;
+  availableClasses?: string[]; // Available classes from object detector
 }
 
-const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, onUnsavedChange, imageUrl, disabled = false }) => {
+const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, onUnsavedChange, imageUrl, disabled = false, availableClasses = [] }) => {
   const theme = useTheme();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -560,7 +561,8 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, o
           end_y: endNormalized.y,
           min_crossing_threshold: 1,
           // Always ensure at least one anchor point is selected by default
-          triggering_anchors: ["BOTTOM_CENTER", "CENTER"]
+          triggering_anchors: ["BOTTOM_CENTER", "CENTER"],
+          triggering_classes: []
         };
         
         onZonesChange([...localZonesRef.current, newZone]);
@@ -582,7 +584,7 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, o
     }
     
     setDraggingPoint(null);
-  }, [disabled, drawMode, isDrawing, drawStartPos, canvasToNormalizedCoords, onZonesChange, draggingPoint]);
+  }, [disabled, drawMode, isDrawing, drawStartPos, canvasToNormalizedCoords, onZonesChange, draggingPoint, availableClasses]);
 
   const handleDeleteSelectedZone = useCallback(() => {
     if (selectedZone === null) return;
@@ -768,6 +770,7 @@ const LineZoneEditor: React.FC<LineZoneEditorProps> = ({ zones, onZonesChange, o
               }}
               onUnsavedChange={onUnsavedChange}
               disabled={disabled}
+              availableClasses={availableClasses}
             />
           </Box>
         </Box>

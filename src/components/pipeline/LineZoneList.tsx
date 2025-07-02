@@ -13,6 +13,7 @@ import { IconButton } from '../../components/ui/IconButton';
 import DeleteIcon from '@mui/icons-material/Delete';
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline';
 import AnchorPointsSelector from './AnchorPointsSelector';
+import ClassSelector from './ClassSelector';
 
 // Interface for Zone
 export interface Zone {
@@ -23,6 +24,7 @@ export interface Zone {
   end_y: number;
   min_crossing_threshold: number;
   triggering_anchors: string[];
+  triggering_classes: string[];
   in_count?: number;
   out_count?: number;
 }
@@ -49,6 +51,7 @@ interface LineZoneListProps {
   onUpdateZone: (index: number, field: keyof Zone, value: any) => void;
   onUnsavedChange?: () => void; // New prop to immediately trigger unsaved changes
   disabled?: boolean;
+  availableClasses?: string[]; // Available classes from object detector
 }
 
 const LineZoneList: React.FC<LineZoneListProps> = ({ 
@@ -58,7 +61,8 @@ const LineZoneList: React.FC<LineZoneListProps> = ({
   onDeleteZone, 
   onUpdateZone,
   onUnsavedChange,
-  disabled = false
+  disabled = false,
+  availableClasses
 }) => {
   // Local state to manage the editing of zone names
   const [editingZoneId, setEditingZoneId] = React.useState<number | null>(null);
@@ -176,10 +180,12 @@ const LineZoneList: React.FC<LineZoneListProps> = ({
                     onKeyDown={(e) => handleZoneNameKeyPress(e, index)}
                     onClick={(e) => {
                       e.stopPropagation();
+                      onSelectZone(index); // Also select the zone when clicking the text field
                       if (editingZoneId !== index) {
                         handleZoneNameClick(index, zone.id);
                       }
                     }}
+                    onFocus={() => onSelectZone(index)} // Select zone when focusing the text field
                     disabled={disabled}
                     sx={{ width: '130px' }}
                   />
@@ -238,9 +244,14 @@ const LineZoneList: React.FC<LineZoneListProps> = ({
                   onChange={(e) => {
                     // Convert to number, ensure it's at least 1 and at most 10
                     const value = e.target.value === '' ? 1 : Math.min(Math.max(parseInt(e.target.value) || 1, 1), 10);
+                    onSelectZone(index); // Select zone when updating threshold
                     onUpdateZone(index, 'min_crossing_threshold', value);
                   }}
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectZone(index); // Also select the zone when clicking the threshold field
+                  }}
+                  onFocus={() => onSelectZone(index)} // Select zone when focusing the threshold field
                   disabled={disabled}
                   sx={{ width: '60px', mx: 1 }}
                   inputProps={{ 
@@ -254,9 +265,24 @@ const LineZoneList: React.FC<LineZoneListProps> = ({
               {/* Use shared AnchorPointsSelector component */}
               <AnchorPointsSelector
                 triggering_anchors={zone.triggering_anchors || []}
-                onUpdateAnchors={(newAnchors) => onUpdateZone(index, 'triggering_anchors', newAnchors)}
+                onUpdateAnchors={(newAnchors) => {
+                  onSelectZone(index); // Select zone when updating anchors
+                  onUpdateZone(index, 'triggering_anchors', newAnchors);
+                }}
                 disabled={disabled}
                 index={index}
+              />
+              
+              {/* Class selector for triggering classes */}
+              <ClassSelector
+                triggering_classes={zone.triggering_classes || []}
+                onUpdateClasses={(newClasses) => {
+                  onSelectZone(index); // Select zone when updating classes
+                  onUpdateZone(index, 'triggering_classes', newClasses);
+                }}
+                disabled={disabled}
+                index={index}
+                availableClasses={availableClasses || []}
               />
             </Box>
           </ListItem>

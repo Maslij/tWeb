@@ -24,6 +24,7 @@ interface PolygonZone {
   polygon: { x: number; y: number }[];
   min_crossing_threshold: number;
   triggering_anchors: string[];
+  triggering_classes: string[];
   in_count?: number;
   out_count?: number;
   current_count?: number;
@@ -64,6 +65,7 @@ interface PolygonZoneConfigTabProps {
   refreshFrame?: () => void;
   frameContainerStyle?: any; // Added prop for consistent container styling
   frameStyle?: any; // Added prop for consistent frame styling
+  availableClasses?: string[]; // Add availableClasses prop
 }
 
 const PolygonZoneConfigTab: React.FC<PolygonZoneConfigTabProps> = ({
@@ -86,7 +88,8 @@ const PolygonZoneConfigTab: React.FC<PolygonZoneConfigTabProps> = ({
   cameraId,
   refreshFrame,
   frameContainerStyle,
-  frameStyle
+  frameStyle,
+  availableClasses
 }) => {
   const [isSaving, setIsSaving] = useState(false);
 
@@ -104,6 +107,8 @@ const PolygonZoneConfigTab: React.FC<PolygonZoneConfigTabProps> = ({
           zone.min_crossing_threshold : parseFloat(String(zone.min_crossing_threshold)) || 1,
         triggering_anchors: Array.isArray(zone.triggering_anchors) ? 
           zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"],
+        triggering_classes: Array.isArray(zone.triggering_classes) ?
+          zone.triggering_classes : [],
         // Preserve the counts if they exist
         in_count: zone.in_count,
         out_count: zone.out_count,
@@ -185,6 +190,7 @@ const PolygonZoneConfigTab: React.FC<PolygonZoneConfigTabProps> = ({
                 }}
                 onUnsavedChange={() => setHasUnsavedZoneChanges(true)}
                 disabled={isSaving}
+                availableClasses={availableClasses}
               />
             </Box>
           ) : (

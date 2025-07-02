@@ -567,13 +567,32 @@ const apiService = {
     },
   },
 
-  // Object detection models
+  // Models and AI server status
   models: {
-    // Get available object detection models
+    // Get comprehensive model metadata including Triton server status
+    getMetadata: async (): Promise<any> => {
+      try {
+        const response = await axios.get(getFullUrl('/api/v1/models/metadata'));
+        return response.data;
+      } catch (error) {
+        console.error('Error fetching model metadata:', error);
+        return null;
+      }
+    },
+
+    // Legacy method for backward compatibility - now uses metadata endpoint
     getObjectDetectionModels: async (): Promise<any> => {
       try {
-        const response = await axios.get(getFullUrl('/api/v1/models/object-detection'));
-        return response.data;
+        const response = await axios.get(getFullUrl('/api/v1/models/metadata'));
+        if (response.data) {
+          // Transform the new format to match the old expected format
+          return {
+            models: response.data.models || [],
+            triton_connected: response.data.triton_connected || false,
+            triton_status: response.data.triton_status || 'unknown'
+          };
+        }
+        return null;
       } catch (error) {
         console.error('Error fetching object detection models:', error);
         return null;

@@ -143,12 +143,19 @@ interface ComponentTypes {
   };
 }
 
-// Add model interfaces
+// Add model interfaces - updated for new metadata API
 interface AIModel {
-  id: string;
+  model_id: string;
   type: string;
   status: string;
-  classes?: string[];
+  runtime_status: string;
+  available_on_triton: boolean;
+  classes: string[];
+  description?: string;
+  framework?: string;
+  server_url?: string;
+  // Legacy fields for backward compatibility
+  id?: string;
 }
 
 // Add new interfaces for telemetry data
@@ -202,6 +209,46 @@ const frameStyle = {
   objectFit: 'contain',
   display: 'block'
 };
+
+// Helper function to normalize zone data with proper types
+const normalizeLineZone = (zone: any) => ({
+  id: zone.id || `zone${Math.random().toString(36).substr(2, 9)}`,
+  start_x: typeof zone.start_x === 'number' ? zone.start_x : 
+           zone.start && typeof zone.start.x === 'number' ? zone.start.x :
+           parseFloat(String(zone.start_x)) || 0.2,
+  start_y: typeof zone.start_y === 'number' ? zone.start_y :
+           zone.start && typeof zone.start.y === 'number' ? zone.start.y :
+           parseFloat(String(zone.start_y)) || 0.5,
+  end_x: typeof zone.end_x === 'number' ? zone.end_x :
+         zone.end && typeof zone.end.x === 'number' ? zone.end.x :
+         parseFloat(String(zone.end_x)) || 0.8,
+  end_y: typeof zone.end_y === 'number' ? zone.end_y :
+         zone.end && typeof zone.end.y === 'number' ? zone.end.y :
+         parseFloat(String(zone.end_y)) || 0.5,
+  min_crossing_threshold: zone.min_crossing_threshold || 1,
+  triggering_anchors: Array.isArray(zone.triggering_anchors) ? 
+    zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"],
+  triggering_classes: Array.isArray(zone.triggering_classes) ?
+    zone.triggering_classes : [],
+  in_count: zone.in_count !== undefined ? zone.in_count : undefined,
+  out_count: zone.out_count !== undefined ? zone.out_count : undefined
+});
+
+// Helper function to normalize polygon zone data
+const normalizePolygonZone = (zone: any) => ({
+  id: zone.id || `zone${Math.random().toString(36).substr(2, 9)}`,
+  polygon: Array.isArray(zone.polygon) ? zone.polygon.map((point: any) => ({
+    x: typeof point.x === 'number' ? point.x : parseFloat(String(point.x)) || 0,
+    y: typeof point.y === 'number' ? point.y : parseFloat(String(point.y)) || 0
+  })) : defaultPolygonZone.polygon,
+  triggering_anchors: Array.isArray(zone.triggering_anchors) ? 
+    zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"],
+  triggering_classes: Array.isArray(zone.triggering_classes) ?
+    zone.triggering_classes : [],
+  in_count: zone.in_count !== undefined ? zone.in_count : undefined,
+  out_count: zone.out_count !== undefined ? zone.out_count : undefined,
+  current_count: zone.current_count !== undefined ? zone.current_count : undefined
+});
 
 const PipelineBuilder = () => {
   // After user state declarations, add state for license information
@@ -348,7 +395,7 @@ const PipelineBuilder = () => {
     text_color: [0, 0, 0],
     text_scale: 0.5,
     text_thickness: 2,
-    zones: [defaultLineZone]
+    zones: [{...defaultLineZone, triggering_classes: []}]
   });
 
   const [fileSinkForm, setFileSinkForm] = useState<FileSinkForm>({
@@ -386,6 +433,28 @@ const PipelineBuilder = () => {
   const [objectClassificationAvailable, setObjectClassificationAvailable] = useState(false);
   const [ageGenderDetectionAvailable, setAgeGenderDetectionAvailable] = useState(false);
   const [inferenceServerAvailable, setInferenceServerAvailable] = useState(false);
+
+  // Computed value: Get classes from existing object detection component or form
+  const getAvailableDetectionClasses = useCallback((): string[] => {
+    // First, look for an existing object detection component
+    const existingObjectDetector = processorComponents.find(
+      comp => comp.type === 'object_detection'
+    );
+    
+    if (existingObjectDetector) {
+      // Try to get classes from the component config first
+      if (existingObjectDetector.config?.classes && Array.isArray(existingObjectDetector.config.classes)) {
+        return existingObjectDetector.config.classes;
+      }
+      // Fallback to classes directly on the component
+      if (existingObjectDetector.classes && Array.isArray(existingObjectDetector.classes)) {
+        return existingObjectDetector.classes;
+      }
+    }
+    
+    // If no existing component or no classes found, fall back to form classes
+    return objectDetectionForm.classes || [];
+  }, [processorComponents, objectDetectionForm.classes]);
 
   const [advancedSettingsExpanded, setAdvancedSettingsExpanded] = useState({
     fileSource: false,
@@ -480,7 +549,7 @@ const PipelineBuilder = () => {
     text_color: [255, 255, 255],
     text_scale: 0.5,
     text_thickness: 2,
-    zones: [defaultPolygonZone]
+    zones: [{...defaultPolygonZone, triggering_classes: []}]
   });
 
   // Fetch data on mount
@@ -547,36 +616,8 @@ const PipelineBuilder = () => {
             }
             
             if (zones.length > 0) {
-              // Ensure zones have all required properties in the correct format
-              const normalizedZones = zones.map(zone => {
-                // Handle nested structure {start: {x, y}, end: {x, y}}
-                const start_x = zone.start && typeof zone.start.x === 'number' ? zone.start.x :
-                                zone.start_x !== undefined ? (typeof zone.start_x === 'number' ? zone.start_x : 
-                                parseFloat(String(zone.start_x))) : 0.2;
-                                
-                const start_y = zone.start && typeof zone.start.y === 'number' ? zone.start.y :
-                                zone.start_y !== undefined ? (typeof zone.start_y === 'number' ? zone.start_y : 
-                                parseFloat(String(zone.start_y))) : 0.5;
-                                
-                const end_x = zone.end && typeof zone.end.x === 'number' ? zone.end.x :
-                              zone.end_x !== undefined ? (typeof zone.end_x === 'number' ? zone.end_x : 
-                              parseFloat(String(zone.end_x))) : 0.8;
-                              
-                const end_y = zone.end && typeof zone.end.y === 'number' ? zone.end.y :
-                              zone.end_y !== undefined ? (typeof zone.end_y === 'number' ? zone.end_y : 
-                              parseFloat(String(zone.end_y))) : 0.5;
-                
-                return {
-                  id: zone.id || `zone${Math.random().toString(36).substr(2, 9)}`,
-                  start_x,
-                  start_y,
-                  end_x,
-                  end_y,
-                  min_crossing_threshold: zone.min_crossing_threshold || 1,
-                  triggering_anchors: Array.isArray(zone.triggering_anchors) ? 
-                    zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"]
-                };
-              });
+              // Normalize zones using helper function
+              const normalizedZones = zones.map(normalizeLineZone);
               
               // Update the line zone manager form with the normalized zones
               setLineZoneManagerForm(prev => ({
@@ -587,31 +628,49 @@ const PipelineBuilder = () => {
           }
         }
 
-        // Fetch available object detection models
-        const modelResponse = await apiService.models.getObjectDetectionModels();
-        if (modelResponse && modelResponse.models) {
-          setAvailableModels(modelResponse.models);
+        // Fetch available models using new metadata endpoint
+        const modelResponse = await apiService.models.getMetadata();
+        if (modelResponse) {
+          // Check Triton server connectivity first
+          const tritonConnected = modelResponse.triton_connected || false;
+          const modelsArray = modelResponse.models || [];
           
-          // Check overall inference server availability
-          setInferenceServerAvailable(modelResponse.models.length > 0);
+          setInferenceServerAvailable(tritonConnected && modelsArray.length > 0);
           
-          // Filter out object detection models
-          const detectionModels = modelResponse.models.filter(
-            (model: AIModel) => model.type === 'object_detection' && model.status === 'loaded'
+          // Transform models to support both new and legacy formats
+          const transformedModels = modelsArray.map((model: any) => ({
+            ...model,
+            id: model.model_id || model.id, // Legacy compatibility
+          }));
+          
+          setAvailableModels(transformedModels);
+          
+          // Filter out object detection models - check both status and runtime_status
+          const detectionModels = transformedModels.filter(
+            (model: AIModel) => 
+              model.type === 'object_detection' && 
+              model.available_on_triton &&
+              (model.status === 'ready' || model.runtime_status === 'loaded')
           );
           
           setObjectDetectionModels(detectionModels);
           setObjectDetectionAvailable(detectionModels.length > 0);
           
           // Check for classification models
-          const classificationModels = modelResponse.models.filter(
-            (model: AIModel) => model.type === 'image_classification' && model.status === 'loaded'
+          const classificationModels = transformedModels.filter(
+            (model: AIModel) => 
+              model.type === 'image_classification' && 
+              model.available_on_triton &&
+              (model.status === 'ready' || model.runtime_status === 'loaded')
           );
           setObjectClassificationAvailable(classificationModels.length > 0);
           
           // Check for age gender detection models
-          const ageGenderModels = modelResponse.models.filter(
-            (model: AIModel) => model.type === 'age_gender_detection' && model.status === 'loaded'
+          const ageGenderModels = transformedModels.filter(
+            (model: AIModel) => 
+              model.type === 'age_gender_detection' && 
+              model.available_on_triton &&
+              (model.status === 'ready' || model.runtime_status === 'loaded')
           );
           setAgeGenderDetectionAvailable(ageGenderModels.length > 0);
           
@@ -620,8 +679,8 @@ const PipelineBuilder = () => {
             const defaultModel = detectionModels[0];
             setObjectDetectionForm(prev => ({
               ...prev,
-              model_id: defaultModel.id,
-              server_url: "http://localhost:8080",
+              model_id: defaultModel.model_id || defaultModel.id,
+              server_url: defaultModel.server_url || "http://localhost:8080",
               confidence_threshold: 0.5,
               draw_bounding_boxes: true,
               use_shared_memory: true,
@@ -666,38 +725,8 @@ const PipelineBuilder = () => {
     }
     
     if (zones.length > 0) {
-      // Ensure zones have all required properties in the correct format
-      const normalizedZones = zones.map(zone => {
-        // Handle nested structure {start: {x, y}, end: {x, y}}
-        const start_x = zone.start && typeof zone.start.x === 'number' ? zone.start.x :
-                        zone.start_x !== undefined ? (typeof zone.start_x === 'number' ? zone.start_x : 
-                        parseFloat(String(zone.start_x))) : 0.2;
-                        
-        const start_y = zone.start && typeof zone.start.y === 'number' ? zone.start.y :
-                        zone.start_y !== undefined ? (typeof zone.start_y === 'number' ? zone.start_y : 
-                        parseFloat(String(zone.start_y))) : 0.5;
-                        
-        const end_x = zone.end && typeof zone.end.x === 'number' ? zone.end.x :
-                      zone.end_x !== undefined ? (typeof zone.end_x === 'number' ? zone.end_x : 
-                      parseFloat(String(zone.end_x))) : 0.8;
-                      
-        const end_y = zone.end && typeof zone.end.y === 'number' ? zone.end.y :
-                      zone.end_y !== undefined ? (typeof zone.end_y === 'number' ? zone.end_y : 
-                      parseFloat(String(zone.end_y))) : 0.5;
-        
-        return {
-          id: zone.id || `zone${Math.random().toString(36).substr(2, 9)}`,
-          start_x,
-          start_y,
-          end_x,
-          end_y,
-          min_crossing_threshold: zone.min_crossing_threshold || 1,
-          triggering_anchors: Array.isArray(zone.triggering_anchors) ? 
-            zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"],
-          in_count: zone.in_count !== undefined ? zone.in_count : undefined,
-          out_count: zone.out_count !== undefined ? zone.out_count : undefined
-        };
-      });
+      // Normalize zones using helper function
+      const normalizedZones = zones.map(normalizeLineZone);
             
       // Get a stringified version of the current zones to compare
       const currentZonesString = JSON.stringify(lineZoneManagerForm.zones);
@@ -756,38 +785,8 @@ const PipelineBuilder = () => {
           }
           
           if (zones.length > 0) {
-            // Ensure zones have all required properties in the correct format
-            const normalizedZones = zones.map(zone => {
-              // Handle nested structure {start: {x, y}, end: {x, y}}
-              const start_x = zone.start && typeof zone.start.x === 'number' ? zone.start.x :
-                              zone.start_x !== undefined ? (typeof zone.start_x === 'number' ? zone.start_x : 
-                              parseFloat(String(zone.start_x))) : 0.2;
-                              
-              const start_y = zone.start && typeof zone.start.y === 'number' ? zone.start.y :
-                              zone.start_y !== undefined ? (typeof zone.start_y === 'number' ? zone.start_y : 
-                              parseFloat(String(zone.start_y))) : 0.5;
-                              
-              const end_x = zone.end && typeof zone.end.x === 'number' ? zone.end.x :
-                            zone.end_x !== undefined ? (typeof zone.end_x === 'number' ? zone.end_x : 
-                            parseFloat(String(zone.end_x))) : 0.8;
-                            
-              const end_y = zone.end && typeof zone.end.y === 'number' ? zone.end.y :
-                            zone.end_y !== undefined ? (typeof zone.end_y === 'number' ? zone.end_y : 
-                            parseFloat(String(zone.end_y))) : 0.5;
-              
-              return {
-                id: zone.id || `zone${Math.random().toString(36).substr(2, 9)}`,
-                start_x,
-                start_y,
-                end_x,
-                end_y,
-                min_crossing_threshold: zone.min_crossing_threshold || 1,
-                triggering_anchors: Array.isArray(zone.triggering_anchors) ? 
-                  zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"],
-                in_count: zone.in_count !== undefined ? zone.in_count : undefined,
-                out_count: zone.out_count !== undefined ? zone.out_count : undefined
-              };
-            });
+            // Normalize zones using helper function
+            const normalizedZones = zones.map(normalizeLineZone);
             
             // Update the line zone manager form with the normalized zones
             // Only if we don't have unsaved changes
@@ -1078,10 +1077,12 @@ const PipelineBuilder = () => {
             min_crossing_threshold: zone.min_crossing_threshold || 1,
             triggering_anchors: Array.isArray(zone.triggering_anchors) ? 
               zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"],
+            triggering_classes: Array.isArray(zone.triggering_classes) ?
+              zone.triggering_classes : [],
             in_count: zone.in_count !== undefined ? zone.in_count : undefined,
             out_count: zone.out_count !== undefined ? zone.out_count : undefined
           };
-        }) : [defaultLineZone];
+        }) : [{...defaultLineZone, triggering_classes: []}];
         
         setLineZoneManagerForm({
           draw_zones: component.draw_zones !== undefined ? component.draw_zones : 
@@ -1115,14 +1116,15 @@ const PipelineBuilder = () => {
               x: typeof point.x === 'number' ? point.x : parseFloat(String(point.x)) || 0,
               y: typeof point.y === 'number' ? point.y : parseFloat(String(point.y)) || 0
             })) : defaultPolygonZone.polygon,
-            min_crossing_threshold: zone.min_crossing_threshold || 1,
             triggering_anchors: Array.isArray(zone.triggering_anchors) ? 
               zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"],
+            triggering_classes: Array.isArray(zone.triggering_classes) ?
+              zone.triggering_classes : [],
             in_count: zone.in_count !== undefined ? zone.in_count : undefined,
             out_count: zone.out_count !== undefined ? zone.out_count : undefined,
             current_count: zone.current_count !== undefined ? zone.current_count : undefined
           };
-        }) : [defaultPolygonZone];
+        }) : [{...defaultPolygonZone, triggering_classes: []}];
         
         setPolygonZoneManagerForm({
           draw_zones: component.draw_zones !== undefined ? component.draw_zones : 
@@ -1235,6 +1237,8 @@ const PipelineBuilder = () => {
   };
 
   const handleObjectDetectionFormChange = (field: keyof ObjectDetectionForm, value: any) => {
+    const prevClasses = objectDetectionForm.classes;
+    
     setObjectDetectionForm(prev => ({
       ...prev,
       [field]: value
@@ -1251,6 +1255,34 @@ const PipelineBuilder = () => {
           model_id: value,
           classes: []
         }));
+        // Clear all zone triggering classes when model changes
+        clearZoneTriggeringClasses();
+      }
+    }
+
+    // If classes change, handle cascading deletion
+    if (field === 'classes') {
+      const newClasses = Array.isArray(value) ? value : [];
+      const removedClasses = prevClasses.filter(cls => !newClasses.includes(cls));
+      
+      if (removedClasses.length > 0) {
+        // Remove deleted classes from line zone triggering classes
+        setLineZoneManagerForm(prev => ({
+          ...prev,
+          zones: prev.zones.map(zone => ({
+            ...zone,
+            triggering_classes: zone.triggering_classes.filter(cls => !removedClasses.includes(cls))
+          }))
+        }));
+        
+        // Remove deleted classes from polygon zone triggering classes
+        setPolygonZoneManagerForm(prev => ({
+          ...prev,
+          zones: prev.zones.map(zone => ({
+            ...zone,
+            triggering_classes: zone.triggering_classes.filter(cls => !removedClasses.includes(cls))
+          }))
+        }));
       }
     }
 
@@ -1262,6 +1294,25 @@ const PipelineBuilder = () => {
         protocol: value ? 'http_shm' : 'http'
       }));
     }
+  };
+
+  // Helper function to clear all zone triggering classes
+  const clearZoneTriggeringClasses = () => {
+    setLineZoneManagerForm(prev => ({
+      ...prev,
+      zones: prev.zones.map(zone => ({
+        ...zone,
+        triggering_classes: []
+      }))
+    }));
+    
+    setPolygonZoneManagerForm(prev => ({
+      ...prev,
+      zones: prev.zones.map(zone => ({
+        ...zone,
+        triggering_classes: []
+      }))
+    }));
   };
 
   const handleObjectClassificationFormChange = (field: keyof ObjectClassificationForm, value: any) => {
@@ -1437,7 +1488,6 @@ const PipelineBuilder = () => {
             zones: polygonZoneManagerForm.zones.map(zone => ({
               id: zone.id,
               polygon: zone.polygon,
-              min_crossing_threshold: zone.min_crossing_threshold,
               triggering_anchors: zone.triggering_anchors
             }))
           };
@@ -2061,7 +2111,9 @@ const PipelineBuilder = () => {
       end_y: typeof zone.end_y === 'number' ? zone.end_y : parseFloat(String(zone.end_y)) || 0.5,
       min_crossing_threshold: zone.min_crossing_threshold || 1,
       triggering_anchors: Array.isArray(zone.triggering_anchors) ? 
-        zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"]
+        zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"],
+      triggering_classes: Array.isArray(zone.triggering_classes) ?
+        zone.triggering_classes : []
     }));
     
     // Get current zones string for comparison
@@ -2175,7 +2227,7 @@ const PipelineBuilder = () => {
           text_color: [0, 0, 0],
           text_scale: 0.5,
           text_thickness: 2,
-          zones: [defaultLineZone]
+          zones: [{...defaultLineZone, triggering_classes: []}]
         });
       } else if (componentType === 'polygon_zone_manager') {
         setPolygonZoneManagerForm({
@@ -2188,7 +2240,7 @@ const PipelineBuilder = () => {
           text_color: [255, 255, 255],
           text_scale: 0.5,
           text_thickness: 2,
-          zones: [defaultPolygonZone]
+          zones: [{...defaultPolygonZone, triggering_classes: []}]
         });
       }
     } else if (dialogType === 'sink') {
@@ -2561,9 +2613,10 @@ const PipelineBuilder = () => {
               x: typeof point.x === 'number' ? point.x : parseFloat(String(point.x)) || 0,
               y: typeof point.y === 'number' ? point.y : parseFloat(String(point.y)) || 0
             })) : defaultPolygonZone.polygon,
-            min_crossing_threshold: zone.min_crossing_threshold || 1,
             triggering_anchors: Array.isArray(zone.triggering_anchors) ? 
               zone.triggering_anchors : ["BOTTOM_CENTER", "CENTER"],
+            triggering_classes: Array.isArray(zone.triggering_classes) ?
+              zone.triggering_classes : [],
             in_count: zone.in_count !== undefined ? zone.in_count : undefined,
             out_count: zone.out_count !== undefined ? zone.out_count : undefined,
             current_count: zone.current_count !== undefined ? zone.current_count : undefined
@@ -2840,6 +2893,7 @@ const PipelineBuilder = () => {
               cameraId={cameraId}
               frameContainerStyle={frameContainerStyle}
               frameStyle={frameStyle}
+              availableClasses={getAvailableDetectionClasses()}
             />
           </TabPanel>
         )}
@@ -2874,6 +2928,7 @@ const PipelineBuilder = () => {
               refreshFrame={refreshFrame}
               frameContainerStyle={frameContainerStyle}
               frameStyle={frameStyle}
+              availableClasses={getAvailableDetectionClasses()}
             />
           </TabPanel>
         )}

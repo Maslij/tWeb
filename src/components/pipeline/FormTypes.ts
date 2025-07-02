@@ -65,6 +65,7 @@ export interface LineZoneManagerForm {
     end_y: number;
     min_crossing_threshold: number;
     triggering_anchors: string[];
+    triggering_classes: string[];
     in_count?: number;
     out_count?: number;
   }[];
@@ -83,9 +84,10 @@ export interface PolygonZoneManagerForm {
   text_thickness: number;
   zones: {
     id: string;
-    polygon: { x: number; y: number; }[];
+    polygon: { x: number; y: number }[];
     min_crossing_threshold: number;
     triggering_anchors: string[];
+    triggering_classes: string[];
     in_count?: number;
     out_count?: number;
     current_count?: number;

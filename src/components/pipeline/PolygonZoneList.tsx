@@ -10,6 +10,7 @@ import {
   Badge
 } from '@mui/material';
 import AnchorPointsSelector from './AnchorPointsSelector';
+import ClassSelector from './ClassSelector';
 
 // Interface for PolygonZone
 export interface PolygonZone {
@@ -17,6 +18,7 @@ export interface PolygonZone {
   polygon: { x: number, y: number }[];
   min_crossing_threshold: number;
   triggering_anchors: string[];
+  triggering_classes: string[];
   in_count?: number;
   out_count?: number;
   current_count?: number;
@@ -33,6 +35,7 @@ interface PolygonZoneListProps {
   onUpdateZone: (index: number, field: keyof PolygonZone, value: any) => void;
   onUnsavedChange?: () => void; // New prop to immediately trigger unsaved changes
   disabled?: boolean;
+  availableClasses?: string[]; // Available classes from object detector
 }
 
 const PolygonZoneList: React.FC<PolygonZoneListProps> = ({ 
@@ -42,7 +45,8 @@ const PolygonZoneList: React.FC<PolygonZoneListProps> = ({
   onDeleteZone, 
   onUpdateZone,
   onUnsavedChange,
-  disabled = false
+  disabled = false,
+  availableClasses
 }) => {
   // Local state to manage the editing of zone names
   const [editingZoneId, setEditingZoneId] = React.useState<number | null>(null);
@@ -308,6 +312,18 @@ const PolygonZoneList: React.FC<PolygonZoneListProps> = ({
                       }}
                       disabled={disabled}
                       index={index}
+                    />
+                    
+                    {/* Class selector for triggering classes */}
+                    <ClassSelector
+                      triggering_classes={zone.triggering_classes || []}
+                      onUpdateClasses={(newClasses) => {
+                        onSelectZone(index); // Select zone when updating classes
+                        onUpdateZone(index, 'triggering_classes', newClasses);
+                      }}
+                      disabled={disabled}
+                      index={index}
+                      availableClasses={availableClasses || []}
                     />
                   </Box>
                 </Box>
